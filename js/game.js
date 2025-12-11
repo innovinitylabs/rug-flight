@@ -770,21 +770,27 @@ EnnemiesHolder.prototype.rotateEnnemies = function(){
     ennemy.mesh.rotation.z += Math.random()*.1;
     ennemy.mesh.rotation.y += Math.random()*.1;
 
-    //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
-    var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
-    var d = diffPos.length();
-    if (d<game.ennemyDistanceTolerance){
-      particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
+    // Only check collisions during gameplay - skip after game ends
+    if (game.status == "playing" && airplane && airplane.mesh) {
+      //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
+      var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
+      var d = diffPos.length();
+      if (d<game.ennemyDistanceTolerance){
+        particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
 
-      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
-      this.mesh.remove(ennemy.mesh);
-      game.planeCollisionSpeedX = 100 * diffPos.x / d;
-      game.planeCollisionSpeedY = 100 * diffPos.y / d;
-      ambientLight.intensity = 2;
+        ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
+        this.mesh.remove(ennemy.mesh);
+        game.planeCollisionSpeedX = 100 * diffPos.x / d;
+        game.planeCollisionSpeedY = 100 * diffPos.y / d;
+        ambientLight.intensity = 2;
 
-      removeEnergy();
-      i--;
-    }else if (ennemy.angle > Math.PI){
+        removeEnergy();
+        i--;
+      }
+    }
+    
+    // Remove enemies that have passed behind (regardless of game status)
+    if (ennemy.angle > Math.PI){
       ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
       this.mesh.remove(ennemy.mesh);
       i--;
