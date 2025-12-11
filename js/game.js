@@ -1281,27 +1281,42 @@ function updatePlane(){
         safeDeltaTime = 0.016; // Default to 60fps if invalid
       }
       
-      // Spring-damper physics for smooth, flowing movement
-      var springStrength = 12.0; // How strongly the banner is pulled toward target (higher = more responsive)
-      var dampingFactor = 0.88; // Velocity damping (0-1, higher = more momentum/flow, less damping)
+      // Smooth, flowing movement that closely follows plane's path
+      // Hybrid approach: fast following with subtle physics for natural flow
+      var followSpeed = 0.6; // Fast following speed for close path tracking
+      var physicsStrength = 0.8; // Small physics component for natural flow (0-1, how much physics vs direct follow)
       
-      // Calculate spring force toward target
-      var offset = new THREE.Vector3();
-      offset.subVectors(bannerTargetPos, banner.position);
+      // Direct following component (keeps banner close to plane's path)
+      var directFollow = new THREE.Vector3();
+      directFollow.subVectors(bannerTargetPos, banner.position);
+      directFollow.multiplyScalar(followSpeed * safeDeltaTime * 60); // Scale for frame-rate independence
       
-      // Apply spring force to velocity
-      var force = offset.clone().multiplyScalar(springStrength * safeDeltaTime);
-      banner.userData.velocity.add(force);
+      // Physics component for natural flow and momentum (subtle)
+      if (!banner.userData.velocity) {
+        banner.userData.velocity = new THREE.Vector3(0, 0, 0);
+      }
       
-      // Apply damping to velocity (creates smooth flowing motion)
-      banner.userData.velocity.multiplyScalar(dampingFactor);
+      // Add velocity from plane's movement direction for momentum
+      var planeVelocity = new THREE.Vector3();
+      if (banner.userData.lastTargetPos) {
+        planeVelocity.subVectors(bannerTargetPos, banner.userData.lastTargetPos);
+        planeVelocity.multiplyScalar(0.5); // Capture some of plane's movement direction
+      }
+      banner.userData.lastTargetPos = bannerTargetPos.clone();
       
-      // Update position based on velocity (smooth, flowing movement with momentum)
-      var positionDelta = banner.userData.velocity.clone().multiplyScalar(safeDeltaTime);
+      // Blend physics velocity with plane's velocity
+      banner.userData.velocity.lerp(planeVelocity, 0.2);
       
-      // Validate position delta to prevent NaN or infinite values
-      if (isFinite(positionDelta.x) && isFinite(positionDelta.y) && isFinite(positionDelta.z)) {
-        banner.position.add(positionDelta);
+      // Apply damping for smooth flow
+      banner.userData.velocity.multiplyScalar(0.92);
+      
+      // Combine direct following (80%) with physics flow (20%) for best of both
+      var physicsComponent = banner.userData.velocity.clone().multiplyScalar(physicsStrength * safeDeltaTime * 60);
+      var totalMovement = directFollow.clone().multiplyScalar(1 - physicsStrength).add(physicsComponent);
+      
+      // Validate and apply movement
+      if (isFinite(totalMovement.x) && isFinite(totalMovement.y) && isFinite(totalMovement.z)) {
+        banner.position.add(totalMovement);
         
         // Safety check: ensure banner position is valid
         if (!isFinite(banner.position.x) || !isFinite(banner.position.y) || !isFinite(banner.position.z)) {
@@ -1310,8 +1325,8 @@ function updatePlane(){
           banner.userData.velocity.set(0, 0, 0);
         }
       } else {
-        // Fallback: if velocity is invalid, use simple interpolation
-        banner.position.lerp(bannerTargetPos, 0.15 * safeDeltaTime * 60);
+        // Fallback: if movement is invalid, use direct interpolation
+        banner.position.lerp(bannerTargetPos, followSpeed * safeDeltaTime * 60);
         banner.userData.velocity.set(0, 0, 0);
       }
       
