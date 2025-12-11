@@ -987,6 +987,7 @@ function createBanner(){
   // Initialize velocity for smooth, flowing ribbon-like movement
   banner.userData.velocity = new THREE.Vector3(0, 0, 0);
   banner.userData.lastTargetPos = new THREE.Vector3(0, 0, 0);
+  banner.userData.lastPlanePos = new THREE.Vector3(0, 0, 0);
   
   // Store original vertices for fluttering animation
   banner.userData.originalVertices = [];
@@ -1302,7 +1303,8 @@ function updatePlane(){
         planeVelocity.subVectors(bannerTargetPos, banner.userData.lastTargetPos);
         planeVelocity.multiplyScalar(0.5); // Capture some of plane's movement direction
       }
-      banner.userData.lastTargetPos = bannerTargetPos.clone();
+      // Store current position for next frame (used for rotation calculation before updating)
+      var currentTargetPos = bannerTargetPos.clone();
       
       // Blend physics velocity with plane's velocity
       banner.userData.velocity.lerp(planeVelocity, 0.2);
@@ -1333,10 +1335,54 @@ function updatePlane(){
       // Ensure banner stays visible
       if (banner) banner.visible = true;
 
-      // Make banner face backward (toward the camera) - rotate to match plane's yaw but face backward
-      banner.rotation.y = airplane.mesh.rotation.y + Math.PI;
-      banner.rotation.x = airplane.mesh.rotation.x * 0.3; // Slight tilt with plane
-      banner.rotation.z = airplane.mesh.rotation.z * 0.3; // Slight roll with plane
+      // Cloth-like tilt: banner tilts naturally based on plane's movement direction
+      // Calculate plane's current world position for movement direction
+      var currentPlanePos = airplane.mesh.position.clone();
+      var planeMovementDir = new THREE.Vector3();
+      
+      if (banner.userData.lastPlanePos && banner.userData.lastPlanePos.length() > 0) {
+        planeMovementDir.subVectors(currentPlanePos, banner.userData.lastPlanePos);
+      }
+      banner.userData.lastPlanePos = currentPlanePos.clone();
+      
+      // Base yaw: follow plane's yaw (but face backward toward camera)
+      var targetYaw = airplane.mesh.rotation.y + Math.PI;
+      
+      // Cloth-like tilt on Z axis (roll): slight roll based on vertical movement
+      // When plane moves up, banner tilts slightly on Z axis (roll)
+      // When plane moves down, banner tilts slightly on Z axis in opposite direction
+      var verticalVelocity = planeMovementDir.y / safeDeltaTime; // Vertical movement speed
+      var rollTilt = verticalVelocity * -0.05; // Negate for correct direction (reversed sign)
+      var targetRoll = rollTilt; // Simple roll based on vertical movement only
+      
+      // Minimal pitch and roll from plane (just follow plane's orientation slightly)
+      var targetPitch = airplane.mesh.rotation.x * 0.2; // Very slight pitch following
+      var targetRollFromPlane = airplane.mesh.rotation.z * 0.15; // Very slight roll following
+      targetRoll += targetRollFromPlane; // Combine movement-based roll with plane's roll
+      
+      // Clamp roll to maximum 45 degrees (Math.PI / 4) to prevent spinning
+      var maxRoll = Math.PI / 4; // 45 degrees
+      if (targetRoll > maxRoll) targetRoll = maxRoll;
+      if (targetRoll < -maxRoll) targetRoll = -maxRoll;
+      
+      // Smoothly interpolate rotations (cloth-like lag) - no spinning!
+      var rotationLerpSpeed = 0.15; // How quickly rotation follows (lower = more lag, more cloth-like)
+      
+      // Smooth yaw following
+      var yawDiff = targetYaw - banner.rotation.y;
+      // Normalize yaw difference (handle wrap-around)
+      while (yawDiff > Math.PI) yawDiff -= 2 * Math.PI;
+      while (yawDiff < -Math.PI) yawDiff += 2 * Math.PI;
+      banner.rotation.y += yawDiff * rotationLerpSpeed;
+      
+      // Smooth pitch tilt (minimal, just slight following)
+      banner.rotation.x += (targetPitch - banner.rotation.x) * rotationLerpSpeed;
+      
+      // Smooth roll tilt on Z axis based on vertical movement (cloth flowing effect)
+      banner.rotation.z += (targetRoll - banner.rotation.z) * rotationLerpSpeed;
+      
+      // Update lastTargetPos for next frame
+      banner.userData.lastTargetPos = currentTargetPos;
     }
 
     // Banner fluttering animation (like a flag in wind) - continues even during game over
