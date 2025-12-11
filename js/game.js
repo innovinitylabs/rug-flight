@@ -137,34 +137,87 @@ function createScene() {
 
   // Texture loader for banner
   textureLoader = new THREE.TextureLoader();
+  
+  // Set crossOrigin to handle CORS issues (though file:// will still have WebGL tainted canvas restrictions)
+  textureLoader.crossOrigin = 'anonymous';
+  
+  // Determine correct path based on protocol (file:// vs http://)
+  var texturePath = 'onchainrugs.png';
+  if (window.location.protocol === 'file:') {
+    // For file:// protocol, use absolute path from current directory
+    texturePath = './onchainrugs.png';
+    console.log('Using file:// protocol, texture path:', texturePath);
+    console.warn('Note: file:// protocol has WebGL security restrictions. Use a local server for best results.');
+  }
+  
   bannerTexture = textureLoader.load(
-    'onchainrugs.png',
+    texturePath,
     function(texture) {
       // Texture loaded successfully
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-      texture.flipY = false; // Prevent texture flipping
+      console.log('Banner texture loaded successfully');
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.flipY = false;
       texture.format = THREE.RGBAFormat;
+      
+      // Rotate texture 180 degrees - check if center exists (older Three.js versions)
+      if (texture.center) {
+        texture.center.set(0.5, 0.5); // Set rotation center to middle of texture
+        texture.rotation = Math.PI; // Rotate 180 degrees
+      } else {
+        // Alternative: use offset and repeat to flip texture 180 degrees
+        texture.offset.set(1, 1);
+        texture.repeat.set(-1, -1);
+        console.log('Using offset/repeat method for 180 degree rotation');
+      }
       texture.needsUpdate = true;
       
       // Update banner material if it exists
       if (banner && banner.material) {
+        // Apply rotation to texture
         banner.material.map = texture;
+        if (banner.material.map) {
+          // Apply rotation if center exists
+          if (banner.material.map.center) {
+            banner.material.map.center.set(0.5, 0.5);
+            banner.material.map.rotation = Math.PI; // 180 degree rotation
+          } else {
+            banner.material.map.offset.set(1, 1);
+            banner.material.map.repeat.set(-1, -1);
+          }
+        }
+        banner.material.map.needsUpdate = true;
         banner.material.needsUpdate = true;
         banner.material.color.setHex(0xffffff); // Ensure white color so texture shows
-        // Force texture update
-        if (banner.material.map) {
-          banner.material.map.needsUpdate = true;
-        }
+        console.log('Banner material updated with texture, image size:', texture.image.width, 'x', texture.image.height);
+      } else {
+        console.warn('Banner or material not found when texture loaded');
       }
     },
-    undefined, // onProgress
+    function(xhr) {
+      // Progress callback
+      console.log('Loading texture progress:', (xhr.loaded / xhr.total * 100) + '%');
+    },
     function(error) {
+      // Error callback - provide more details
       console.error('Error loading banner texture:', error);
+      console.error('Texture path attempted:', texturePath);
+      console.error('Current window location:', window.location.href);
+      console.error('Protocol:', window.location.protocol);
+      
+      // Try alternative loading method for file://
+      if (window.location.protocol === 'file:') {
+        console.error('File:// protocol detected. WebGL security restrictions prevent loading textures from file://');
+        console.error('This is a browser security feature - WebGL considers file:// images as "tainted"');
+        console.error('SOLUTION: Use a local server: python3 -m http.server 8080');
+        console.error('Then access via: http://localhost:8080');
+      }
+      
       // Fallback: use a colored material if texture fails to load
       if (banner && banner.material) {
-        banner.material.color.setHex(0xff0000); // Red fallback
+        banner.material.color.setHex(0xff0000); // Red fallback to indicate error
         banner.material.needsUpdate = true;
+        console.warn('Using red fallback color due to texture load failure');
       }
     }
   );
@@ -822,20 +875,32 @@ function createBanner(){
   // NFT Banner - Create a larger banner to show the texture clearly
   var geomBanner = new THREE.PlaneGeometry(50, 30, 10, 6); // More vertices for fluttering, larger size
   
-  // Create material with texture (will update when texture loads)
+  // Create material with texture - use BasicMaterial to ensure texture always shows regardless of lighting
   var matBanner = new THREE.MeshBasicMaterial({
     map: bannerTexture, 
     transparent: false, 
     side: THREE.DoubleSide,
-    color: 0xffffff, // White base color so texture shows properly without tinting
-    depthWrite: true,
-    depthTest: true
+    color: 0xffffff // White base color so texture shows properly without tinting
   });
   
-  // If texture is already loaded, ensure it's properly set
+  // Set texture on material (will be null if not loaded yet, but will be set in callback)
+  matBanner.map = bannerTexture;
+  
+  // If texture is already loaded, ensure it's properly set with rotation
   if (bannerTexture && bannerTexture.image && bannerTexture.image.complete) {
+    // Apply rotation - check if center exists
+    if (bannerTexture.center) {
+      bannerTexture.center.set(0.5, 0.5);
+      bannerTexture.rotation = Math.PI; // 180 degree rotation
+    } else {
+      bannerTexture.offset.set(1, 1);
+      bannerTexture.repeat.set(-1, -1);
+    }
     bannerTexture.needsUpdate = true;
     matBanner.needsUpdate = true;
+    console.log('Banner texture already loaded when creating banner');
+  } else {
+    console.log('Banner texture not yet loaded, will update when loaded. Texture object:', bannerTexture);
   }
   
   banner = new THREE.Mesh(geomBanner, matBanner);
