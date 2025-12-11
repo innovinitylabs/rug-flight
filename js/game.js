@@ -91,7 +91,12 @@ var scene,
     camera, fieldOfView, aspectRatio, nearPlane, farPlane,
     renderer,
     container,
-    controls;
+    controls,
+    textureLoader,
+    bannerTexture,
+    banner,
+    ropeLeft,
+    ropeRight;
 
 //SCREEN & MOUSE VARIABLES
 
@@ -129,6 +134,47 @@ function createScene() {
 
   container = document.getElementById('world');
   container.appendChild(renderer.domElement);
+
+  // Texture loader for banner
+  textureLoader = new THREE.TextureLoader();
+  bannerTexture = textureLoader.load(
+    'onchainrugs.png',
+    function(texture) {
+      // Texture loaded successfully
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.flipY = false; // Prevent texture flipping
+      texture.format = THREE.RGBAFormat;
+      texture.needsUpdate = true;
+      
+      // Update banner material if it exists
+      if (banner && banner.material) {
+        banner.material.map = texture;
+        banner.material.needsUpdate = true;
+        banner.material.color.setHex(0xffffff); // Ensure white color so texture shows
+        // Force texture update
+        if (banner.material.map) {
+          banner.material.map.needsUpdate = true;
+        }
+      }
+    },
+    undefined, // onProgress
+    function(error) {
+      console.error('Error loading banner texture:', error);
+      // Fallback: use a colored material if texture fails to load
+      if (banner && banner.material) {
+        banner.material.color.setHex(0xff0000); // Red fallback
+        banner.material.needsUpdate = true;
+      }
+    }
+  );
+  
+  // Set initial texture properties
+  if (bannerTexture) {
+    bannerTexture.wrapS = THREE.ClampToEdgeWrapping;
+    bannerTexture.wrapT = THREE.ClampToEdgeWrapping;
+    bannerTexture.flipY = false;
+  }
 
   window.addEventListener('resize', handleWindowResize, false);
 
@@ -772,6 +818,66 @@ function createPlane(){
   scene.add(airplane.mesh);
 }
 
+function createBanner(){
+  // NFT Banner - Create a larger banner to show the texture clearly
+  var geomBanner = new THREE.PlaneGeometry(50, 30, 10, 6); // More vertices for fluttering, larger size
+  
+  // Create material with texture (will update when texture loads)
+  var matBanner = new THREE.MeshBasicMaterial({
+    map: bannerTexture, 
+    transparent: false, 
+    side: THREE.DoubleSide,
+    color: 0xffffff, // White base color so texture shows properly without tinting
+    depthWrite: true,
+    depthTest: true
+  });
+  
+  // If texture is already loaded, ensure it's properly set
+  if (bannerTexture && bannerTexture.image && bannerTexture.image.complete) {
+    bannerTexture.needsUpdate = true;
+    matBanner.needsUpdate = true;
+  }
+  
+  banner = new THREE.Mesh(geomBanner, matBanner);
+  
+  // Store original vertices for fluttering animation
+  banner.userData.originalVertices = [];
+  if (geomBanner.vertices) {
+    for (var i = 0; i < geomBanner.vertices.length; i++) {
+      banner.userData.originalVertices.push(geomBanner.vertices[i].clone());
+    }
+  }
+  
+  // Position behind the plane initially
+  banner.position.set(0, game.planeDefaultHeight, -80);
+  scene.add(banner);
+
+  // Two ropes connecting plane tail to banner top corners (edges closest to plane)
+  var ropeMaterial = new THREE.LineBasicMaterial({color: Colors.brownDark, linewidth: 4});
+  
+  // Left rope (top-left corner from plane's perspective)
+  var ropeLeftGeometry = new THREE.Geometry();
+  ropeLeftGeometry.vertices = [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, -20),
+    new THREE.Vector3(0, 0, -40),
+    new THREE.Vector3(0, 0, -60)
+  ];
+  ropeLeft = new THREE.Line(ropeLeftGeometry, ropeMaterial);
+  scene.add(ropeLeft);
+  
+  // Right rope (top-right corner from plane's perspective)
+  var ropeRightGeometry = new THREE.Geometry();
+  ropeRightGeometry.vertices = [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, -20),
+    new THREE.Vector3(0, 0, -40),
+    new THREE.Vector3(0, 0, -60)
+  ];
+  ropeRight = new THREE.Line(ropeRightGeometry, ropeMaterial);
+  scene.add(ropeRight);
+}
+
 function createSea(){
   sea = new Sea();
   sea.mesh.position.y = -game.seaRadius;
@@ -952,6 +1058,188 @@ function updatePlane(){
   game.planeCollisionDisplacementY += (0-game.planeCollisionDisplacementY)*deltaTime *0.01;
 
   airplane.pilot.updateHairs();
+
+  // Update banner position to follow the plane (only if banner exists)
+  if (banner && airplane) {
+    // Calculate attachment point at the tail of the plane
+    // Create a helper vector for tail position in plane's local space
+    // Tail is at (-40, 20, 0) before scaling, so (-10, 5, 0) after 0.25 scale
+    var tailLocalPos = new THREE.Vector3(-10, 5, 0);
+    
+    // Transform tail position to world space
+    var worldTailPos = new THREE.Vector3();
+    worldTailPos.copy(tailLocalPos);
+    worldTailPos.applyMatrix4(airplane.mesh.matrixWorld);
+    
+    // Banner offset behind the tail (move in negative local X direction)
+    var bannerOffset = 55; // Distance behind the tail in world space
+    var backwardDir = new THREE.Vector3(-1, 0, 0); // Negative X is backward
+    backwardDir.applyQuaternion(airplane.mesh.quaternion);
+    
+    var bannerTargetPos = worldTailPos.clone().add(backwardDir.clone().multiplyScalar(bannerOffset));
+
+    // Smoothly move banner to target position
+    banner.position.x += (bannerTargetPos.x - banner.position.x) * deltaTime * 0.02;
+    banner.position.y += (bannerTargetPos.y - banner.position.y) * deltaTime * 0.02;
+    banner.position.z += (bannerTargetPos.z - banner.position.z) * deltaTime * 0.02;
+
+    // Make banner face backward (toward the camera) - rotate to match plane's yaw but face backward
+    banner.rotation.y = airplane.mesh.rotation.y + Math.PI;
+    banner.rotation.x = airplane.mesh.rotation.x * 0.3; // Slight tilt with plane
+    banner.rotation.z = airplane.mesh.rotation.z * 0.3; // Slight roll with plane
+
+    // Banner fluttering animation (like a flag in wind)
+    var time = Date.now() * 0.001; // Convert to seconds
+    var flutterIntensity = 2 + game.planeSpeed * 0.5; // More fluttering at higher speeds
+
+    // Apply wave-like deformation to banner vertices using stored originals
+    var geometry = banner.geometry;
+    if (geometry.vertices && banner.userData.originalVertices) {
+      // Old Three.js Geometry API
+      var vertices = geometry.vertices;
+      var originals = banner.userData.originalVertices;
+      for (var i = 0; i < vertices.length && i < originals.length; i++) {
+        var original = originals[i];
+        var vertex = vertices[i];
+
+        // ========== FLUTTER ORIENTATION CONTROLS ==========
+        // Banner coordinate system (PlaneGeometry 50x30):
+        //   - X axis: left-right (width), ranges from -25 to +25
+        //   - Y axis: up-down (height), ranges from -15 to +15
+        //   - Z axis: depth (forward-backward), normally 0 for a plane
+        //
+        // Banner is rotated to face backward: rotation.y = plane.rotation.y + PI
+        // From camera view (looking at banner from behind plane):
+        //   - Changing X creates LEFT-RIGHT waving (horizontal)
+        //   - Changing Y creates UP-DOWN waving (vertical)
+        //   - Changing Z creates FORWARD-BACKWARD waving (depth/in-out)
+        //
+        // Wave amplitude - constant across entire banner for uniform flutter
+        // (Change this to vary amplitude: var waveAmplitude = (1 - original.y/15) * flutterIntensity; for more wave at bottom)
+        var waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
+        
+        // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
+        //   - For LEFT-RIGHT flutter: modify X based on Y position
+        //   - For UP-DOWN flutter: modify Y based on X position (CURRENT - 90 degree rotation)
+        //   - For DEPTH flutter: modify Z based on Y position
+        var waveY = Math.sin(time * 4 + original.x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position
+        // Wave frequency: time * 4 controls speed, original.x * 0.2 controls wave spacing (X-based for vertical wave)
+        
+        // SECONDARY WAVE VARIATIONS (for 3D effect):
+        var waveX = Math.cos(time * 3 + original.y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
+        var waveZ = Math.sin(time * 2.5 + original.y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
+
+        // Apply the wave deformation to vertices
+        vertex.x = original.x + waveX; // Add horizontal wave component (secondary)
+        vertex.y = original.y + waveY; // Add main vertical wave component (rotated 90 degrees from horizontal)
+        vertex.z = original.z + waveZ; // Add depth wave component (secondary)
+      }
+      geometry.verticesNeedUpdate = true;
+      geometry.computeFaceNormals();
+      geometry.computeVertexNormals();
+    } else if (geometry.attributes && geometry.attributes.position) {
+      // Modern BufferGeometry API - store original positions if not already stored
+      if (!banner.userData.originalPositions) {
+        banner.userData.originalPositions = new Float32Array(geometry.attributes.position.array.length);
+        for (var i = 0; i < geometry.attributes.position.array.length; i++) {
+          banner.userData.originalPositions[i] = geometry.attributes.position.array[i];
+        }
+      }
+      
+      var positions = geometry.attributes.position.array;
+      var originals = banner.userData.originalPositions;
+      for (var i = 0; i < positions.length; i += 3) {
+        var x = originals[i];
+        var y = originals[i + 1];
+        var z = originals[i + 2];
+
+        // ========== FLUTTER ORIENTATION CONTROLS ==========
+        // Banner coordinate system (PlaneGeometry 50x30):
+        //   - X axis: left-right (width), ranges from -25 to +25
+        //   - Y axis: up-down (height), ranges from -15 to +15
+        //   - Z axis: depth (forward-backward), normally 0 for a plane
+        //
+        // Banner is rotated to face backward: rotation.y = plane.rotation.y + PI
+        // From camera view (looking at banner from behind plane):
+        //   - Changing X creates LEFT-RIGHT waving (horizontal)
+        //   - Changing Y creates UP-DOWN waving (vertical)
+        //   - Changing Z creates FORWARD-BACKWARD waving (depth/in-out)
+        //
+        // Wave amplitude - constant across entire banner for uniform flutter
+        // (Change this to vary amplitude: var waveAmplitude = (1 - y/15) * flutterIntensity; for more wave at bottom)
+        var waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
+        
+        // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
+        //   - For LEFT-RIGHT flutter: modify X based on Y position
+        //   - For UP-DOWN flutter: modify Y based on X position (CURRENT - 90 degree rotation)
+        //   - For DEPTH flutter: modify Z based on Y position
+        var waveY = Math.sin(time * 4 + x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position
+        // Wave frequency: time * 4 controls speed, x * 0.2 controls wave spacing (X-based for vertical wave)
+        
+        // SECONDARY WAVE VARIATIONS (for 3D effect):
+        var waveX = Math.cos(time * 3 + y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
+        var waveZ = Math.sin(time * 2.5 + y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
+
+        // Apply the wave deformation to positions
+        positions[i] = x + waveX; // Add horizontal wave component (secondary, index 0 = X)
+        positions[i + 1] = y + waveY; // Add main vertical wave component (rotated 90 degrees, index 1 = Y)
+        positions[i + 2] = z + waveZ; // Add depth wave component (secondary, index 2 = Z)
+      }
+      geometry.attributes.position.needsUpdate = true;
+      geometry.computeVertexNormals();
+    }
+
+    // Calculate banner corner positions in world space
+    // Banner is 50 units wide (X), 30 units tall (Y)
+    // Top-left corner in local space: (-25, 15, 0) - these are the edges closest to the plane
+    // Top-right corner in local space: (25, 15, 0)
+    var topLeftLocal = new THREE.Vector3(-22, 13, 0);
+    var topRightLocal = new THREE.Vector3(-22, -13, 0);
+    
+    // Transform to world space using banner's matrix
+    var topLeftWorld = new THREE.Vector3();
+    var topRightWorld = new THREE.Vector3();
+    topLeftWorld.copy(topLeftLocal);
+    topRightWorld.copy(topRightLocal);
+    topLeftWorld.applyMatrix4(banner.matrixWorld);
+    topRightWorld.applyMatrix4(banner.matrixWorld);
+
+    // Update left rope to connect plane tail to banner top-left corner
+    if (ropeLeft) {
+      var segments = 4;
+      for (var i = 0; i < segments; i++) {
+        var t = i / (segments - 1);
+        var point = new THREE.Vector3().lerpVectors(worldTailPos, topLeftWorld, t);
+
+        // Add some sag to the middle of the rope
+        if (i > 0 && i < segments - 1) {
+          var sagAmount = Math.sin(t * Math.PI) * 2; // Sag in the middle
+          point.y -= sagAmount;
+        }
+
+        ropeLeft.geometry.vertices[i] = point;
+      }
+      ropeLeft.geometry.verticesNeedUpdate = true;
+    }
+
+    // Update right rope to connect plane tail to banner top-right corner
+    if (ropeRight) {
+      var segments = 4;
+      for (var i = 0; i < segments; i++) {
+        var t = i / (segments - 1);
+        var point = new THREE.Vector3().lerpVectors(worldTailPos, topRightWorld, t);
+
+        // Add some sag to the middle of the rope
+        if (i > 0 && i < segments - 1) {
+          var sagAmount = Math.sin(t * Math.PI) * 2; // Sag in the middle
+          point.y -= sagAmount;
+        }
+
+        ropeRight.geometry.vertices[i] = point;
+      }
+      ropeRight.geometry.verticesNeedUpdate = true;
+    }
+  }
 }
 
 function showReplay(){
@@ -988,6 +1276,7 @@ function init(event){
 
   createLights();
   createPlane();
+  createBanner();
   createSea();
   createSky();
   createCoins();
