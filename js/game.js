@@ -246,6 +246,7 @@ function createScene() {
           banner.material.emissiveMap.anisotropy = maxAnisotropy;
           banner.material.emissiveMap.needsUpdate = true;
         }
+        banner.material.emissive.setHex(0x999999); // Balanced emissive for natural colors (matches createBanner)
         banner.material.needsUpdate = true;
         banner.material.color.setHex(0xffffff); // Ensure white color so texture shows
         console.log('Banner material updated with texture, image size:', texture.image.width, 'x', texture.image.height);
@@ -940,7 +941,7 @@ function createBanner(){
   var matBanner = new THREE.MeshLambertMaterial({
     map: bannerTexture,
     emissiveMap: bannerTexture, // Use texture as emissive map for self-illumination
-    emissive: 0xffffff, // White emissive at full intensity for bright colors
+    emissive: 0x888888, // Balanced emissive for natural colors (was 0xffffff - too bright, 0x666666 - too dim/pink, now ~53% intensity)
     transparent: false, 
     side: THREE.DoubleSide,
     color: 0xffffff // White base color so texture shows properly without tinting
@@ -1370,8 +1371,12 @@ function updatePlane(){
       
       var targetRoll = rollTilt; // Simple roll based on vertical movement only
       
-      // Minimal pitch and roll from plane (just follow plane's orientation slightly)
-      var targetPitch = airplane.mesh.rotation.x * 0.2; // Very slight pitch following
+      // X-axis pitch tilt: banner tilts on X-axis based on vertical movement (like plane does)
+      // When plane moves up/down, banner should pitch forward/backward slightly for natural look
+      var pitchTiltFromMovement = verticalVelocity * velocityToTiltScale * 0.15; // Pitch tilt based on vertical movement (15% of roll tilt - very subtle)
+      var targetPitch = airplane.mesh.rotation.x * 0.08 + pitchTiltFromMovement; // Combine plane pitch with movement-based pitch (very minimal plane influence)
+      
+      // Minimal roll from plane (just follow plane's orientation slightly)
       var targetRollFromPlane = airplane.mesh.rotation.z * 0.15; // Very slight roll following
       targetRoll += targetRollFromPlane; // Combine movement-based roll with plane's roll
       
@@ -1391,7 +1396,38 @@ function updatePlane(){
       banner.rotation.y += yawDiff * rotationLerpSpeed;
       
       // Smooth pitch tilt (minimal, just slight following)
+      // Rotate around right edge (X = -22 in local space, where ropes attach)
+      // To rotate around a pivot point, we need to adjust position offset
+      var previousPitch = banner.userData.lastPitch || banner.rotation.x;
       banner.rotation.x += (targetPitch - banner.rotation.x) * rotationLerpSpeed;
+      var pitchDelta = banner.rotation.x - previousPitch;
+      banner.userData.lastPitch = banner.rotation.x;
+      
+      // Pivot point is at right edge: X = -22 in local banner space (where ropes attach)
+      // Banner geometry: width 50 (X: -25 to +25), height 30 (Y: -15 to +15)
+      var pivotLocalX = -22; // Local X position of pivot point (right edge)
+      
+      // Calculate world-space offset to rotate around pivot
+      // When rotating around pivot: position needs to be adjusted
+      // Offset = pivot point rotated around itself
+      if (Math.abs(pitchDelta) > 0.0001) { // Only adjust if there's significant rotation
+        // Calculate offset vector from banner center to pivot in local space
+        var pivotOffset = new THREE.Vector3(pivotLocalX, 0, 0);
+        
+        // Rotate the offset vector by the pitch delta
+        var rotatedOffset = pivotOffset.clone();
+        rotatedOffset.applyAxisAngle(new THREE.Vector3(1, 0, 0), pitchDelta);
+        
+        // Calculate position adjustment (difference between rotated and original offset)
+        var positionAdjust = rotatedOffset.sub(pivotOffset);
+        
+        // Transform to world space (considering banner's current rotation)
+        positionAdjust.applyAxisAngle(new THREE.Vector3(0, 1, 0), banner.rotation.y);
+        positionAdjust.applyAxisAngle(new THREE.Vector3(0, 0, 1), banner.rotation.z);
+        
+        // Apply position adjustment
+        banner.position.add(positionAdjust);
+      }
       
       // Smooth roll tilt on Z axis based on vertical movement (cloth flowing effect)
       banner.rotation.z += (targetRoll - banner.rotation.z) * rotationLerpSpeed;
@@ -1440,17 +1476,25 @@ function updatePlane(){
           waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
         }
         
+        // ========== FLUTTER SPEED CONTROLS - TWEAK THESE VALUES ==========
         // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
         //   - For LEFT-RIGHT flutter: modify X based on Y position
         //   - For UP-DOWN flutter: modify Y based on X position (CURRENT - 90 degree rotation)
         //   - For DEPTH flutter: modify Z based on Y position
         // Note: Using negative phase (-original.x) to reverse wave direction from right-to-left instead of left-to-right
-        var waveY = Math.sin(time * 4 - original.x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
-        // Wave frequency: time * 4 controls speed, original.x * 0.2 controls wave spacing (X-based for vertical wave)
+        
+        // MAIN WAVE SPEED: Increase the multiplier (currently 5.5) to make flutter faster
+        // Lower values = slower flutter, Higher values = faster flutter
+        var mainWaveSpeed = 11.0; // TWEAK THIS: Controls main flutter speed (was 4, now 5.5 for faster flutter)
+        var waveY = Math.sin(time * mainWaveSpeed - original.x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
+        // Wave frequency: time * mainWaveSpeed controls speed, original.x * 0.2 controls wave spacing (X-based for vertical wave)
         
         // SECONDARY WAVE VARIATIONS (for 3D effect):
-        var waveX = Math.cos(time * 3 + original.y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
-        var waveZ = Math.sin(time * 2.5 + original.y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
+        // SECONDARY WAVE SPEEDS: Increase these multipliers to make secondary waves faster
+        var secondaryWaveSpeedX = 11.0; // TWEAK THIS: Horizontal wave speed (was 3)
+        var secondaryWaveSpeedZ = 3.5; // TWEAK THIS: Depth wave speed (was 2.5)
+        var waveX = Math.cos(time * secondaryWaveSpeedX + original.y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
+        var waveZ = Math.sin(time * secondaryWaveSpeedZ + original.y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
 
         // Apply the wave deformation to vertices
         vertex.x = original.x + waveX; // Add horizontal wave component (secondary)
@@ -1501,17 +1545,25 @@ function updatePlane(){
           waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
         }
         
+        // ========== FLUTTER SPEED CONTROLS - TWEAK THESE VALUES ==========
         // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
         //   - For LEFT-RIGHT flutter: modify X based on Y position
         //   - For UP-DOWN flutter: modify Y based on X position (CURRENT - 90 degree rotation)
         //   - For DEPTH flutter: modify Z based on Y position
         // Note: Using negative phase (-x) to reverse wave direction from right-to-left instead of left-to-right
-        var waveY = Math.sin(time * 4 - x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
-        // Wave frequency: time * 4 controls speed, x * 0.2 controls wave spacing (X-based for vertical wave)
+        
+        // MAIN WAVE SPEED: Increase the multiplier (currently 5.5) to make flutter faster
+        // Lower values = slower flutter, Higher values = faster flutter
+        var mainWaveSpeed = 5.5; // TWEAK THIS: Controls main flutter speed (was 4, now 5.5 for faster flutter)
+        var waveY = Math.sin(time * mainWaveSpeed - x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
+        // Wave frequency: time * mainWaveSpeed controls speed, x * 0.2 controls wave spacing (X-based for vertical wave)
         
         // SECONDARY WAVE VARIATIONS (for 3D effect):
-        var waveX = Math.cos(time * 3 + y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
-        var waveZ = Math.sin(time * 2.5 + y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
+        // SECONDARY WAVE SPEEDS: Increase these multipliers to make secondary waves faster
+        var secondaryWaveSpeedX = 4.0; // TWEAK THIS: Horizontal wave speed (was 3)
+        var secondaryWaveSpeedZ = 3.5; // TWEAK THIS: Depth wave speed (was 2.5)
+        var waveX = Math.cos(time * secondaryWaveSpeedX + y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
+        var waveZ = Math.sin(time * secondaryWaveSpeedZ + y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
 
         // Apply the wave deformation to positions
         positions[i] = x + waveX; // Add horizontal wave component (secondary, index 0 = X)
