@@ -185,6 +185,7 @@ function createScene() {
       if (banner && banner.material) {
         // Apply rotation to texture
         banner.material.map = texture;
+        banner.material.emissiveMap = texture; // Set emissive map for self-illumination (bright, proper colors)
         if (banner.material.map) {
           // Apply rotation if center exists
           if (banner.material.map.center) {
@@ -195,7 +196,18 @@ function createScene() {
             banner.material.map.repeat.set(-1, -1);
           }
         }
+        // Apply same rotation to emissive map
+        if (banner.material.emissiveMap) {
+          if (banner.material.emissiveMap.center) {
+            banner.material.emissiveMap.center.set(0.5, 0.5);
+            banner.material.emissiveMap.rotation = Math.PI;
+          } else {
+            banner.material.emissiveMap.offset.set(1, 1);
+            banner.material.emissiveMap.repeat.set(-1, -1);
+          }
+        }
         banner.material.map.needsUpdate = true;
+        if (banner.material.emissiveMap) banner.material.emissiveMap.needsUpdate = true;
         banner.material.needsUpdate = true;
         banner.material.color.setHex(0xffffff); // Ensure white color so texture shows
         console.log('Banner material updated with texture, image size:', texture.image.width, 'x', texture.image.height);
@@ -884,9 +896,13 @@ function createBanner(){
   // NFT Banner - Create a larger banner to show the texture clearly
   var geomBanner = new THREE.PlaneGeometry(50, 30, 10, 6); // More vertices for fluttering, larger size
   
-  // Create material with texture - use BasicMaterial to ensure texture always shows regardless of lighting
-  var matBanner = new THREE.MeshBasicMaterial({
-    map: bannerTexture, 
+  // Create material with texture - use LambertMaterial to enable shadow casting while maintaining texture colors
+  // Use emissiveMap to make texture self-illuminated (bright and proper colored like original)
+  // This makes it less affected by ambient light tinting
+  var matBanner = new THREE.MeshLambertMaterial({
+    map: bannerTexture,
+    emissiveMap: bannerTexture, // Use texture as emissive map for self-illumination
+    emissive: 0xffffff, // White emissive at full intensity for bright colors
     transparent: false, 
     side: THREE.DoubleSide,
     color: 0xffffff // White base color so texture shows properly without tinting
@@ -894,6 +910,7 @@ function createBanner(){
   
   // Set texture on material (will be null if not loaded yet, but will be set in callback)
   matBanner.map = bannerTexture;
+  matBanner.emissiveMap = bannerTexture; // Set emissive map for self-illumination
   
   // If texture is already loaded, ensure it's properly set with rotation
   if (bannerTexture && bannerTexture.image && bannerTexture.image.complete) {
@@ -913,6 +930,10 @@ function createBanner(){
   }
   
   banner = new THREE.Mesh(geomBanner, matBanner);
+  
+  // Enable shadow casting and receiving for the banner
+  banner.castShadow = true;
+  banner.receiveShadow = true;
   
   // Store original vertices for fluttering animation
   banner.userData.originalVertices = [];
