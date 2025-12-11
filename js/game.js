@@ -169,6 +169,19 @@ function createScene() {
       texture.flipY = false;
       texture.format = THREE.RGBAFormat;
       
+      // High-definition texture settings for sharp, crisp rendering
+      texture.minFilter = THREE.LinearMipmapLinearFilter; // Best quality mipmap filtering
+      texture.magFilter = THREE.LinearFilter; // Best quality when texture is magnified
+      texture.generateMipmaps = true; // Generate mipmaps for better quality
+      // Maximum anisotropy for sharp textures at angles (16 is maximum, fallback to 8 for older GPUs)
+      var maxAnisotropy = 16;
+      if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
+        maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+      } else if (renderer.getMaxAnisotropy) {
+        maxAnisotropy = renderer.getMaxAnisotropy();
+      }
+      texture.anisotropy = maxAnisotropy;
+      
       // Rotate texture 180 degrees - check if center exists (older Three.js versions)
       if (texture.center) {
         texture.center.set(0.5, 0.5); // Set rotation center to middle of texture
@@ -206,8 +219,33 @@ function createScene() {
             banner.material.emissiveMap.repeat.set(-1, -1);
           }
         }
-        banner.material.map.needsUpdate = true;
-        if (banner.material.emissiveMap) banner.material.emissiveMap.needsUpdate = true;
+        // Apply high-definition settings to both maps
+        if (banner.material.map) {
+          banner.material.map.minFilter = THREE.LinearMipmapLinearFilter;
+          banner.material.map.magFilter = THREE.LinearFilter;
+          banner.material.map.generateMipmaps = true;
+          var maxAnisotropy = 16;
+          if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
+            maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+          } else if (renderer.getMaxAnisotropy) {
+            maxAnisotropy = renderer.getMaxAnisotropy();
+          }
+          banner.material.map.anisotropy = maxAnisotropy;
+          banner.material.map.needsUpdate = true;
+        }
+        if (banner.material.emissiveMap) {
+          banner.material.emissiveMap.minFilter = THREE.LinearMipmapLinearFilter;
+          banner.material.emissiveMap.magFilter = THREE.LinearFilter;
+          banner.material.emissiveMap.generateMipmaps = true;
+          var maxAnisotropy = 16;
+          if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
+            maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+          } else if (renderer.getMaxAnisotropy) {
+            maxAnisotropy = renderer.getMaxAnisotropy();
+          }
+          banner.material.emissiveMap.anisotropy = maxAnisotropy;
+          banner.material.emissiveMap.needsUpdate = true;
+        }
         banner.material.needsUpdate = true;
         banner.material.color.setHex(0xffffff); // Ensure white color so texture shows
         console.log('Banner material updated with texture, image size:', texture.image.width, 'x', texture.image.height);
@@ -912,7 +950,7 @@ function createBanner(){
   matBanner.map = bannerTexture;
   matBanner.emissiveMap = bannerTexture; // Set emissive map for self-illumination
   
-  // If texture is already loaded, ensure it's properly set with rotation
+  // If texture is already loaded, ensure it's properly set with rotation and high-definition settings
   if (bannerTexture && bannerTexture.image && bannerTexture.image.complete) {
     // Apply rotation - check if center exists
     if (bannerTexture.center) {
@@ -922,6 +960,17 @@ function createBanner(){
       bannerTexture.offset.set(1, 1);
       bannerTexture.repeat.set(-1, -1);
     }
+    // Apply high-definition texture settings
+    bannerTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    bannerTexture.magFilter = THREE.LinearFilter;
+    bannerTexture.generateMipmaps = true;
+    var maxAnisotropy = 16;
+    if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
+      maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+    } else if (renderer.getMaxAnisotropy) {
+      maxAnisotropy = renderer.getMaxAnisotropy();
+    }
+    bannerTexture.anisotropy = maxAnisotropy;
     bannerTexture.needsUpdate = true;
     matBanner.needsUpdate = true;
     console.log('Banner texture already loaded when creating banner');
