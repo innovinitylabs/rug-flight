@@ -1250,7 +1250,8 @@ function updatePlane(){
         //   - For LEFT-RIGHT flutter: modify X based on Y position
         //   - For UP-DOWN flutter: modify Y based on X position (CURRENT - 90 degree rotation)
         //   - For DEPTH flutter: modify Z based on Y position
-        var waveY = Math.sin(time * 4 + original.x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position
+        // Note: Using negative phase (-original.x) to reverse wave direction from right-to-left instead of left-to-right
+        var waveY = Math.sin(time * 4 - original.x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
         // Wave frequency: time * 4 controls speed, original.x * 0.2 controls wave spacing (X-based for vertical wave)
         
         // SECONDARY WAVE VARIATIONS (for 3D effect):
@@ -1310,7 +1311,8 @@ function updatePlane(){
         //   - For LEFT-RIGHT flutter: modify X based on Y position
         //   - For UP-DOWN flutter: modify Y based on X position (CURRENT - 90 degree rotation)
         //   - For DEPTH flutter: modify Z based on Y position
-        var waveY = Math.sin(time * 4 + x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position
+        // Note: Using negative phase (-x) to reverse wave direction from right-to-left instead of left-to-right
+        var waveY = Math.sin(time * 4 - x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
         // Wave frequency: time * 4 controls speed, x * 0.2 controls wave spacing (X-based for vertical wave)
         
         // SECONDARY WAVE VARIATIONS (for 3D effect):
