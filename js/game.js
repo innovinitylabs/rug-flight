@@ -83,6 +83,15 @@ function resetGame(){
           status : "playing",
          };
   fieldLevel.innerHTML = Math.floor(game.level);
+  
+  // Make ropes visible again when game resets
+  if (ropeLeft) ropeLeft.visible = true;
+  if (ropeRight) ropeRight.visible = true;
+  
+  // Make airplane visible again when game resets
+  if (airplane && airplane.mesh) {
+    airplane.mesh.visible = true;
+  }
 }
 
 //THREEJS RELATED VARIABLES
@@ -1028,13 +1037,32 @@ function loop(){
     game.planeFallSpeed *= 1.05;
     airplane.mesh.position.y -= game.planeFallSpeed*deltaTime;
 
+    // Hide ropes when game ends
+    if (ropeLeft) ropeLeft.visible = false;
+    if (ropeRight) ropeRight.visible = false;
+
+    // Update banner animation during gameover (it will animate to center)
+    updatePlane();
+
     if (airplane.mesh.position.y <-200){
+      // Hide airplane when it falls below screen
+      airplane.mesh.visible = false;
       showReplay();
       game.status = "waitingReplay";
 
     }
   }else if (game.status=="waitingReplay"){
-
+    // Keep ropes hidden during replay wait
+    if (ropeLeft) ropeLeft.visible = false;
+    if (ropeRight) ropeRight.visible = false;
+    
+    // Keep airplane hidden during replay wait
+    if (airplane && airplane.mesh) {
+      airplane.mesh.visible = false;
+    }
+    
+    // Update banner animation during waiting replay (it will stay centered)
+    updatePlane();
   }
 
 
@@ -1126,36 +1154,62 @@ function updatePlane(){
 
   // Update banner position to follow the plane (only if banner exists)
   if (banner && airplane) {
-    // Calculate attachment point at the tail of the plane
-    // Create a helper vector for tail position in plane's local space
-    // Tail is at (-40, 20, 0) before scaling, so (-10, 5, 0) after 0.25 scale
-    var tailLocalPos = new THREE.Vector3(-10, 5, 0);
-    
-    // Transform tail position to world space
-    var worldTailPos = new THREE.Vector3();
-    worldTailPos.copy(tailLocalPos);
-    worldTailPos.applyMatrix4(airplane.mesh.matrixWorld);
-    
-    // Banner offset behind the tail (move in negative local X direction)
-    var bannerOffset = 55; // Distance behind the tail in world space
-    var backwardDir = new THREE.Vector3(-1, 0, 0); // Negative X is backward
-    backwardDir.applyQuaternion(airplane.mesh.quaternion);
-    
-    var bannerTargetPos = worldTailPos.clone().add(backwardDir.clone().multiplyScalar(bannerOffset));
+    // When game is over or waiting for replay, animate banner to center screen above replay message
+    if (game.status == "gameover" || game.status == "waitingReplay") {
+      // Target position: center of screen, above replay message, closer to camera
+      // Replay message is at bottom center, so banner should be above center
+      var bannerTargetX = 0; // Center horizontally
+      var bannerTargetY = 150; // Above center, above replay message
+      var bannerTargetZ = 100; // Closer to camera (normally camera is at z=200, plane at z=0)
+      
+      // Smoothly animate banner to target position (slow smooth animation)
+      var animationSpeed = 0.05; // Animation speed - adjust for faster/slower movement
+      banner.position.x += (bannerTargetX - banner.position.x) * deltaTime * animationSpeed;
+      banner.position.y += (bannerTargetY - banner.position.y) * deltaTime * animationSpeed;
+      banner.position.z += (bannerTargetZ - banner.position.z) * deltaTime * animationSpeed;
+      
+      // Rotate banner to face camera (but keep it facing forward, not backward/mirrored)
+      // During gameplay banner faces backward (rotation.y = plane.rotation.y + PI)
+      // When centered, we want it facing the camera (rotation.y = PI to face backward toward camera)
+      var targetRotationY = Math.PI; // Face backward toward camera (180 degrees from forward)
+      var rotationSpeed = 0.05; // Rotation speed
+      banner.rotation.y += (targetRotationY - banner.rotation.y) * deltaTime * rotationSpeed;
+      banner.rotation.x += (0 - banner.rotation.x) * deltaTime * rotationSpeed; // Level out
+      banner.rotation.z += (0 - banner.rotation.z) * deltaTime * rotationSpeed; // Level out
+    } else {
+      // Normal gameplay: banner follows plane
+      // Calculate attachment point at the tail of the plane
+      // Create a helper vector for tail position in plane's local space
+      // Tail is at (-40, 20, 0) before scaling, so (-10, 5, 0) after 0.25 scale
+      var tailLocalPos = new THREE.Vector3(-10, 5, 0);
+      
+      // Transform tail position to world space
+      var worldTailPos = new THREE.Vector3();
+      worldTailPos.copy(tailLocalPos);
+      worldTailPos.applyMatrix4(airplane.mesh.matrixWorld);
+      
+      // Banner offset behind the tail (move in negative local X direction)
+      var bannerOffset = 55; // Distance behind the tail in world space
+      var backwardDir = new THREE.Vector3(-1, 0, 0); // Negative X is backward
+      backwardDir.applyQuaternion(airplane.mesh.quaternion);
+      
+      var bannerTargetPos = worldTailPos.clone().add(backwardDir.clone().multiplyScalar(bannerOffset));
 
-    // Smoothly move banner to target position
-    banner.position.x += (bannerTargetPos.x - banner.position.x) * deltaTime * 0.02;
-    banner.position.y += (bannerTargetPos.y - banner.position.y) * deltaTime * 0.02;
-    banner.position.z += (bannerTargetPos.z - banner.position.z) * deltaTime * 0.02;
+      // Smoothly move banner to target position
+      banner.position.x += (bannerTargetPos.x - banner.position.x) * deltaTime * 0.02;
+      banner.position.y += (bannerTargetPos.y - banner.position.y) * deltaTime * 0.02;
+      banner.position.z += (bannerTargetPos.z - banner.position.z) * deltaTime * 0.02;
 
-    // Make banner face backward (toward the camera) - rotate to match plane's yaw but face backward
-    banner.rotation.y = airplane.mesh.rotation.y + Math.PI;
-    banner.rotation.x = airplane.mesh.rotation.x * 0.3; // Slight tilt with plane
-    banner.rotation.z = airplane.mesh.rotation.z * 0.3; // Slight roll with plane
+      // Make banner face backward (toward the camera) - rotate to match plane's yaw but face backward
+      banner.rotation.y = airplane.mesh.rotation.y + Math.PI;
+      banner.rotation.x = airplane.mesh.rotation.x * 0.3; // Slight tilt with plane
+      banner.rotation.z = airplane.mesh.rotation.z * 0.3; // Slight roll with plane
+    }
 
-    // Banner fluttering animation (like a flag in wind)
+    // Banner fluttering animation (like a flag in wind) - continues even during game over
     var time = Date.now() * 0.001; // Convert to seconds
-    var flutterIntensity = 2 + game.planeSpeed * 0.5; // More fluttering at higher speeds
+    // Base flutter intensity, increases with speed during gameplay
+    var flutterIntensity = game.status == "playing" ? (2 + game.planeSpeed * 0.5) : 2.5; // Constant flutter when game over
 
     // Apply wave-like deformation to banner vertices using stored originals
     var geometry = banner.geometry;
@@ -1273,8 +1327,9 @@ function updatePlane(){
     topLeftWorld.applyMatrix4(banner.matrixWorld);
     topRightWorld.applyMatrix4(banner.matrixWorld);
 
-    // Update left rope to connect plane tail to banner top-left corner
-    if (ropeLeft) {
+    // Update ropes only during normal gameplay (not during gameover/waitingReplay)
+    if (game.status == "playing" && ropeLeft && ropeRight) {
+      // Update left rope to connect plane tail to banner top-left corner
       var segments = 4;
       for (var i = 0; i < segments; i++) {
         var t = i / (segments - 1);
@@ -1289,11 +1344,8 @@ function updatePlane(){
         ropeLeft.geometry.vertices[i] = point;
       }
       ropeLeft.geometry.verticesNeedUpdate = true;
-    }
 
-    // Update right rope to connect plane tail to banner top-right corner
-    if (ropeRight) {
-      var segments = 4;
+      // Update right rope to connect plane tail to banner top-right corner
       for (var i = 0; i < segments; i++) {
         var t = i / (segments - 1);
         var point = new THREE.Vector3().lerpVectors(worldTailPos, topRightWorld, t);
