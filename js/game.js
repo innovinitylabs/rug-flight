@@ -984,6 +984,10 @@ function createBanner(){
   banner.castShadow = true;
   banner.receiveShadow = true;
   
+  // Initialize velocity for smooth, flowing ribbon-like movement
+  banner.userData.velocity = new THREE.Vector3(0, 0, 0);
+  banner.userData.lastTargetPos = new THREE.Vector3(0, 0, 0);
+  
   // Store original vertices for fluttering animation
   banner.userData.originalVertices = [];
   if (geomBanner.vertices) {
@@ -1265,10 +1269,54 @@ function updatePlane(){
       
       var bannerTargetPos = worldTailPos.clone().add(backwardDir.clone().multiplyScalar(bannerOffset));
 
-      // Smoothly move banner to target position
-      banner.position.x += (bannerTargetPos.x - banner.position.x) * deltaTime * 0.02;
-      banner.position.y += (bannerTargetPos.y - banner.position.y) * deltaTime * 0.02;
-      banner.position.z += (bannerTargetPos.z - banner.position.z) * deltaTime * 0.02;
+      // Smooth, flowing ribbon-like movement using physics-based spring-damper system
+      // This creates natural overshoot and settling, like a ribbon flowing in the wind
+      if (!banner.userData.velocity) {
+        banner.userData.velocity = new THREE.Vector3(0, 0, 0);
+      }
+      
+      // Ensure deltaTime is valid and reasonable
+      var safeDeltaTime = deltaTime;
+      if (!deltaTime || deltaTime <= 0 || !isFinite(deltaTime) || deltaTime > 0.1) {
+        safeDeltaTime = 0.016; // Default to 60fps if invalid
+      }
+      
+      // Spring-damper physics for smooth, flowing movement
+      var springStrength = 12.0; // How strongly the banner is pulled toward target (higher = more responsive)
+      var dampingFactor = 0.88; // Velocity damping (0-1, higher = more momentum/flow, less damping)
+      
+      // Calculate spring force toward target
+      var offset = new THREE.Vector3();
+      offset.subVectors(bannerTargetPos, banner.position);
+      
+      // Apply spring force to velocity
+      var force = offset.clone().multiplyScalar(springStrength * safeDeltaTime);
+      banner.userData.velocity.add(force);
+      
+      // Apply damping to velocity (creates smooth flowing motion)
+      banner.userData.velocity.multiplyScalar(dampingFactor);
+      
+      // Update position based on velocity (smooth, flowing movement with momentum)
+      var positionDelta = banner.userData.velocity.clone().multiplyScalar(safeDeltaTime);
+      
+      // Validate position delta to prevent NaN or infinite values
+      if (isFinite(positionDelta.x) && isFinite(positionDelta.y) && isFinite(positionDelta.z)) {
+        banner.position.add(positionDelta);
+        
+        // Safety check: ensure banner position is valid
+        if (!isFinite(banner.position.x) || !isFinite(banner.position.y) || !isFinite(banner.position.z)) {
+          // Reset to target if position becomes invalid
+          banner.position.copy(bannerTargetPos);
+          banner.userData.velocity.set(0, 0, 0);
+        }
+      } else {
+        // Fallback: if velocity is invalid, use simple interpolation
+        banner.position.lerp(bannerTargetPos, 0.15 * safeDeltaTime * 60);
+        banner.userData.velocity.set(0, 0, 0);
+      }
+      
+      // Ensure banner stays visible
+      if (banner) banner.visible = true;
 
       // Make banner face backward (toward the camera) - rotate to match plane's yaw but face backward
       banner.rotation.y = airplane.mesh.rotation.y + Math.PI;
@@ -1415,6 +1463,9 @@ function updatePlane(){
 
     // Update ropes only during normal gameplay (not during gameover/waitingReplay)
     if (game.status == "playing" && ropeLeft && ropeRight) {
+      // Ensure ropes are visible during gameplay
+      ropeLeft.visible = true;
+      ropeRight.visible = true;
       // Update left rope to connect plane tail to banner top-left corner
       var segments = 4;
       for (var i = 0; i < segments; i++) {
