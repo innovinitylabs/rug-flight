@@ -1440,6 +1440,40 @@ function updatePlane(){
     var time = Date.now() * 0.001; // Convert to seconds
     // Base flutter intensity, increases with speed during gameplay
     var flutterIntensity = game.status == "playing" ? (2 + game.planeSpeed * 0.5) : 2.5; // Constant flutter when game over
+    
+    // Map flutter speed to world speed: faster world = faster flutter, slower world = slower flutter
+    // Normal playing: flutter speed 11.0 (perfect at game start)
+    // Game over (slow world): flutter speed 5.5 (perfect when world is slow)
+    var maxGameSpeed = game.initSpeed * game.planeMaxSpeed; // Maximum expected game speed during normal play
+    var currentGameSpeed = game.speed || 0.001; // Current game speed (fallback to small value if 0)
+    var speedRatio = Math.min(currentGameSpeed / maxGameSpeed, 1.0); // Normalize to 0-1 range
+    var minFlutterSpeed = 5.5; // Slow flutter when world is slow (game over)
+    var maxFlutterSpeed = 11.0; // Fast flutter when world is fast (normal play)
+    var baseFlutterSpeed = minFlutterSpeed + (speedRatio * (maxFlutterSpeed - minFlutterSpeed)); // Linear mapping
+    
+    // Increase flutter speed during vertical maneuvers (up/down movement) - ONLY during gameplay
+    // More airflow from maneuvers = faster flutter (more realistic)
+    var maneuverBoost = 1.0; // Default: no boost
+    if (game.status == "playing") { // Only apply during gameplay, not after game over
+      var verticalVelocity = 0;
+      var safeDeltaTimeForFlutter = deltaTime;
+      if (!safeDeltaTimeForFlutter || safeDeltaTimeForFlutter <= 0 || !isFinite(safeDeltaTimeForFlutter) || safeDeltaTimeForFlutter > 0.1) {
+        safeDeltaTimeForFlutter = 0.016; // Default to 60fps if invalid
+      }
+      if (banner.userData.lastPlanePos && banner.userData.lastPlanePos.length() > 0 && airplane && airplane.mesh) {
+        var currentPlanePos = airplane.mesh.position.clone();
+        var planeMovementDir = new THREE.Vector3();
+        planeMovementDir.subVectors(currentPlanePos, banner.userData.lastPlanePos);
+        verticalVelocity = Math.abs(planeMovementDir.y / safeDeltaTimeForFlutter); // Vertical movement velocity
+      }
+      
+      // Calculate maneuver boost: more vertical movement = faster flutter
+      // Scale vertical velocity to a reasonable range and apply as multiplier
+      var maxVerticalVelocity = 50; // Expected max vertical velocity during maneuvers (tune this if needed)
+      var verticalVelocityRatio = Math.min(verticalVelocity / maxVerticalVelocity, 1.0); // Normalize to 0-1
+      maneuverBoost = 1.0 + (verticalVelocityRatio * 1.0); // Up to 200% boost (2x speed) during maneuvers
+    }
+    var flutterSpeedMultiplier = baseFlutterSpeed * maneuverBoost; // Apply maneuver boost to base flutter speed (only during gameplay)
 
     // Apply wave-like deformation to banner vertices using stored originals
     var geometry = banner.geometry;
@@ -1483,16 +1517,17 @@ function updatePlane(){
         //   - For DEPTH flutter: modify Z based on Y position
         // Note: Using negative phase (-original.x) to reverse wave direction from right-to-left instead of left-to-right
         
-        // MAIN WAVE SPEED: Increase the multiplier (currently 5.5) to make flutter faster
-        // Lower values = slower flutter, Higher values = faster flutter
-        var mainWaveSpeed = 11.0; // TWEAK THIS: Controls main flutter speed (was 4, now 5.5 for faster flutter)
+        // MAIN WAVE SPEED: Mapped to world speed (calculated above)
+        // Automatically scales: 11.0 at normal speed, 5.5 when world is slow
+        // You can still tweak minFlutterSpeed and maxFlutterSpeed above if needed
+        var mainWaveSpeed = flutterSpeedMultiplier; // Speed scales with world speed
         var waveY = Math.sin(time * mainWaveSpeed - original.x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
         // Wave frequency: time * mainWaveSpeed controls speed, original.x * 0.2 controls wave spacing (X-based for vertical wave)
         
         // SECONDARY WAVE VARIATIONS (for 3D effect):
-        // SECONDARY WAVE SPEEDS: Increase these multipliers to make secondary waves faster
-        var secondaryWaveSpeedX = 11.0; // TWEAK THIS: Horizontal wave speed (was 3)
-        var secondaryWaveSpeedZ = 3.5; // TWEAK THIS: Depth wave speed (was 2.5)
+        // SECONDARY WAVE SPEEDS: Scaled proportionally to main wave speed
+        var secondaryWaveSpeedX = flutterSpeedMultiplier * 0.7; // Horizontal wave speed (70% of main speed, scales with world)
+        var secondaryWaveSpeedZ = flutterSpeedMultiplier * 0.32; // Depth wave speed (32% of main speed, scales with world)
         var waveX = Math.cos(time * secondaryWaveSpeedX + original.y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
         var waveZ = Math.sin(time * secondaryWaveSpeedZ + original.y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
 
@@ -1552,16 +1587,17 @@ function updatePlane(){
         //   - For DEPTH flutter: modify Z based on Y position
         // Note: Using negative phase (-x) to reverse wave direction from right-to-left instead of left-to-right
         
-        // MAIN WAVE SPEED: Increase the multiplier (currently 5.5) to make flutter faster
-        // Lower values = slower flutter, Higher values = faster flutter
-        var mainWaveSpeed = 5.5; // TWEAK THIS: Controls main flutter speed (was 4, now 5.5 for faster flutter)
+        // MAIN WAVE SPEED: Mapped to world speed (calculated above)
+        // Automatically scales: 11.0 at normal speed, 5.5 when world is slow
+        // You can still tweak minFlutterSpeed and maxFlutterSpeed above if needed
+        var mainWaveSpeed = flutterSpeedMultiplier; // Speed scales with world speed
         var waveY = Math.sin(time * mainWaveSpeed - x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
         // Wave frequency: time * mainWaveSpeed controls speed, x * 0.2 controls wave spacing (X-based for vertical wave)
         
         // SECONDARY WAVE VARIATIONS (for 3D effect):
-        // SECONDARY WAVE SPEEDS: Increase these multipliers to make secondary waves faster
-        var secondaryWaveSpeedX = 4.0; // TWEAK THIS: Horizontal wave speed (was 3)
-        var secondaryWaveSpeedZ = 3.5; // TWEAK THIS: Depth wave speed (was 2.5)
+        // SECONDARY WAVE SPEEDS: Scaled proportionally to main wave speed
+        var secondaryWaveSpeedX = flutterSpeedMultiplier * 0.7; // Horizontal wave speed (70% of main speed, scales with world)
+        var secondaryWaveSpeedZ = flutterSpeedMultiplier * 0.32; // Depth wave speed (32% of main speed, scales with world)
         var waveX = Math.cos(time * secondaryWaveSpeedX + y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
         var waveZ = Math.sin(time * secondaryWaveSpeedZ + y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
 
