@@ -1233,11 +1233,18 @@ function updatePlane(){
         //   - Changing Y creates UP-DOWN waving (vertical)
         //   - Changing Z creates FORWARD-BACKWARD waving (depth/in-out)
         //
-        // Wave amplitude - zero at right edge (where ropes attach at X = -22), increasing toward left edge
-        // Banner X ranges from -25 (right edge) to +25 (left edge), ropes attach at X = -22 (right edge)
-        // Amplitude formula: (x + 22) / 47 gives 0 at X = -22 (ropes), 1 at X = +25 (left edge)
-        var normalizedX = Math.max(0, (original.x + 22) / 47); // Clamp to prevent negative values
-        var waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
+        // Wave amplitude calculation:
+        // During gameplay: zero at right edge (where ropes attach at X = -22), increasing toward left edge
+        // During gameover/waitingReplay: full flutter across entire banner (ropes are detached)
+        var waveAmplitude;
+        if (game.status == "playing") {
+          // Ropes attached - zero flutter at attachment point
+          var normalizedX = Math.max(0, (original.x + 22) / 47); // Clamp to prevent negative values
+          waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
+        } else {
+          // Ropes detached - full flutter everywhere
+          waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
+        }
         
         // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
         //   - For LEFT-RIGHT flutter: modify X based on Y position
@@ -1286,11 +1293,18 @@ function updatePlane(){
         //   - Changing Y creates UP-DOWN waving (vertical)
         //   - Changing Z creates FORWARD-BACKWARD waving (depth/in-out)
         //
-        // Wave amplitude - zero at right edge (where ropes attach at X = -22), increasing toward left edge
-        // Banner X ranges from -25 (right edge) to +25 (left edge), ropes attach at X = -22 (right edge)
-        // Amplitude formula: (x + 22) / 47 gives 0 at X = -22 (ropes), 1 at X = +25 (left edge)
-        var normalizedX = Math.max(0, (x + 22) / 47); // Clamp to prevent negative values
-        var waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
+        // Wave amplitude calculation:
+        // During gameplay: zero at right edge (where ropes attach at X = -22), increasing toward left edge
+        // During gameover/waitingReplay: full flutter across entire banner (ropes are detached)
+        var waveAmplitude;
+        if (game.status == "playing") {
+          // Ropes attached - zero flutter at attachment point
+          var normalizedX = Math.max(0, (x + 22) / 47); // Clamp to prevent negative values
+          waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
+        } else {
+          // Ropes detached - full flutter everywhere
+          waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
+        }
         
         // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
         //   - For LEFT-RIGHT flutter: modify X based on Y position
