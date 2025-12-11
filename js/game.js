@@ -1114,9 +1114,11 @@ function updatePlane(){
         //   - Changing Y creates UP-DOWN waving (vertical)
         //   - Changing Z creates FORWARD-BACKWARD waving (depth/in-out)
         //
-        // Wave amplitude - constant across entire banner for uniform flutter
-        // (Change this to vary amplitude: var waveAmplitude = (1 - original.y/15) * flutterIntensity; for more wave at bottom)
-        var waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
+        // Wave amplitude - zero at right edge (where ropes attach at X = -22), increasing toward left edge
+        // Banner X ranges from -25 (right edge) to +25 (left edge), ropes attach at X = -22 (right edge)
+        // Amplitude formula: (x + 22) / 47 gives 0 at X = -22 (ropes), 1 at X = +25 (left edge)
+        var normalizedX = Math.max(0, (original.x + 22) / 47); // Clamp to prevent negative values
+        var waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
         
         // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
         //   - For LEFT-RIGHT flutter: modify X based on Y position
@@ -1165,9 +1167,11 @@ function updatePlane(){
         //   - Changing Y creates UP-DOWN waving (vertical)
         //   - Changing Z creates FORWARD-BACKWARD waving (depth/in-out)
         //
-        // Wave amplitude - constant across entire banner for uniform flutter
-        // (Change this to vary amplitude: var waveAmplitude = (1 - y/15) * flutterIntensity; for more wave at bottom)
-        var waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
+        // Wave amplitude - zero at right edge (where ropes attach at X = -22), increasing toward left edge
+        // Banner X ranges from -25 (right edge) to +25 (left edge), ropes attach at X = -22 (right edge)
+        // Amplitude formula: (x + 22) / 47 gives 0 at X = -22 (ropes), 1 at X = +25 (left edge)
+        var normalizedX = Math.max(0, (x + 22) / 47); // Clamp to prevent negative values
+        var waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
         
         // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
         //   - For LEFT-RIGHT flutter: modify X based on Y position
