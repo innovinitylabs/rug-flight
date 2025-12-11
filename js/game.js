@@ -1348,11 +1348,26 @@ function updatePlane(){
       // Base yaw: follow plane's yaw (but face backward toward camera)
       var targetYaw = airplane.mesh.rotation.y + Math.PI;
       
-      // Cloth-like tilt on Z axis (roll): slight roll based on vertical movement
-      // When plane moves up, banner tilts slightly on Z axis (roll)
-      // When plane moves down, banner tilts slightly on Z axis in opposite direction
-      var verticalVelocity = planeMovementDir.y / safeDeltaTime; // Vertical movement speed
-      var rollTilt = verticalVelocity * -0.05; // Negate for correct direction (reversed sign)
+      // Cloth-like tilt on Z axis (roll): roll based on vertical movement velocity (rate of change)
+      // When plane moves up quickly, banner tilts more on Z axis (roll)
+      // When plane moves down quickly, banner tilts more in opposite direction
+      // Gradual movements create smaller tilt, fast movements create larger tilt
+      var verticalVelocity = planeMovementDir.y / safeDeltaTime; // Vertical movement velocity (rate of change)
+      
+      // Direct velocity-based tilt: matches the rate of movement
+      // Fast movement = more tilt, gradual movement = less tilt
+      // Use a smooth scaling function that works for both fast and gradual movements
+      var velocityMagnitude = Math.abs(verticalVelocity);
+      
+      // Scale factor: makes velocity directly proportional to tilt
+      // Fast movements (high velocity) → larger tilt
+      // Gradual movements (low velocity) → smaller tilt
+      // The multiplier determines sensitivity (tune this for desired response)
+      var velocityToTiltScale = 0.008; // Tune this: higher = more sensitive, lower = less sensitive
+      
+      // Calculate tilt directly from velocity (matches rate of movement)
+      var rollTilt = verticalVelocity * velocityToTiltScale * -1; // Negative for correct direction
+      
       var targetRoll = rollTilt; // Simple roll based on vertical movement only
       
       // Minimal pitch and roll from plane (just follow plane's orientation slightly)
