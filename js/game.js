@@ -15,6 +15,17 @@ var AudioManager = function() {
     this.listener = new THREE.AudioListener();
     this.buffers = {}; // Store loaded audio buffers for Three.js Audio
     this.threeJSSupported = true;
+    
+    // Track all Three.js Audio instances for debugging
+    this.allPropellerInstances = [];
+    
+    // Monitor audio context state
+    if (this.listener.context) {
+      console.log('[PROPELLER] Audio context state:', this.listener.context.state);
+      this.listener.context.addEventListener('statechange', function() {
+        console.log('[PROPELLER] Audio context state changed to:', this.listener.context.state);
+      }.bind(this));
+    }
   } else {
     this.threeJSSupported = false;
     console.warn('[PROPELLER] Three.js Audio API not available');
@@ -27,6 +38,17 @@ AudioManager.prototype.init = function(camera) {
   // Attach Three.js AudioListener to camera (like Aviator2)
   if (this.threeJSSupported && camera && this.listener) {
     camera.add(this.listener);
+    console.log('[PROPELLER] AudioListener attached to camera');
+    if (this.listener.context) {
+      console.log('[PROPELLER] Audio context state after attaching:', this.listener.context.state);
+      // Monitor context state changes
+      this.listener.context.addEventListener('statechange', function() {
+        console.log('[PROPELLER] Audio context state changed to:', this.listener.context.state);
+        if (this.listener.context.state === 'suspended') {
+          console.warn('[PROPELLER] ⚠️ Audio context SUSPENDED - this will cause audio to stop!');
+        }
+      }.bind(this));
+    }
   }
   
   // Enable audio after first user interaction (click, touchstart, or keydown)
@@ -249,6 +271,13 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       
       if (soundId === 'propeller') {
         console.log('[PROPELLER] Created new THREE.Audio instance');
+        // Track this instance
+        this.allPropellerInstances.push({
+          instance: threeJSSound,
+          createdAt: new Date().toISOString(),
+          uuid: threeJSSound.uuid
+        });
+        console.log('[PROPELLER] Total instances created:', this.allPropellerInstances.length);
       }
       
       threeJSSound.setBuffer(buffer);
@@ -256,6 +285,9 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       
       if (soundId === 'propeller') {
         console.log('[PROPELLER] Set buffer and loop = true');
+        console.log('[PROPELLER] Buffer sampleRate:', buffer.sampleRate);
+        console.log('[PROPELLER] Buffer numberOfChannels:', buffer.numberOfChannels);
+        console.log('[PROPELLER] Buffer length:', buffer.length, 'samples');
       }
       
       if (options.volume !== undefined) {
@@ -270,6 +302,7 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       if (soundId === 'propeller') {
         console.log('[PROPELLER] Calling play() on THREE.Audio instance');
         console.log('[PROPELLER] Sound isPlaying before play():', threeJSSound.isPlaying);
+        console.log('[PROPELLER] Audio context state before play():', this.listener.context ? this.listener.context.state : 'no-context');
       }
       
       threeJSSound.play();
@@ -281,10 +314,26 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
         if (threeJSSound.source) {
           console.log('[PROPELLER] Source loop:', threeJSSound.source.loop);
           console.log('[PROPELLER] Source buffer:', !!threeJSSound.source.buffer);
-          console.log('[PROPELLER] Source playbackRate:', threeJSSound.source.playbackRate);
+          console.log('[PROPELLER] Source playbackRate:', threeJSSound.source.playbackRate.value);
+          console.log('[PROPELLER] Source loopStart:', threeJSSound.source.loopStart);
+          console.log('[PROPELLER] Source loopEnd:', threeJSSound.source.loopEnd);
+          
+          // Monitor source for ended event (shouldn't happen with loop=true, but check)
+          threeJSSound.source.onended = function() {
+            console.warn('[PROPELLER] ⚠️ SOURCE ENDED EVENT FIRED - This should not happen with loop=true!');
+            console.warn('[PROPELLER] Source ended at:', new Date().toISOString());
+          };
         }
         console.log('[PROPELLER] Three.js Audio instance created at:', new Date().toISOString());
-        console.log('[PROPELLER] Instance ID (for tracking):', threeJSSound.uuid || 'no-uuid');
+        console.log('[PROPELLER] Instance UUID:', threeJSSound.uuid);
+        
+        // Check audio context state
+        if (this.listener.context) {
+          console.log('[PROPELLER] Audio context state after play():', this.listener.context.state);
+          if (this.listener.context.state === 'suspended') {
+            console.warn('[PROPELLER] ⚠️ Audio context is SUSPENDED - this will cause gaps!');
+          }
+        }
       }
       
       return threeJSSound;
