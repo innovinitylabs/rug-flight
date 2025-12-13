@@ -281,7 +281,10 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
         if (threeJSSound.source) {
           console.log('[PROPELLER] Source loop:', threeJSSound.source.loop);
           console.log('[PROPELLER] Source buffer:', !!threeJSSound.source.buffer);
+          console.log('[PROPELLER] Source playbackRate:', threeJSSound.source.playbackRate);
         }
+        console.log('[PROPELLER] Three.js Audio instance created at:', new Date().toISOString());
+        console.log('[PROPELLER] Instance ID (for tracking):', threeJSSound.uuid || 'no-uuid');
       }
       
       return threeJSSound;
