@@ -320,9 +320,29 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
           
           // Monitor source for ended event (shouldn't happen with loop=true, but check)
           threeJSSound.source.onended = function() {
-            console.warn('[PROPELLER] ⚠️ SOURCE ENDED EVENT FIRED - This should not happen with loop=true!');
-            console.warn('[PROPELLER] Source ended at:', new Date().toISOString());
+            console.error('[PROPELLER] ⚠️⚠️⚠️ SOURCE ENDED EVENT FIRED - This should not happen with loop=true!');
+            console.error('[PROPELLER] Source ended at:', new Date().toISOString());
+            console.error('[PROPELLER] This is why you hear gaps - the source is ending despite loop=true!');
           };
+          
+          // Monitor isPlaying state periodically to detect if it stops
+          var checkInterval = setInterval(function() {
+            if (!threeJSSound.isPlaying) {
+              console.error('[PROPELLER] ⚠️⚠️⚠️ Sound stopped playing! isPlaying = false');
+              console.error('[PROPELLER] This happened at:', new Date().toISOString());
+              clearInterval(checkInterval);
+            }
+          }, 1000); // Check every second
+          
+          // Also check source state
+          var checkSourceInterval = setInterval(function() {
+            if (threeJSSound.source && threeJSSound.source.playbackState) {
+              var state = threeJSSound.source.playbackState;
+              if (state !== 'playing' && state !== 'scheduled') {
+                console.warn('[PROPELLER] Source playbackState changed to:', state);
+              }
+            }
+          }, 1000);
         }
         console.log('[PROPELLER] Three.js Audio instance created at:', new Date().toISOString());
         console.log('[PROPELLER] Instance UUID:', threeJSSound.uuid);
@@ -331,8 +351,16 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
         if (this.listener.context) {
           console.log('[PROPELLER] Audio context state after play():', this.listener.context.state);
           if (this.listener.context.state === 'suspended') {
-            console.warn('[PROPELLER] ⚠️ Audio context is SUSPENDED - this will cause gaps!');
+            console.error('[PROPELLER] ⚠️⚠️⚠️ Audio context is SUSPENDED - this will cause gaps!');
           }
+          
+          // Monitor context state changes
+          this.listener.context.addEventListener('statechange', function() {
+            console.warn('[PROPELLER] ⚠️ Audio context state changed to:', this.listener.context.state);
+            if (this.listener.context.state === 'suspended') {
+              console.error('[PROPELLER] ⚠️⚠️⚠️ Context SUSPENDED - audio will stop!');
+            }
+          }.bind(this));
         }
       }
       
