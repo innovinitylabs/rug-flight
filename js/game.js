@@ -1,3 +1,264 @@
+// AUDIO MANAGER - Using HTML5 Audio API (compatible with all Three.js versions)
+var AudioManager = function() {
+  this.sounds = {};
+  this.categories = {};
+  this.playingSounds = {};
+  this.userInteracted = false;
+  this.pendingPlays = [];
+  this.startTime = performance.now();
+  this.loadTimes = {}; // Track when each sound starts loading
+  this.loadedTimes = {}; // Track when each sound finishes loading
+  console.log('[AUDIO] AudioManager initialized at', (performance.now() - this.startTime).toFixed(2), 'ms');
+};
+
+AudioManager.prototype.init = function(camera) {
+  var initTime = performance.now();
+  console.log('[AUDIO] init() called at', (initTime - this.startTime).toFixed(2), 'ms');
+  // No initialization needed for HTML5 Audio
+  // This method is kept for compatibility
+  var _this = this;
+  // Enable audio after first user interaction (click, touchstart, or keydown)
+  var enableAudio = function() {
+    var interactionTime = performance.now();
+    console.log('[AUDIO] ✓ Valid user interaction detected (click/touch/keydown) at', (interactionTime - _this.startTime).toFixed(2), 'ms');
+    _this.userInteracted = true;
+    console.log('[AUDIO] Pending plays:', _this.pendingPlays.length);
+    // Play any pending sounds
+    for (var i = 0; i < _this.pendingPlays.length; i++) {
+      var pending = _this.pendingPlays[i];
+      console.log('[AUDIO] Playing pending sound:', pending.soundId);
+      _this.play(pending.soundId, pending.options);
+    }
+    _this.pendingPlays = [];
+    
+    // Start background sounds immediately on valid interaction
+    setTimeout(function() {
+      var attemptTime = performance.now();
+      console.log('[AUDIO] Attempting to play background sounds at', (attemptTime - _this.startTime).toFixed(2), 'ms');
+      
+      if (_this.sounds['propeller']) {
+        console.log('[AUDIO] propeller is loaded, playing now');
+        _this.play('propeller', {loop: true, volume: 0.6});
+      } else {
+        console.log('[AUDIO] propeller NOT loaded yet, will retry in 200ms');
+        setTimeout(function() {
+          if (_this.sounds['propeller']) {
+            console.log('[AUDIO] propeller now loaded, playing');
+            _this.play('propeller', {loop: true, volume: 0.6});
+          }
+        }, 200);
+      }
+      if (_this.sounds['ocean']) {
+        console.log('[AUDIO] ocean is loaded, playing now');
+        _this.play('ocean', {loop: true, volume: 0.4});
+      } else {
+        console.log('[AUDIO] ocean NOT loaded yet, will retry in 200ms');
+        setTimeout(function() {
+          if (_this.sounds['ocean']) {
+            console.log('[AUDIO] ocean now loaded, playing');
+            _this.play('ocean', {loop: true, volume: 0.4});
+          }
+        }, 200);
+      }
+    }, 10); // Small delay to ensure audio context is ready
+    
+    document.removeEventListener('click', enableAudio);
+    document.removeEventListener('touchstart', enableAudio);
+    document.removeEventListener('keydown', enableAudio);
+  };
+  document.addEventListener('click', enableAudio, {once: true});
+  document.addEventListener('touchstart', enableAudio, {once: true});
+  document.addEventListener('keydown', enableAudio, {once: true});
+  console.log('[AUDIO] init() completed in', (performance.now() - initTime).toFixed(2), 'ms');
+  console.log('[AUDIO] Waiting for user interaction (click/touch/keydown) to start audio...');
+};
+
+AudioManager.prototype.load = function(soundId, category, path) {
+  var loadStartTime = performance.now();
+  var _this = this;
+  _this.loadTimes[soundId] = loadStartTime;
+  console.log('[AUDIO] load() called for', soundId, 'at', (loadStartTime - this.startTime).toFixed(2), 'ms, path:', path);
+  
+  return new Promise(function(resolve, reject) {
+    var audio = new Audio();
+    audio.preload = 'auto';
+    
+    var loadEventTime = performance.now();
+    console.log('[AUDIO] Audio element created for', soundId, 'at', (loadEventTime - _this.startTime).toFixed(2), 'ms');
+    
+    // Use 'loadeddata' for faster loading (doesn't wait for entire file)
+    var onLoaded = function(eventType) {
+      var loadedTime = performance.now();
+      var loadDuration = loadedTime - loadStartTime;
+      _this.loadedTimes[soundId] = loadedTime;
+      _this.sounds[soundId] = audio;
+      
+      console.log('[AUDIO] ✓', soundId, 'loaded via', eventType, 'at', (loadedTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)');
+      console.log('[AUDIO]   Audio readyState:', audio.readyState, '(0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA)');
+      console.log('[AUDIO]   Audio duration:', audio.duration, 'seconds');
+      console.log('[AUDIO]   Audio buffered:', audio.buffered.length, 'ranges');
+      
+        if (category !== null) {
+          if (!_this.categories[category]) {
+            _this.categories[category] = [];
+          }
+          _this.categories[category].push(soundId);
+        console.log('[AUDIO]   Added to category:', category);
+        }
+      
+      // Clean up listeners
+      audio.removeEventListener('loadeddata', onLoadedData);
+      audio.removeEventListener('canplaythrough', onCanPlayThrough);
+      audio.removeEventListener('error', onError);
+        resolve();
+    };
+    
+    var onLoadedData = function() {
+      onLoaded('loadeddata');
+    };
+    
+    var onCanPlayThrough = function() {
+      onLoaded('canplaythrough');
+    };
+    
+    var onError = function(e) {
+      var errorTime = performance.now();
+      var loadDuration = errorTime - loadStartTime;
+      console.error('[AUDIO] ✗ Failed to load audio:', soundId, 'at', (errorTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)', e);
+      console.error('[AUDIO]   Error details:', {
+        name: e.target.error ? e.target.error.name : 'unknown',
+        code: e.target.error ? e.target.error.code : 'unknown',
+        message: e.target.error ? e.target.error.message : 'unknown'
+      });
+      audio.removeEventListener('loadeddata', onLoadedData);
+      audio.removeEventListener('canplaythrough', onCanPlayThrough);
+      audio.removeEventListener('error', onError);
+      reject(e);
+    };
+    
+    // Try loadeddata first (faster), fallback to canplaythrough
+    audio.addEventListener('loadeddata', onLoadedData, {once: true});
+    audio.addEventListener('canplaythrough', onCanPlayThrough, {once: true});
+    audio.addEventListener('error', onError, {once: true});
+    
+    var setSrcTime = performance.now();
+    audio.src = path;
+    console.log('[AUDIO] Set src for', soundId, 'at', (setSrcTime - _this.startTime).toFixed(2), 'ms');
+    
+    var loadCallTime = performance.now();
+    audio.load(); // Force loading to start
+    console.log('[AUDIO] Called audio.load() for', soundId, 'at', (loadCallTime - _this.startTime).toFixed(2), 'ms');
+  });
+};
+
+AudioManager.prototype.play = function(soundIdOrCategory, options) {
+  var playStartTime = performance.now();
+  options = options || {};
+  
+  console.log('[AUDIO] play() called for', soundIdOrCategory, 'at', (playStartTime - this.startTime).toFixed(2), 'ms', 
+              '(options:', JSON.stringify(options) + ')');
+
+  var soundId = soundIdOrCategory;
+  // Check if it's a category (array of sounds)
+  if (this.categories[soundIdOrCategory]) {
+    var categorySounds = this.categories[soundIdOrCategory];
+    if (categorySounds.length > 0) {
+    soundId = categorySounds[Math.floor(Math.random() * categorySounds.length)];
+      console.log('[AUDIO] Selected from category:', soundIdOrCategory, '->', soundId);
+    } else {
+      console.warn('[AUDIO] Category has no sounds:', soundIdOrCategory);
+      return null;
+    }
+  }
+
+  var audio = this.sounds[soundId];
+  if (!audio) {
+    console.warn('[AUDIO] ✗ Audio not loaded:', soundId, '- available sounds:', Object.keys(this.sounds));
+    if (this.loadTimes[soundId]) {
+      console.warn('[AUDIO]   Loading started at', (this.loadTimes[soundId] - this.startTime).toFixed(2), 'ms but not yet loaded');
+    }
+    return null;
+  }
+
+  // If user hasn't interacted yet and this is a looping sound, queue it
+  if (!this.userInteracted && options.loop) {
+    console.log('[AUDIO] User not interacted yet, queuing sound:', soundId);
+    this.pendingPlays.push({soundId: soundId, options: options});
+    return null;
+  }
+
+  var sound;
+  var playCallTime = performance.now();
+  
+  // For looping sounds, reuse the same element (don't clone - cloned elements lose loaded data)
+  // For one-shot sounds, reuse as well but reset currentTime for overlapping playback
+  if (options.loop) {
+    sound = audio; // Reuse original element for looping sounds
+    console.log('[AUDIO] Reusing original audio element for looping sound:', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
+    
+    sound.loop = true;
+    // Store looping sounds so we can stop them later
+    this.playingSounds[soundId] = sound;
+    console.log('[AUDIO] Set loop=true for', soundId);
+  } else {
+    // For one-shot sounds, reuse the original but reset currentTime to allow "restarting"
+    // HTML5 Audio can play multiple times if we reset currentTime to 0
+    sound = audio;
+    console.log('[AUDIO] Reusing original audio element for one-shot sound:', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
+    
+    // Reset to beginning to allow overlapping playback of the same sound
+    sound.currentTime = 0;
+    console.log('[AUDIO] Reset currentTime to 0 for overlapping playback');
+  }
+  
+  if (options.volume !== undefined) {
+    sound.volume = Math.max(0, Math.min(1, options.volume));
+    console.log('[AUDIO] Set volume to', options.volume, 'for', soundId);
+  } else {
+    sound.volume = 1.0;
+  }
+
+  var timeSinceLoad = this.loadedTimes[soundId] ? (playCallTime - this.loadedTimes[soundId]) : -1;
+  console.log('[AUDIO] Calling sound.play() for', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
+  if (timeSinceLoad >= 0) {
+    console.log('[AUDIO]   Time since load:', timeSinceLoad.toFixed(2), 'ms');
+  }
+  console.log('[AUDIO]   Audio readyState:', sound.readyState, sound.readyState >= 2 ? '(ready)' : '(not ready)');
+  
+  var playPromise = sound.play();
+  if (playPromise !== undefined) {
+    playPromise.then(function() {
+      var actuallyPlayingTime = performance.now();
+      var totalTime = actuallyPlayingTime - playStartTime;
+      console.log('[AUDIO] ✓', soundId, 'actually started playing at', (actuallyPlayingTime - this.startTime).toFixed(2), 'ms (play() took', totalTime.toFixed(2), 'ms)');
+    }.bind(this)).catch(function(err) {
+      var errorTime = performance.now();
+      var totalTime = errorTime - playStartTime;
+      console.error('[AUDIO] ✗ Failed to play', soundId, 'at', (errorTime - this.startTime).toFixed(2), 'ms (play() took', totalTime.toFixed(2), 'ms)');
+      // Only log if it's not a user interaction error
+      if (err.name !== 'NotAllowedError') {
+        console.error('[AUDIO]   Error:', err.name, err.message);
+      } else {
+        console.warn('[AUDIO]   NotAllowedError - user interaction required');
+      }
+    }.bind(this));
+  } else {
+    console.warn('[AUDIO] play() returned undefined for', soundId);
+  }
+  
+  return sound;
+};
+
+AudioManager.prototype.stop = function(soundId) {
+  if (this.playingSounds[soundId]) {
+    this.playingSounds[soundId].pause();
+    this.playingSounds[soundId].currentTime = 0;
+    delete this.playingSounds[soundId];
+  }
+};
+
+var audioManager = new AudioManager();
+
 //COLORS
 var Colors = {
     red:0xf25346,
@@ -87,10 +348,28 @@ function resetGame(){
   // Make ropes visible again when game resets
   if (ropeLeft) ropeLeft.visible = true;
   if (ropeRight) ropeRight.visible = true;
-  
+
   // Make airplane visible again when game resets
   if (airplane && airplane.mesh) {
     airplane.mesh.visible = true;
+  }
+  
+  // Restart background sounds when game resets (only if user has interacted)
+  var resetTime = performance.now();
+  console.log('[AUDIO] resetGame: Called at', (resetTime - audioManager.startTime).toFixed(2), 'ms');
+  if (audioManager.userInteracted) {
+    console.log('[AUDIO] resetGame: User has interacted, checking if sounds are loaded...');
+    console.log('[AUDIO] resetGame: propeller loaded?', !!audioManager.sounds['propeller']);
+    console.log('[AUDIO] resetGame: ocean loaded?', !!audioManager.sounds['ocean']);
+    if (audioManager.sounds['propeller'] && audioManager.sounds['ocean']) {
+      console.log('[AUDIO] resetGame: Both sounds loaded, playing now');
+      audioManager.play('propeller', {loop: true, volume: 0.6});
+      audioManager.play('ocean', {loop: true, volume: 0.4});
+    } else {
+      console.warn('[AUDIO] resetGame: Sounds not loaded yet, skipping audio playback');
+    }
+  } else {
+    console.log('[AUDIO] resetGame: User not interacted yet, skipping audio');
   }
 }
 
@@ -136,6 +415,9 @@ function createScene() {
   camera.position.y = game.planeDefaultHeight;
   //camera.lookAt(new THREE.Vector3(0, 400, 0));
 
+  // Initialize audio manager (HTML5 Audio doesn't need camera)
+  audioManager.init(camera);
+
   renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
   renderer.setSize(WIDTH, HEIGHT);
 
@@ -146,10 +428,10 @@ function createScene() {
 
   // Texture loader for banner
   textureLoader = new THREE.TextureLoader();
-  
+
   // Set crossOrigin to handle CORS issues (though file:// will still have WebGL tainted canvas restrictions)
   textureLoader.crossOrigin = 'anonymous';
-  
+
   // Determine correct path based on protocol (file:// vs http://)
   var texturePath = 'onchainrugs.png';
   if (window.location.protocol === 'file:') {
@@ -158,7 +440,7 @@ function createScene() {
     console.log('Using file:// protocol, texture path:', texturePath);
     console.warn('Note: file:// protocol has WebGL security restrictions. Use a local server for best results.');
   }
-  
+
   bannerTexture = textureLoader.load(
     texturePath,
     function(texture) {
@@ -193,7 +475,7 @@ function createScene() {
         console.log('Using offset/repeat method for 180 degree rotation');
       }
       texture.needsUpdate = true;
-      
+
       // Update banner material if it exists
       if (banner && banner.material) {
         // Apply rotation to texture
@@ -272,7 +554,7 @@ function createScene() {
         console.error('SOLUTION: Use a local server: python3 -m http.server 8080');
         console.error('Then access via: http://localhost:8080');
       }
-      
+
       // Fallback: use a colored material if texture fails to load
       if (banner && banner.material) {
         banner.material.color.setHex(0xff0000); // Red fallback to indicate error
@@ -281,7 +563,7 @@ function createScene() {
       }
     }
   );
-  
+
   // Set initial texture properties
   if (bannerTexture) {
     bannerTexture.wrapS = THREE.ClampToEdgeWrapping;
@@ -312,6 +594,8 @@ function handleWindowResize() {
 }
 
 function handleMouseMove(event) {
+  // Note: mousemove is NOT a valid user interaction for audio autoplay policy
+  // Audio will be started on click/touch instead (handled in audioManager.init)
   var tx = -1 + (event.clientX / WIDTH)*2;
   var ty = 1 - (event.clientY / HEIGHT)*2;
   mousePos = {x:tx, y:ty};
@@ -319,6 +603,8 @@ function handleMouseMove(event) {
 
 function handleTouchMove(event) {
     event.preventDefault();
+    // Note: touchmove is NOT a valid user interaction for audio autoplay policy
+    // Audio will be started on touchstart instead (handled in audioManager.init)
     var tx = -1 + (event.touches[0].pageX / WIDTH)*2;
     var ty = 1 - (event.touches[0].pageY / HEIGHT)*2;
     mousePos = {x:tx, y:ty};
@@ -377,7 +663,7 @@ var Pilot = function(){
   this.angleHairs=0;
 
   var bodyGeom = new THREE.BoxGeometry(15,15,15);
-  var bodyMat = new THREE.MeshPhongMaterial({color:Colors.brown, shading:THREE.FlatShading});
+  var bodyMat = new THREE.MeshPhongMaterial({color:Colors.brown, flatShading:true});
   var body = new THREE.Mesh(bodyGeom, bodyMat);
   body.position.set(2,-12,0);
 
@@ -391,7 +677,7 @@ var Pilot = function(){
   var hairGeom = new THREE.BoxGeometry(4,4,4);
   var hairMat = new THREE.MeshLambertMaterial({color:Colors.brown});
   var hair = new THREE.Mesh(hairGeom, hairMat);
-  hair.geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0,2,0));
+  hair.geometry.applyMatrix4(new THREE.Matrix4().makeTranslation(0,2,0));
   var hairs = new THREE.Object3D();
 
   this.hairsTop = new THREE.Object3D();
@@ -403,13 +689,13 @@ var Pilot = function(){
     var startPosZ = -4;
     var startPosX = -4;
     h.position.set(startPosX + row*4, 0, startPosZ + col*4);
-    h.geometry.applyMatrix(new THREE.Matrix4().makeScale(1,1,1));
+    h.geometry.applyMatrix4(new THREE.Matrix4().makeScale(1,1,1));
     this.hairsTop.add(h);
   }
   hairs.add(this.hairsTop);
 
   var hairSideGeom = new THREE.BoxGeometry(12,4,2);
-  hairSideGeom.applyMatrix(new THREE.Matrix4().makeTranslation(-6,0,0));
+  hairSideGeom.applyMatrix4(new THREE.Matrix4().makeTranslation(-6,0,0));
   var hairSideR = new THREE.Mesh(hairSideGeom, hairMat);
   var hairSideL = hairSideR.clone();
   hairSideR.position.set(8,-2,6);
@@ -464,19 +750,44 @@ var AirPlane = function(){
   this.mesh = new THREE.Object3D();
   this.mesh.name = "airPlane";
 
-  // Cabin
+  // Cabin - using reference geometry approach
+  var matCabin = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true, side: THREE.DoubleSide});
 
-  var geomCabin = new THREE.BoxGeometry(80,50,50,1,1,1);
-  var matCabin = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  // Define vertex positions for custom cabin shape
+  var frontUR = [ 40,  25, -25];
+  var frontUL = [ 40,  25,  25];
+  var frontLR = [ 40, -25, -25];
+  var frontLL = [ 40, -25,  25];
+  var backUR  = [-40,  15,  -5];
+  var backUL  = [-40,  15,   5];
+  var backLR  = [-40,   5,  -5];
+  var backLL  = [-40,   5,   5];
 
-  geomCabin.vertices[4].y-=10;
-  geomCabin.vertices[4].z+=20;
-  geomCabin.vertices[5].y-=10;
-  geomCabin.vertices[5].z-=20;
-  geomCabin.vertices[6].y+=30;
-  geomCabin.vertices[6].z+=20;
-  geomCabin.vertices[7].y+=30;
-  geomCabin.vertices[7].z-=20;
+  // Helper function to create two triangles from four points (makes a quad)
+  var makeTetrahedron = function(a, b, c, d) {
+    return [
+      a[0], a[1], a[2],
+      b[0], b[1], b[2],
+      c[0], c[1], c[2],
+      b[0], b[1], b[2],
+      c[0], c[1], c[2],
+      d[0], d[1], d[2],
+    ];
+  };
+
+  var vertices = new Float32Array(
+    [].concat(
+      makeTetrahedron(frontUL, frontUR, frontLL, frontLR),   // front
+      makeTetrahedron(backUL, backUR, backLL, backLR),       // back
+      makeTetrahedron(backUR, backLR, frontUR, frontLR),     // side
+      makeTetrahedron(backUL, backLL, frontUL, frontLL),     // side
+      makeTetrahedron(frontUL, backUL, frontUR, backUR),     // top
+      makeTetrahedron(frontLL, backLL, frontLR, backLR)      // bottom
+    )
+  );
+
+  var geomCabin = new THREE.BufferGeometry();
+  geomCabin.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 
   var cabin = new THREE.Mesh(geomCabin, matCabin);
   cabin.castShadow = true;
@@ -486,7 +797,7 @@ var AirPlane = function(){
   // Engine
 
   var geomEngine = new THREE.BoxGeometry(20,50,50,1,1,1);
-  var matEngine = new THREE.MeshPhongMaterial({color:Colors.white, shading:THREE.FlatShading});
+  var matEngine = new THREE.MeshPhongMaterial({color:Colors.white, flatShading:true});
   var engine = new THREE.Mesh(geomEngine, matEngine);
   engine.position.x = 50;
   engine.castShadow = true;
@@ -496,7 +807,7 @@ var AirPlane = function(){
   // Tail Plane
 
   var geomTailPlane = new THREE.BoxGeometry(15,20,5,1,1,1);
-  var matTailPlane = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  var matTailPlane = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true});
   var tailPlane = new THREE.Mesh(geomTailPlane, matTailPlane);
   tailPlane.position.set(-40,20,0);
   tailPlane.castShadow = true;
@@ -506,7 +817,7 @@ var AirPlane = function(){
   // Wings
 
   var geomSideWing = new THREE.BoxGeometry(30,5,120,1,1,1);
-  var matSideWing = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  var matSideWing = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true});
   var sideWing = new THREE.Mesh(geomSideWing, matSideWing);
   sideWing.position.set(0,15,0);
   sideWing.castShadow = true;
@@ -514,9 +825,9 @@ var AirPlane = function(){
   this.mesh.add(sideWing);
 
   var geomWindshield = new THREE.BoxGeometry(3,15,20,1,1,1);
-  var matWindshield = new THREE.MeshPhongMaterial({color:Colors.white,transparent:true, opacity:.3, shading:THREE.FlatShading});;
+  var matWindshield = new THREE.MeshPhongMaterial({color:Colors.white,transparent:true, opacity:.3, flatShading:true});;
   var windshield = new THREE.Mesh(geomWindshield, matWindshield);
-  windshield.position.set(5,27,0);
+  windshield.position.set(20,27,0);
 
   windshield.castShadow = true;
   windshield.receiveShadow = true;
@@ -524,22 +835,27 @@ var AirPlane = function(){
   this.mesh.add(windshield);
 
   var geomPropeller = new THREE.BoxGeometry(20,10,10,1,1,1);
-  geomPropeller.vertices[4].y-=5;
-  geomPropeller.vertices[4].z+=5;
-  geomPropeller.vertices[5].y-=5;
-  geomPropeller.vertices[5].z-=5;
-  geomPropeller.vertices[6].y+=5;
-  geomPropeller.vertices[6].z+=5;
-  geomPropeller.vertices[7].y+=5;
-  geomPropeller.vertices[7].z-=5;
-  var matPropeller = new THREE.MeshPhongMaterial({color:Colors.brown, shading:THREE.FlatShading});
+  // Modify propeller vertices - exactly as in reference
+  if (geomPropeller.attributes && geomPropeller.attributes.position) {
+    var pos = geomPropeller.attributes.position.array;
+    pos[4*3+1] -= 5;
+    pos[4*3+2] += 5;
+    pos[5*3+1] -= 5;
+    pos[5*3+2] -= 5;
+    pos[6*3+1] += 5;
+    pos[6*3+2] += 5;
+    pos[7*3+1] += 5;
+    pos[7*3+2] -= 5;
+    geomPropeller.attributes.position.needsUpdate = true;
+  }
+  var matPropeller = new THREE.MeshPhongMaterial({color:Colors.brown, flatShading:true});
   this.propeller = new THREE.Mesh(geomPropeller, matPropeller);
 
   this.propeller.castShadow = true;
   this.propeller.receiveShadow = true;
 
   var geomBlade = new THREE.BoxGeometry(1,80,10,1,1,1);
-  var matBlade = new THREE.MeshPhongMaterial({color:Colors.brownDark, shading:THREE.FlatShading});
+  var matBlade = new THREE.MeshPhongMaterial({color:Colors.brownDark, flatShading:true});
   var blade1 = new THREE.Mesh(geomBlade, matBlade);
   blade1.position.set(8,0,0);
 
@@ -558,18 +874,18 @@ var AirPlane = function(){
   this.mesh.add(this.propeller);
 
   var wheelProtecGeom = new THREE.BoxGeometry(30,15,10,1,1,1);
-  var wheelProtecMat = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  var wheelProtecMat = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true});
   var wheelProtecR = new THREE.Mesh(wheelProtecGeom,wheelProtecMat);
   wheelProtecR.position.set(25,-20,25);
   this.mesh.add(wheelProtecR);
 
   var wheelTireGeom = new THREE.BoxGeometry(24,24,4);
-  var wheelTireMat = new THREE.MeshPhongMaterial({color:Colors.brownDark, shading:THREE.FlatShading});
+  var wheelTireMat = new THREE.MeshPhongMaterial({color:Colors.brownDark, flatShading:true});
   var wheelTireR = new THREE.Mesh(wheelTireGeom,wheelTireMat);
   wheelTireR.position.set(25,-28,25);
 
   var wheelAxisGeom = new THREE.BoxGeometry(10,10,6);
-  var wheelAxisMat = new THREE.MeshPhongMaterial({color:Colors.brown, shading:THREE.FlatShading});
+  var wheelAxisMat = new THREE.MeshPhongMaterial({color:Colors.brown, flatShading:true});
   var wheelAxis = new THREE.Mesh(wheelAxisGeom,wheelAxisMat);
   wheelTireR.add(wheelAxis);
 
@@ -589,8 +905,8 @@ var AirPlane = function(){
   this.mesh.add(wheelTireB);
 
   var suspensionGeom = new THREE.BoxGeometry(4,20,4);
-  suspensionGeom.applyMatrix(new THREE.Matrix4().makeTranslation(0,10,0))
-  var suspensionMat = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  suspensionGeom.applyMatrix4(new THREE.Matrix4().makeTranslation(0,10,0))
+  var suspensionMat = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true});
   var suspension = new THREE.Mesh(suspensionGeom,suspensionMat);
   suspension.position.set(-35,-5,0);
   suspension.rotation.z = -.3;
@@ -637,14 +953,36 @@ Sky.prototype.moveClouds = function(){
 
 Sea = function(){
   var geom = new THREE.CylinderGeometry(game.seaRadius,game.seaRadius,game.seaLength,40,10);
-  geom.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI/2));
+  geom.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI/2));
+  
+  // Handle BufferGeometry (newer Three.js) vs Geometry (older)
+  var l, vertices;
+  if (geom.attributes && geom.attributes.position) {
+    // BufferGeometry
+    l = geom.attributes.position.count;
+    vertices = [];
+    var pos = geom.attributes.position.array;
+    for (var i = 0; i < l; i++) {
+      vertices.push({
+        x: pos[i * 3],
+        y: pos[i * 3 + 1],
+        z: pos[i * 3 + 2]
+      });
+    }
+  } else if (geom.vertices) {
+    // Geometry (legacy)
   geom.mergeVertices();
-  var l = geom.vertices.length;
+    l = geom.vertices.length;
+    vertices = geom.vertices;
+  } else {
+    l = 0;
+    vertices = [];
+  }
 
   this.waves = [];
 
   for (var i=0;i<l;i++){
-    var v = geom.vertices[i];
+    var v = vertices[i];
     //v.y = Math.random()*30;
     this.waves.push({y:v.y,
                      x:v.x,
@@ -658,7 +996,7 @@ Sea = function(){
     color:Colors.blue,
     transparent:true,
     opacity:.8,
-    shading:THREE.FlatShading,
+    flatShading:true,
 
   });
 
@@ -669,22 +1007,40 @@ Sea = function(){
 }
 
 Sea.prototype.moveWaves = function (){
-  var verts = this.mesh.geometry.vertices;
-  var l = verts.length;
+  // Handle both BufferGeometry and Geometry
+  var geom = this.mesh.geometry;
+  var l = this.waves.length;
+  
+  if (geom.attributes && geom.attributes.position) {
+    // BufferGeometry
+    var pos = geom.attributes.position.array;
+    for (var i=0; i<l; i++){
+      var vprops = this.waves[i];
+      pos[i * 3] = vprops.x + Math.cos(vprops.ang)*vprops.amp;
+      pos[i * 3 + 1] = vprops.y + Math.sin(vprops.ang)*vprops.amp;
+      pos[i * 3 + 2] = vprops.z;
+      vprops.ang += vprops.speed*deltaTime;
+    }
+    geom.attributes.position.needsUpdate = true;
+  } else if (geom.vertices) {
+    // Geometry (legacy)
+    var verts = geom.vertices;
   for (var i=0; i<l; i++){
     var v = verts[i];
     var vprops = this.waves[i];
-    v.x =  vprops.x + Math.cos(vprops.ang)*vprops.amp;
+      v.x = vprops.x + Math.cos(vprops.ang)*vprops.amp;
     v.y = vprops.y + Math.sin(vprops.ang)*vprops.amp;
+      v.z = vprops.z;
     vprops.ang += vprops.speed*deltaTime;
-    this.mesh.geometry.verticesNeedUpdate=true;
+    }
+    geom.verticesNeedUpdate = true;
   }
 }
 
 Cloud = function(){
   this.mesh = new THREE.Object3D();
   this.mesh.name = "cloud";
-  var geom = new THREE.CubeGeometry(20,20,20);
+  var geom = new THREE.BoxGeometry(20,20,20);
   var mat = new THREE.MeshPhongMaterial({
     color:Colors.white,
 
@@ -724,7 +1080,7 @@ Ennemy = function(){
     color:Colors.red,
     shininess:0,
     specular:0xffffff,
-    shading:THREE.FlatShading
+    flatShading:true
   });
   this.mesh = new THREE.Mesh(geom,mat);
   this.mesh.castShadow = true;
@@ -772,19 +1128,21 @@ EnnemiesHolder.prototype.rotateEnnemies = function(){
 
     // Only check collisions during gameplay - skip after game ends
     if (game.status == "playing" && airplane && airplane.mesh) {
-      //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
-      var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
-      var d = diffPos.length();
-      if (d<game.ennemyDistanceTolerance){
-        particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
+    //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
+    var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
+    var d = diffPos.length();
+    if (d<game.ennemyDistanceTolerance){
+      particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
 
-        ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
-        this.mesh.remove(ennemy.mesh);
-        game.planeCollisionSpeedX = 100 * diffPos.x / d;
-        game.planeCollisionSpeedY = 100 * diffPos.y / d;
-        ambientLight.intensity = 2;
+      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
+      this.mesh.remove(ennemy.mesh);
+      game.planeCollisionSpeedX = 100 * diffPos.x / d;
+      game.planeCollisionSpeedY = 100 * diffPos.y / d;
+      ambientLight.intensity = 2;
 
-        removeEnergy();
+      removeEnergy();
+        // Play collision sound
+        audioManager.play('airplane-crash', {volume: 0.8});
         i--;
       }
     }
@@ -804,7 +1162,7 @@ Particle = function(){
     color:0x009999,
     shininess:0,
     specular:0xffffff,
-    shading:THREE.FlatShading
+    flatShading:true
   });
   this.mesh = new THREE.Mesh(geom,mat);
 }
@@ -858,7 +1216,7 @@ Coin = function(){
     shininess:0,
     specular:0xffffff,
 
-    shading:THREE.FlatShading
+    flatShading:true
   });
   this.mesh = new THREE.Mesh(geom,mat);
   this.mesh.castShadow = true;
@@ -916,6 +1274,8 @@ CoinsHolder.prototype.rotateCoins = function(){
       this.mesh.remove(coin.mesh);
       particlesHolder.spawnParticles(coin.mesh.position.clone(), 5, 0x009999, .8);
       addEnergy();
+      // Play coin collection sound
+      audioManager.play('coin', {volume: 0.5});
       i--;
     }else if (coin.angle > Math.PI){
       this.coinsPool.unshift(this.coinsInUse.splice(i,1)[0]);
@@ -940,7 +1300,7 @@ function createPlane(){
 function createBanner(){
   // NFT Banner - Create a larger banner to show the texture clearly
   var geomBanner = new THREE.PlaneGeometry(50, 30, 10, 6); // More vertices for fluttering, larger size
-  
+
   // Create material with texture - use LambertMaterial to enable shadow casting while maintaining texture colors
   // Use emissiveMap to make texture self-illuminated (bright and proper colored like original)
   // This makes it less affected by ambient light tinting
@@ -948,7 +1308,7 @@ function createBanner(){
     map: bannerTexture,
     emissiveMap: bannerTexture, // Use texture as emissive map for self-illumination
     emissive: 0x888888, // Balanced emissive for natural colors (was 0xffffff - too bright, 0x666666 - too dim/pink, now ~53% intensity)
-    transparent: false, 
+    transparent: false,
     side: THREE.DoubleSide,
     color: 0xffffff // White base color so texture shows properly without tinting
   });
@@ -984,18 +1344,18 @@ function createBanner(){
   } else {
     console.log('Banner texture not yet loaded, will update when loaded. Texture object:', bannerTexture);
   }
-  
+
   banner = new THREE.Mesh(geomBanner, matBanner);
-  
+
   // Enable shadow casting and receiving for the banner
   banner.castShadow = true;
   banner.receiveShadow = true;
-  
+
   // Initialize velocity for smooth, flowing ribbon-like movement
   banner.userData.velocity = new THREE.Vector3(0, 0, 0);
   banner.userData.lastTargetPos = new THREE.Vector3(0, 0, 0);
   banner.userData.lastPlanePos = new THREE.Vector3(0, 0, 0);
-  
+
   // Store original vertices for fluttering animation
   banner.userData.originalVertices = [];
   if (geomBanner.vertices) {
@@ -1003,33 +1363,35 @@ function createBanner(){
       banner.userData.originalVertices.push(geomBanner.vertices[i].clone());
     }
   }
-  
+
   // Position behind the plane initially
   banner.position.set(0, game.planeDefaultHeight, -80);
   scene.add(banner);
 
   // Two ropes connecting plane tail to banner top corners (edges closest to plane)
   var ropeMaterial = new THREE.LineBasicMaterial({color: Colors.brownDark, linewidth: 4});
-  
-  // Left rope (top-left corner from plane's perspective)
-  var ropeLeftGeometry = new THREE.Geometry();
-  ropeLeftGeometry.vertices = [
-    new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(0, 0, -20),
-    new THREE.Vector3(0, 0, -40),
-    new THREE.Vector3(0, 0, -60)
-  ];
+
+  // Left rope (top-left corner from plane's perspective) - using BufferGeometry
+  var ropeLeftGeometry = new THREE.BufferGeometry();
+  var ropeLeftPositions = new Float32Array([
+    0, 0, 0,
+    0, 0, -20,
+    0, 0, -40,
+    0, 0, -60
+  ]);
+  ropeLeftGeometry.setAttribute('position', new THREE.BufferAttribute(ropeLeftPositions, 3));
   ropeLeft = new THREE.Line(ropeLeftGeometry, ropeMaterial);
   scene.add(ropeLeft);
-  
-  // Right rope (top-right corner from plane's perspective)
-  var ropeRightGeometry = new THREE.Geometry();
-  ropeRightGeometry.vertices = [
-    new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(0, 0, -20),
-    new THREE.Vector3(0, 0, -40),
-    new THREE.Vector3(0, 0, -60)
-  ];
+
+  // Right rope (top-right corner from plane's perspective) - using BufferGeometry
+  var ropeRightGeometry = new THREE.BufferGeometry();
+  var ropeRightPositions = new Float32Array([
+    0, 0, 0,
+    0, 0, -20,
+    0, 0, -40,
+    0, 0, -60
+  ]);
+  ropeRightGeometry.setAttribute('position', new THREE.BufferAttribute(ropeRightPositions, 3));
   ropeRight = new THREE.Line(ropeRightGeometry, ropeMaterial);
   scene.add(ropeRight);
 }
@@ -1189,6 +1551,11 @@ function updateEnergy(){
 
   if (game.energy <1){
     game.status = "gameover";
+    // Stop background sounds
+    audioManager.stop('propeller');
+    audioManager.stop('ocean');
+    // Play crash sound when game over
+    audioManager.play('airplane-crash', {volume: 1.0});
   }
 }
 
@@ -1305,7 +1672,7 @@ function updatePlane(){
       }
       
       // Add velocity from plane's movement direction for momentum
-      var planeVelocity = new THREE.Vector3();
+  var planeVelocity = new THREE.Vector3();
       if (banner.userData.lastTargetPos) {
         planeVelocity.subVectors(bannerTargetPos, banner.userData.lastTargetPos);
         planeVelocity.multiplyScalar(0.5); // Capture some of plane's movement direction
@@ -1507,7 +1874,7 @@ function updatePlane(){
         // During gameplay: zero at right edge (where ropes attach at X = -22), increasing toward left edge
         // During gameover/waitingReplay: full flutter across entire banner (ropes are detached)
         var waveAmplitude;
-        if (game.status == "playing") {
+    if (game.status == "playing") {
           // Ropes attached - zero flutter at attachment point
           var normalizedX = Math.max(0, (original.x + 22) / 47); // Clamp to prevent negative values
           waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
@@ -1581,7 +1948,7 @@ function updatePlane(){
           // Ropes attached - zero flutter at attachment point
           var normalizedX = Math.max(0, (x + 22) / 47); // Clamp to prevent negative values
           waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
-        } else {
+    } else {
           // Ropes detached - full flutter everywhere
           waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
         }
@@ -1636,8 +2003,10 @@ function updatePlane(){
       // Ensure ropes are visible during gameplay
       ropeLeft.visible = true;
       ropeRight.visible = true;
+      
       // Update left rope to connect plane tail to banner top-left corner
       var segments = 4;
+      var leftPositions = ropeLeft.geometry.attributes.position.array;
       for (var i = 0; i < segments; i++) {
         var t = i / (segments - 1);
         var point = new THREE.Vector3().lerpVectors(worldTailPos, topLeftWorld, t);
@@ -1648,11 +2017,14 @@ function updatePlane(){
           point.y -= sagAmount;
         }
 
-        ropeLeft.geometry.vertices[i] = point;
+        leftPositions[i * 3] = point.x;
+        leftPositions[i * 3 + 1] = point.y;
+        leftPositions[i * 3 + 2] = point.z;
       }
-      ropeLeft.geometry.verticesNeedUpdate = true;
+      ropeLeft.geometry.attributes.position.needsUpdate = true;
 
       // Update right rope to connect plane tail to banner top-right corner
+      var rightPositions = ropeRight.geometry.attributes.position.array;
       for (var i = 0; i < segments; i++) {
         var t = i / (segments - 1);
         var point = new THREE.Vector3().lerpVectors(worldTailPos, topRightWorld, t);
@@ -1663,9 +2035,11 @@ function updatePlane(){
           point.y -= sagAmount;
         }
 
-        ropeRight.geometry.vertices[i] = point;
+        rightPositions[i * 3] = point.x;
+        rightPositions[i * 3 + 1] = point.y;
+        rightPositions[i * 3 + 2] = point.z;
       }
-      ropeRight.geometry.verticesNeedUpdate = true;
+      ropeRight.geometry.attributes.position.needsUpdate = true;
     }
   }
 }
@@ -1711,12 +2085,34 @@ function init(event){
   createEnnemies();
   createParticles();
 
-  document.addEventListener('mousemove', handleMouseMove, false);
-  document.addEventListener('touchmove', handleTouchMove, false);
-  document.addEventListener('mouseup', handleMouseUp, false);
-  document.addEventListener('touchend', handleTouchEnd, false);
+  // Load audio files
+  audioManager.load('ocean', null, 'audio/ocean.mp3');
+  audioManager.load('propeller', null, 'audio/propeller.mp3');
+  
+  audioManager.load('coin-1', 'coin', 'audio/coin-1.mp3');
+  audioManager.load('coin-2', 'coin', 'audio/coin-2.mp3');
+  audioManager.load('coin-3', 'coin', 'audio/coin-3.mp3');
+  audioManager.load('jar-1', 'coin', 'audio/jar-1.mp3');
+  audioManager.load('jar-2', 'coin', 'audio/jar-2.mp3');
+  audioManager.load('jar-3', 'coin', 'audio/jar-3.mp3');
+  audioManager.load('jar-4', 'coin', 'audio/jar-4.mp3');
+  audioManager.load('jar-5', 'coin', 'audio/jar-5.mp3');
+  audioManager.load('jar-6', 'coin', 'audio/jar-6.mp3');
+  audioManager.load('jar-7', 'coin', 'audio/jar-7.mp3');
+  
+  audioManager.load('airplane-crash-1', 'airplane-crash', 'audio/airplane-crash-1.mp3');
+  audioManager.load('airplane-crash-2', 'airplane-crash', 'audio/airplane-crash-2.mp3');
+  audioManager.load('airplane-crash-3', 'airplane-crash', 'audio/airplane-crash-3.mp3');
+  audioManager.load('airplane-crash-4', 'airplane-crash', 'audio/airplane-crash-4.mp3');
 
-  loop();
+  // Background sounds will start after user interaction (handled in audioManager.init)
+
+    document.addEventListener('mousemove', handleMouseMove, false);
+    document.addEventListener('touchmove', handleTouchMove, false);
+    document.addEventListener('mouseup', handleMouseUp, false);
+    document.addEventListener('touchend', handleTouchEnd, false);
+
+    loop();
 }
 
 window.addEventListener('load', init, false);
