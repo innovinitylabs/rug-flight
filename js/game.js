@@ -17,82 +17,60 @@ var AudioManager = function() {
     if (AudioContext) {
       this.audioContext = new AudioContext();
       this.webAudioSupported = true;
-      console.log('[AUDIO] Web Audio API initialized for seamless looping');
     } else {
       this.webAudioSupported = false;
-      console.warn('[AUDIO] Web Audio API not supported, falling back to HTML5 Audio');
     }
   } catch (e) {
     this.webAudioSupported = false;
-    console.warn('[AUDIO] Failed to initialize Web Audio API:', e);
   }
   
   this.audioBuffers = {}; // Store loaded audio buffers for Web Audio API
-  
-  console.log('[AUDIO] AudioManager initialized at', (performance.now() - this.startTime).toFixed(2), 'ms');
 };
 
 AudioManager.prototype.init = function(camera) {
-  var initTime = performance.now();
-  console.log('[AUDIO] init() called at', (initTime - this.startTime).toFixed(2), 'ms');
   // No initialization needed for HTML5 Audio
   // This method is kept for compatibility
   var _this = this;
   // Enable audio after first user interaction (click, touchstart, or keydown)
   var enableAudio = function() {
-    var interactionTime = performance.now();
-    console.log('[AUDIO] ✓ Valid user interaction detected (click/touch/keydown) at', (interactionTime - _this.startTime).toFixed(2), 'ms');
     _this.userInteracted = true;
     
     // Resume Web Audio API context if suspended (required by some browsers)
     if (_this.webAudioSupported && _this.audioContext && _this.audioContext.state === 'suspended') {
-      _this.audioContext.resume().then(function() {
-        console.log('[AUDIO] Web Audio context resumed');
-      }).catch(function(err) {
-        console.warn('[AUDIO] Failed to resume audio context:', err);
-      });
+      _this.audioContext.resume();
     }
     
-    console.log('[AUDIO] Pending plays:', _this.pendingPlays.length);
     // Play any pending sounds
     for (var i = 0; i < _this.pendingPlays.length; i++) {
       var pending = _this.pendingPlays[i];
-      console.log('[AUDIO] Playing pending sound:', pending.soundId);
       _this.play(pending.soundId, pending.options);
     }
     _this.pendingPlays = [];
     
     // Start background sounds immediately on valid interaction
     setTimeout(function() {
-      var attemptTime = performance.now();
-      console.log('[AUDIO] Attempting to play background sounds at', (attemptTime - _this.startTime).toFixed(2), 'ms');
-      
       // Check if sounds are loaded (either HTML5 Audio or Web Audio buffer)
       var propellerLoaded = _this.sounds['propeller'] || (_this.webAudioSupported && _this.audioBuffers['propeller']);
       var oceanLoaded = _this.sounds['ocean'] || (_this.webAudioSupported && _this.audioBuffers['ocean']);
       
       if (propellerLoaded) {
-        console.log('[AUDIO] propeller is loaded, playing now');
+        console.log('[PROPELLER] Starting airplane sound');
         _this.play('propeller', {loop: true, volume: 0.6});
       } else {
-        console.log('[AUDIO] propeller NOT loaded yet, will retry in 200ms');
         setTimeout(function() {
           var propellerLoadedRetry = _this.sounds['propeller'] || (_this.webAudioSupported && _this.audioBuffers['propeller']);
           if (propellerLoadedRetry) {
-            console.log('[AUDIO] propeller now loaded, playing');
+            console.log('[PROPELLER] Starting airplane sound (delayed)');
             _this.play('propeller', {loop: true, volume: 0.6});
           }
         }, 200);
       }
       if (oceanLoaded) {
-        console.log('[AUDIO] ocean is loaded, playing now');
         _this.play('ocean', {loop: true, volume: 0.4});
       } else {
-        console.log('[AUDIO] ocean NOT loaded yet, will retry in 200ms');
         setTimeout(function() {
           var oceanLoadedRetry = _this.sounds['ocean'] || (_this.webAudioSupported && _this.audioBuffers['ocean']);
           if (oceanLoadedRetry) {
-            console.log('[AUDIO] ocean now loaded, playing');
             _this.play('ocean', {loop: true, volume: 0.4});
           }
         }, 200);
@@ -106,23 +84,22 @@ AudioManager.prototype.init = function(camera) {
   document.addEventListener('click', enableAudio, {once: true});
   document.addEventListener('touchstart', enableAudio, {once: true});
   document.addEventListener('keydown', enableAudio, {once: true});
-  console.log('[AUDIO] init() completed in', (performance.now() - initTime).toFixed(2), 'ms');
-  console.log('[AUDIO] Waiting for user interaction (click/touch/keydown) to start audio...');
 };
 
 AudioManager.prototype.load = function(soundId, category, path) {
   var loadStartTime = performance.now();
   var _this = this;
   _this.loadTimes[soundId] = loadStartTime;
-  console.log('[AUDIO] load() called for', soundId, 'at', (loadStartTime - this.startTime).toFixed(2), 'ms, path:', path);
+  
+  // Log only for propeller sound
+  if (soundId === 'propeller') {
+    console.log('[PROPELLER] Loading airplane sound from:', path);
+  }
   
   return new Promise(function(resolve, reject) {
     // Load both HTML5 Audio (for one-shot sounds) and Web Audio API buffer (for looping sounds)
     var audio = new Audio();
     audio.preload = 'auto';
-    
-    var loadEventTime = performance.now();
-    console.log('[AUDIO] Audio element created for', soundId, 'at', (loadEventTime - _this.startTime).toFixed(2), 'ms');
     
     var html5Loaded = false;
     var webAudioLoaded = false;
@@ -130,13 +107,15 @@ AudioManager.prototype.load = function(soundId, category, path) {
     var checkBothLoaded = function() {
       if (html5Loaded && webAudioLoaded) {
         var loadedTime = performance.now();
-        var loadDuration = loadedTime - loadStartTime;
         _this.loadedTimes[soundId] = loadedTime;
         
-        console.log('[AUDIO] ✓', soundId, 'fully loaded at', (loadedTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)');
-        console.log('[AUDIO]   HTML5 Audio duration:', audio.duration, 'seconds');
-        if (_this.audioBuffers[soundId]) {
-          console.log('[AUDIO]   Web Audio buffer duration:', _this.audioBuffers[soundId].duration, 'seconds');
+        // Log only for propeller sound
+        if (soundId === 'propeller') {
+          var loadDuration = loadedTime - loadStartTime;
+          console.log('[PROPELLER] Airplane sound loaded in', loadDuration.toFixed(2), 'ms');
+          if (_this.audioBuffers[soundId]) {
+            console.log('[PROPELLER] Duration:', _this.audioBuffers[soundId].duration.toFixed(2), 'seconds');
+          }
         }
         
         if (category !== null) {
@@ -144,7 +123,6 @@ AudioManager.prototype.load = function(soundId, category, path) {
             _this.categories[category] = [];
           }
           _this.categories[category].push(soundId);
-          console.log('[AUDIO]   Added to category:', category);
         }
         
         resolve();
@@ -156,7 +134,6 @@ AudioManager.prototype.load = function(soundId, category, path) {
       if (!html5Loaded) {
         html5Loaded = true;
         _this.sounds[soundId] = audio;
-        console.log('[AUDIO] ✓', soundId, 'HTML5 Audio loaded via', eventType, 'at', (performance.now() - _this.startTime).toFixed(2), 'ms');
         checkBothLoaded();
       }
     };
@@ -170,9 +147,9 @@ AudioManager.prototype.load = function(soundId, category, path) {
     };
     
     var onError = function(e) {
-      var errorTime = performance.now();
-      var loadDuration = errorTime - loadStartTime;
-      console.error('[AUDIO] ✗ Failed to load audio:', soundId, 'at', (errorTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)', e);
+      if (soundId === 'propeller') {
+        console.error('[PROPELLER] Failed to load airplane sound:', e);
+      }
       audio.removeEventListener('loadeddata', onLoadedData);
       audio.removeEventListener('canplaythrough', onCanPlayThrough);
       audio.removeEventListener('error', onError);
@@ -184,13 +161,8 @@ AudioManager.prototype.load = function(soundId, category, path) {
     audio.addEventListener('canplaythrough', onCanPlayThrough, {once: true});
     audio.addEventListener('error', onError, {once: true});
     
-    var setSrcTime = performance.now();
     audio.src = path;
-    console.log('[AUDIO] Set src for', soundId, 'at', (setSrcTime - _this.startTime).toFixed(2), 'ms');
-    
-    var loadCallTime = performance.now();
     audio.load(); // Force loading to start
-    console.log('[AUDIO] Called audio.load() for', soundId, 'at', (loadCallTime - _this.startTime).toFixed(2), 'ms');
     
     // Also load as Web Audio API buffer for seamless looping (like Aviator2)
     if (_this.webAudioSupported && _this.audioContext) {
@@ -202,11 +174,9 @@ AudioManager.prototype.load = function(soundId, category, path) {
         .then(function(audioBuffer) {
           _this.audioBuffers[soundId] = audioBuffer;
           webAudioLoaded = true;
-          console.log('[AUDIO] ✓', soundId, 'Web Audio buffer loaded at', (performance.now() - _this.startTime).toFixed(2), 'ms');
           checkBothLoaded();
         })
         .catch(function(err) {
-          console.warn('[AUDIO] Failed to load Web Audio buffer for', soundId, ':', err);
           // Continue with HTML5 Audio only
           webAudioLoaded = true;
           checkBothLoaded();
@@ -220,21 +190,15 @@ AudioManager.prototype.load = function(soundId, category, path) {
 };
 
 AudioManager.prototype.play = function(soundIdOrCategory, options) {
-  var playStartTime = performance.now();
   options = options || {};
-  
-  console.log('[AUDIO] play() called for', soundIdOrCategory, 'at', (playStartTime - this.startTime).toFixed(2), 'ms', 
-              '(options:', JSON.stringify(options) + ')');
 
   var soundId = soundIdOrCategory;
   // Check if it's a category (array of sounds)
   if (this.categories[soundIdOrCategory]) {
     var categorySounds = this.categories[soundIdOrCategory];
     if (categorySounds.length > 0) {
-    soundId = categorySounds[Math.floor(Math.random() * categorySounds.length)];
-      console.log('[AUDIO] Selected from category:', soundIdOrCategory, '->', soundId);
+      soundId = categorySounds[Math.floor(Math.random() * categorySounds.length)];
     } else {
-      console.warn('[AUDIO] Category has no sounds:', soundIdOrCategory);
       return null;
     }
   }
@@ -244,22 +208,19 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
   var webAudioBuffer = this.webAudioSupported ? this.audioBuffers[soundId] : null;
   
   if (!audio && !webAudioBuffer) {
-    console.warn('[AUDIO] ✗ Audio not loaded:', soundId, '- available HTML5 sounds:', Object.keys(this.sounds), '- available Web Audio buffers:', Object.keys(this.audioBuffers || {}));
-    if (this.loadTimes[soundId]) {
-      console.warn('[AUDIO]   Loading started at', (this.loadTimes[soundId] - this.startTime).toFixed(2), 'ms but not yet loaded');
+    if (soundId === 'propeller') {
+      console.warn('[PROPELLER] Airplane sound not loaded yet');
     }
     return null;
   }
 
   // If user hasn't interacted yet and this is a looping sound, queue it
   if (!this.userInteracted && options.loop) {
-    console.log('[AUDIO] User not interacted yet, queuing sound:', soundId);
     this.pendingPlays.push({soundId: soundId, options: options});
     return null;
   }
 
   var sound;
-  var playCallTime = performance.now();
   
   // For looping sounds, use Web Audio API for seamless looping (like Aviator2)
   // This provides truly seamless looping without any gaps
@@ -272,10 +233,11 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
           this.playingWebAudioSounds[soundId].source.stop();
           this.playingWebAudioSounds[soundId].source.disconnect();
           this.playingWebAudioSounds[soundId].gainNode.disconnect();
-          console.log('[AUDIO] Stopped existing', soundId, 'source before restarting');
+          if (soundId === 'propeller') {
+            console.log('[PROPELLER] Stopped existing airplane sound before restarting');
+          }
         } catch (e) {
           // Source may already be stopped (this is OK)
-          console.log('[AUDIO] Existing source already stopped for', soundId);
         }
         delete this.playingWebAudioSounds[soundId];
       }
@@ -283,9 +245,7 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       // Resume audio context if it's suspended (required by some browsers)
       var resumePromise = null;
       if (this.audioContext.state === 'suspended') {
-        resumePromise = this.audioContext.resume().then(function() {
-          console.log('[AUDIO] Audio context resumed');
-        });
+        resumePromise = this.audioContext.resume();
       }
       
       // Wait for resume if needed, then start source
@@ -313,7 +273,11 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
           gainNode: gainNode
         };
         
-        console.log('[AUDIO] Playing', soundId, 'with Web Audio API (seamless loop) at', (playCallTime - this.startTime).toFixed(2), 'ms');
+        // Log only for propeller sound
+        if (soundId === 'propeller') {
+          console.log('[PROPELLER] Airplane sound playing (Web Audio API, seamless loop)');
+        }
+        
         return source;
       }.bind(this);
       
@@ -332,7 +296,10 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
         delete this.playingSounds[soundId];
       }
       
-      console.warn('[AUDIO] Web Audio API not available for', soundId, ', using HTML5 Audio (may have gaps)');
+      if (soundId === 'propeller') {
+        console.warn('[PROPELLER] Using HTML5 Audio (may have gaps)');
+      }
+      
       sound = audio;
       sound.loop = true;
       this.playingSounds[soundId] = sound;
@@ -341,46 +308,27 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
     // For one-shot sounds, reuse the original but reset currentTime to allow "restarting"
     // HTML5 Audio can play multiple times if we reset currentTime to 0
     sound = audio;
-    console.log('[AUDIO] Reusing original audio element for one-shot sound:', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
-    
     // Reset to beginning to allow overlapping playback of the same sound
     sound.currentTime = 0;
-    console.log('[AUDIO] Reset currentTime to 0 for overlapping playback');
   }
   
   if (options.volume !== undefined) {
     sound.volume = Math.max(0, Math.min(1, options.volume));
-    console.log('[AUDIO] Set volume to', options.volume, 'for', soundId);
   } else {
     sound.volume = 1.0;
   }
 
-  var timeSinceLoad = this.loadedTimes[soundId] ? (playCallTime - this.loadedTimes[soundId]) : -1;
-  console.log('[AUDIO] Calling sound.play() for', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
-  if (timeSinceLoad >= 0) {
-    console.log('[AUDIO]   Time since load:', timeSinceLoad.toFixed(2), 'ms');
-  }
-  console.log('[AUDIO]   Audio readyState:', sound.readyState, sound.readyState >= 2 ? '(ready)' : '(not ready)');
-  
   var playPromise = sound.play();
   if (playPromise !== undefined) {
     playPromise.then(function() {
-      var actuallyPlayingTime = performance.now();
-      var totalTime = actuallyPlayingTime - playStartTime;
-      console.log('[AUDIO] ✓', soundId, 'actually started playing at', (actuallyPlayingTime - this.startTime).toFixed(2), 'ms (play() took', totalTime.toFixed(2), 'ms)');
+      if (soundId === 'propeller') {
+        console.log('[PROPELLER] Airplane sound started successfully');
+      }
     }.bind(this)).catch(function(err) {
-      var errorTime = performance.now();
-      var totalTime = errorTime - playStartTime;
-      console.error('[AUDIO] ✗ Failed to play', soundId, 'at', (errorTime - this.startTime).toFixed(2), 'ms (play() took', totalTime.toFixed(2), 'ms)');
-      // Only log if it's not a user interaction error
-      if (err.name !== 'NotAllowedError') {
-        console.error('[AUDIO]   Error:', err.name, err.message);
-      } else {
-        console.warn('[AUDIO]   NotAllowedError - user interaction required');
+      if (soundId === 'propeller') {
+        console.error('[PROPELLER] Failed to start airplane sound:', err.name, err.message);
       }
     }.bind(this));
-  } else {
-    console.warn('[AUDIO] play() returned undefined for', soundId);
   }
   
   return sound;
@@ -393,9 +341,11 @@ AudioManager.prototype.stop = function(soundId) {
       this.playingWebAudioSounds[soundId].source.stop();
       this.playingWebAudioSounds[soundId].source.disconnect();
       this.playingWebAudioSounds[soundId].gainNode.disconnect();
+      if (soundId === 'propeller') {
+        console.log('[PROPELLER] Stopped airplane sound');
+      }
     } catch (e) {
       // Source may already be stopped
-      console.warn('[AUDIO] Error stopping Web Audio source:', e);
     }
     delete this.playingWebAudioSounds[soundId];
   }
@@ -404,6 +354,9 @@ AudioManager.prototype.stop = function(soundId) {
   if (this.playingSounds[soundId]) {
     this.playingSounds[soundId].pause();
     this.playingSounds[soundId].currentTime = 0;
+    if (soundId === 'propeller') {
+      console.log('[PROPELLER] Stopped airplane sound (HTML5)');
+    }
     delete this.playingSounds[soundId];
   }
 };
@@ -506,23 +459,14 @@ function resetGame(){
   }
   
   // Restart background sounds when game resets (only if user has interacted)
-  var resetTime = performance.now();
-  console.log('[AUDIO] resetGame: Called at', (resetTime - audioManager.startTime).toFixed(2), 'ms');
   if (audioManager.userInteracted) {
-    console.log('[AUDIO] resetGame: User has interacted, checking if sounds are loaded...');
     var propellerLoaded = audioManager.sounds['propeller'] || (audioManager.webAudioSupported && audioManager.audioBuffers['propeller']);
     var oceanLoaded = audioManager.sounds['ocean'] || (audioManager.webAudioSupported && audioManager.audioBuffers['ocean']);
-    console.log('[AUDIO] resetGame: propeller loaded?', !!propellerLoaded);
-    console.log('[AUDIO] resetGame: ocean loaded?', !!oceanLoaded);
     if (propellerLoaded && oceanLoaded) {
-      console.log('[AUDIO] resetGame: Both sounds loaded, playing now');
+      console.log('[PROPELLER] Restarting airplane sound on game reset');
       audioManager.play('propeller', {loop: true, volume: 0.6});
       audioManager.play('ocean', {loop: true, volume: 0.4});
-    } else {
-      console.warn('[AUDIO] resetGame: Sounds not loaded yet, skipping audio playback');
     }
-  } else {
-    console.log('[AUDIO] resetGame: User not interacted yet, skipping audio');
   }
 }
 
