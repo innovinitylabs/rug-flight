@@ -2115,4 +2115,26 @@ function init(event){
     loop();
 }
 
-window.addEventListener('load', init, false);
+// Wrap in Aviator1Game namespace for modular loading
+window.Aviator1Game = {
+  init: function() {
+    // Only initialize if not already initialized
+    if (window.Aviator1Game._initialized) {
+      return;
+    }
+    window.Aviator1Game._initialized = true;
+    init();
+  },
+  show: function() {
+    // Show the game container if needed
+    var container = document.getElementById('gameHolderAviator1');
+    if (container) {
+      container.style.display = 'block';
+    }
+  }
+};
+
+// Auto-initialize only if game mode selector is not present (backward compatibility)
+if (!document.getElementById('gameModeSelector')) {
+  window.addEventListener('load', init, false);
+}
