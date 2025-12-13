@@ -325,24 +325,61 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
             console.error('[PROPELLER] This is why you hear gaps - the source is ending despite loop=true!');
           };
           
+          // Monitor playback position to detect loop points
+          var lastPosition = 0;
+          var loopCount = 0;
+          var positionCheckInterval = setInterval(function() {
+            if (threeJSSound.source && threeJSSound.context) {
+              try {
+                // Try to get current playback time (if available)
+                var currentTime = threeJSSound.context.currentTime;
+                var bufferDuration = buffer.duration;
+                
+                // Calculate expected position based on time
+                // Note: This is approximate since we can't directly read BufferSource position
+                var expectedPosition = (currentTime % bufferDuration);
+                
+                // Detect if we've looped (position reset to near 0)
+                if (lastPosition > bufferDuration * 0.9 && expectedPosition < bufferDuration * 0.1) {
+                  loopCount++;
+                  console.log('[PROPELLER] 🔄 LOOP DETECTED #' + loopCount + ' at:', new Date().toISOString());
+                  console.log('[PROPELLER] Last position before loop:', lastPosition.toFixed(3), 's');
+                  console.log('[PROPELLER] New position after loop:', expectedPosition.toFixed(3), 's');
+                  console.log('[PROPELLER] Gap detected:', (bufferDuration - lastPosition + expectedPosition).toFixed(3), 's');
+                }
+                lastPosition = expectedPosition;
+              } catch (e) {
+                // Can't read position directly, that's OK
+              }
+            }
+          }, 100); // Check every 100ms to catch loop points
+          
           // Monitor isPlaying state periodically to detect if it stops
           var checkInterval = setInterval(function() {
             if (!threeJSSound.isPlaying) {
               console.error('[PROPELLER] ⚠️⚠️⚠️ Sound stopped playing! isPlaying = false');
               console.error('[PROPELLER] This happened at:', new Date().toISOString());
               clearInterval(checkInterval);
+              clearInterval(positionCheckInterval);
             }
           }, 1000); // Check every second
           
-          // Also check source state
-          var checkSourceInterval = setInterval(function() {
-            if (threeJSSound.source && threeJSSound.source.playbackState) {
-              var state = threeJSSound.source.playbackState;
-              if (state !== 'playing' && state !== 'scheduled') {
-                console.warn('[PROPELLER] Source playbackState changed to:', state);
+          // Check if source still exists and is connected
+          var sourceCheckInterval = setInterval(function() {
+            if (!threeJSSound.source) {
+              console.warn('[PROPELLER] Source is null/undefined');
+              clearInterval(sourceCheckInterval);
+            } else {
+              // Check if source is still in the audio graph
+              try {
+                var numberOfInputs = threeJSSound.source.numberOfInputs;
+                var numberOfOutputs = threeJSSound.source.numberOfOutputs;
+                // This is just to verify source still exists
+              } catch (e) {
+                console.warn('[PROPELLER] Cannot access source properties:', e);
               }
             }
-          }, 1000);
+          }, 2000);
         }
         console.log('[PROPELLER] Three.js Audio instance created at:', new Date().toISOString());
         console.log('[PROPELLER] Instance UUID:', threeJSSound.uuid);
