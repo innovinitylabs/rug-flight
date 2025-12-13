@@ -266,40 +266,72 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
   if (options.loop) {
     // Use Web Audio API if available (seamless looping like Aviator2)
     if (this.webAudioSupported && this.audioContext && this.audioBuffers[soundId]) {
+      // CRITICAL FIX: Stop existing source if already playing to prevent overlapping sources
+      if (this.playingWebAudioSounds[soundId]) {
+        try {
+          this.playingWebAudioSounds[soundId].source.stop();
+          this.playingWebAudioSounds[soundId].source.disconnect();
+          this.playingWebAudioSounds[soundId].gainNode.disconnect();
+          console.log('[AUDIO] Stopped existing', soundId, 'source before restarting');
+        } catch (e) {
+          // Source may already be stopped (this is OK)
+          console.log('[AUDIO] Existing source already stopped for', soundId);
+        }
+        delete this.playingWebAudioSounds[soundId];
+      }
+      
       // Resume audio context if it's suspended (required by some browsers)
+      var resumePromise = null;
       if (this.audioContext.state === 'suspended') {
-        this.audioContext.resume().then(function() {
+        resumePromise = this.audioContext.resume().then(function() {
           console.log('[AUDIO] Audio context resumed');
         });
       }
       
-      var buffer = this.audioBuffers[soundId];
-      var source = this.audioContext.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true; // Web Audio API provides seamless looping
+      // Wait for resume if needed, then start source
+      var startSource = function() {
+        var buffer = this.audioBuffers[soundId];
+        var source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true; // Web Audio API provides seamless looping
+        
+        var gainNode = this.audioContext.createGain();
+        if (options.volume !== undefined) {
+          gainNode.gain.value = Math.max(0, Math.min(1, options.volume));
+        } else {
+          gainNode.gain.value = 1.0;
+        }
+        
+        source.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        source.start(0);
+        
+        // Store the source so we can stop it later
+        this.playingWebAudioSounds[soundId] = {
+          source: source,
+          gainNode: gainNode
+        };
+        
+        console.log('[AUDIO] Playing', soundId, 'with Web Audio API (seamless loop) at', (playCallTime - this.startTime).toFixed(2), 'ms');
+        return source;
+      }.bind(this);
       
-      var gainNode = this.audioContext.createGain();
-      if (options.volume !== undefined) {
-        gainNode.gain.value = Math.max(0, Math.min(1, options.volume));
+      if (resumePromise) {
+        resumePromise.then(startSource);
+        return null; // Return null since we're starting asynchronously
       } else {
-        gainNode.gain.value = 1.0;
+        return startSource();
       }
-      
-      source.connect(gainNode);
-      gainNode.connect(this.audioContext.destination);
-      
-      source.start(0);
-      
-      // Store the source so we can stop it later
-      this.playingWebAudioSounds[soundId] = {
-        source: source,
-        gainNode: gainNode
-      };
-      
-      console.log('[AUDIO] Playing', soundId, 'with Web Audio API (seamless loop) at', (playCallTime - this.startTime).toFixed(2), 'ms');
-      return source;
     } else {
       // Fallback to HTML5 Audio if Web Audio API not available
+      // Also stop existing HTML5 Audio if playing
+      if (this.playingSounds[soundId]) {
+        this.playingSounds[soundId].pause();
+        this.playingSounds[soundId].currentTime = 0;
+        delete this.playingSounds[soundId];
+      }
+      
       console.warn('[AUDIO] Web Audio API not available for', soundId, ', using HTML5 Audio (may have gaps)');
       sound = audio;
       sound.loop = true;
