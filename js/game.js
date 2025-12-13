@@ -1639,6 +1639,7 @@ function updateEnergy(){
   if (game.energy <1){
     game.status = "gameover";
     // Stop background sounds
+    console.log('[PROPELLER] Game over - calling stop() on propeller');
     audioManager.stop('propeller');
     audioManager.stop('ocean');
     // Play crash sound when game over
