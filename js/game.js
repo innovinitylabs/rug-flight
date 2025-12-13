@@ -282,6 +282,13 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       
       threeJSSound.setBuffer(buffer);
       threeJSSound.setLoop(true);
+
+      // FIX: Set loop points BEFORE calling play()
+      if (soundId === 'propeller') {
+        threeJSSound.source.loopStart = 0.022; // Skip initial silence
+        threeJSSound.source.loopEnd = 3.628;   // End before fade-out
+        console.log('[PROPELLER] ✅ FIXED loop points BEFORE play(): loopStart=0.022s, loopEnd=3.628s');
+      }
       
       if (soundId === 'propeller') {
         console.log('[PROPELLER] Set buffer and loop = true');
