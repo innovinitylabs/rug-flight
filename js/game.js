@@ -123,8 +123,8 @@ AudioManager.prototype.load = function(soundId, category, path) {
     
     var checkBothLoaded = function() {
       if (html5Loaded && threeJSLoaded) {
-        var loadedTime = performance.now();
-        _this.loadedTimes[soundId] = loadedTime;
+      var loadedTime = performance.now();
+      _this.loadedTimes[soundId] = loadedTime;
         
         // Log only for propeller sound
         if (soundId === 'propeller') {
@@ -134,14 +134,14 @@ AudioManager.prototype.load = function(soundId, category, path) {
             console.log('[PROPELLER] Duration:', _this.buffers[soundId].duration.toFixed(2), 'seconds');
           }
         }
-        
+      
         if (category !== null) {
           if (!_this.categories[category]) {
             _this.categories[category] = [];
           }
           _this.categories[category].push(soundId);
         }
-        
+      
         resolve();
       }
     };
@@ -214,7 +214,7 @@ AudioManager.prototype.load = function(soundId, category, path) {
 
 AudioManager.prototype.play = function(soundIdOrCategory, options) {
   options = options || {};
-
+  
   if (soundIdOrCategory === 'propeller') {
     console.log('[PROPELLER] ===== play() CALLED =====');
     console.log('[PROPELLER] Options:', JSON.stringify(options));
@@ -226,7 +226,7 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
   if (this.categories[soundIdOrCategory]) {
     var categorySounds = this.categories[soundIdOrCategory];
     if (categorySounds.length > 0) {
-      soundId = categorySounds[Math.floor(Math.random() * categorySounds.length)];
+    soundId = categorySounds[Math.floor(Math.random() * categorySounds.length)];
     } else {
       return null;
     }
@@ -317,6 +317,81 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
           console.log('[PROPELLER] Source playbackRate:', threeJSSound.source.playbackRate.value);
           console.log('[PROPELLER] Source loopStart:', threeJSSound.source.loopStart);
           console.log('[PROPELLER] Source loopEnd:', threeJSSound.source.loopEnd);
+          console.log('[PROPELLER] Buffer duration:', buffer.duration, 'seconds');
+          
+          // CRITICAL: Check if loopEnd is set correctly
+          // When loopEnd is 0, it means "use buffer length", but let's verify
+          if (threeJSSound.source.loopEnd === 0) {
+            console.log('[PROPELLER] loopEnd is 0 (defaults to buffer length =', buffer.duration, 'seconds)');
+          } else if (threeJSSound.source.loopEnd !== buffer.duration) {
+            console.warn('[PROPELLER] ⚠️ loopEnd (' + threeJSSound.source.loopEnd + ') != buffer duration (' + buffer.duration + ')');
+          }
+          
+          // Analyze buffer for silence at start/end and waveform discontinuity
+          if (buffer.getChannelData) {
+            try {
+              var channelData = buffer.getChannelData(0);
+              var startSamples = channelData.slice(0, 100); // First 100 samples
+              var endSamples = channelData.slice(-100); // Last 100 samples
+              var startAvg = Math.abs(startSamples.reduce(function(a, b) { return a + Math.abs(b); }, 0) / startSamples.length);
+              var endAvg = Math.abs(endSamples.reduce(function(a, b) { return a + Math.abs(b); }, 0) / endSamples.length);
+              var startEndDiff = Math.abs(channelData[0] - channelData[channelData.length - 1]);
+              
+              console.log('[PROPELLER] ===== BUFFER ANALYSIS =====');
+              console.log('[PROPELLER] Start samples (first 100) avg amplitude:', startAvg.toFixed(6));
+              console.log('[PROPELLER] End samples (last 100) avg amplitude:', endAvg.toFixed(6));
+              console.log('[PROPELLER] First sample value:', channelData[0].toFixed(6));
+              console.log('[PROPELLER] Last sample value:', channelData[channelData.length - 1].toFixed(6));
+              console.log('[PROPELLER] Start/End sample difference:', startEndDiff.toFixed(6));
+              
+              // Check for silence (very low amplitude)
+              var silenceThreshold = 0.001;
+              if (startAvg < silenceThreshold) {
+                console.error('[PROPELLER] ⚠️⚠️⚠️ START OF BUFFER HAS SILENCE! (avg amplitude:', startAvg.toFixed(6), ')');
+                console.error('[PROPELLER] This creates a gap when looping back to start');
+              }
+              if (endAvg < silenceThreshold) {
+                console.error('[PROPELLER] ⚠️⚠️⚠️ END OF BUFFER HAS SILENCE! (avg amplitude:', endAvg.toFixed(6), ')');
+                console.error('[PROPELLER] This creates a gap before looping');
+              }
+              if (startEndDiff > 0.1) {
+                console.error('[PROPELLER] ⚠️⚠️⚠️ WAVEFORM DISCONTINUITY! (difference:', startEndDiff.toFixed(6), ')');
+                console.error('[PROPELLER] First sample (', channelData[0].toFixed(6), ') != Last sample (', channelData[channelData.length - 1].toFixed(6), ')');
+                console.error('[PROPELLER] This will cause a click/pop at loop point');
+              }
+              
+              // Check how many samples of silence at start
+              var silenceStartCount = 0;
+              for (var i = 0; i < Math.min(1000, channelData.length); i++) {
+                if (Math.abs(channelData[i]) < silenceThreshold) {
+                  silenceStartCount++;
+                } else {
+                  break;
+                }
+              }
+              if (silenceStartCount > 0) {
+                var silenceStartDuration = (silenceStartCount / buffer.sampleRate);
+                console.warn('[PROPELLER] ⚠️', silenceStartCount, 'samples of silence at start =', silenceStartDuration.toFixed(3), 'seconds');
+              }
+              
+              // Check how many samples of silence at end
+              var silenceEndCount = 0;
+              for (var i = channelData.length - 1; i >= Math.max(0, channelData.length - 1000); i--) {
+                if (Math.abs(channelData[i]) < silenceThreshold) {
+                  silenceEndCount++;
+                } else {
+                  break;
+                }
+              }
+              if (silenceEndCount > 0) {
+                var silenceEndDuration = (silenceEndCount / buffer.sampleRate);
+                console.warn('[PROPELLER] ⚠️', silenceEndCount, 'samples of silence at end =', silenceEndDuration.toFixed(3), 'seconds');
+                console.warn('[PROPELLER] This matches the ~0.099s gap we detected!');
+              }
+            } catch (e) {
+              console.warn('[PROPELLER] Could not analyze buffer:', e);
+            }
+          }
           
           // Monitor source for ended event (shouldn't happen with loop=true, but check)
           threeJSSound.source.onended = function() {
@@ -409,7 +484,7 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       }
       
       sound = audio;
-      sound.loop = true;
+    sound.loop = true;
       // Don't track HTML5 Audio for looping sounds (let multiple instances play)
     }
   } else {
@@ -425,7 +500,7 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
   } else {
     sound.volume = 1.0;
   }
-
+  
   var playPromise = sound.play();
   if (playPromise !== undefined) {
     playPromise.then(function() {
@@ -2341,5 +2416,5 @@ window.Aviator1Game = {
 
 // Auto-initialize only if game mode selector is not present (backward compatibility)
 if (!document.getElementById('gameModeSelector')) {
-  window.addEventListener('load', init, false);
+window.addEventListener('load', init, false);
 }
