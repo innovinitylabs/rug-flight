@@ -190,16 +190,54 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
   var sound;
   var playCallTime = performance.now();
   
-  // For looping sounds, reuse the same element (don't clone - cloned elements lose loaded data)
-  // For one-shot sounds, reuse as well but reset currentTime for overlapping playback
+  // For looping sounds, implement seamless looping using timeupdate event
+  // This prevents the noticeable gap that occurs with HTML5 Audio's native loop property
   if (options.loop) {
     sound = audio; // Reuse original element for looping sounds
     console.log('[AUDIO] Reusing original audio element for looping sound:', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
     
-    sound.loop = true;
+    // Instead of using sound.loop = true (which can have gaps),
+    // implement seamless looping by restarting just before the end
+    sound.loop = false; // Disable native loop to control it manually
+    
+    // Remove any existing timeupdate listener to avoid duplicates
+    var existingHandler = sound._seamlessLoopHandler;
+    if (existingHandler) {
+      sound.removeEventListener('timeupdate', existingHandler);
+    }
+    
+    // Create seamless loop handler
+    var seamlessLoopHandler = function() {
+      // Restart the audio when it's very close to the end (within 0.1 seconds)
+      // This creates a seamless loop without gaps
+      if (sound.duration && !isNaN(sound.duration) && sound.currentTime >= sound.duration - 0.1) {
+        sound.currentTime = 0;
+        // Ensure it keeps playing (should already be playing, but check just in case)
+        if (sound.paused) {
+          sound.play().catch(function(err) {
+            console.warn('[AUDIO] Failed to restart loop for', soundId, ':', err);
+          });
+        }
+      }
+    };
+    
+    sound._seamlessLoopHandler = seamlessLoopHandler;
+    sound.addEventListener('timeupdate', seamlessLoopHandler);
+    
+    // Also handle the ended event as a fallback
+    var endedHandler = function() {
+      sound.currentTime = 0;
+      sound.play().catch(function(err) {
+        console.warn('[AUDIO] Failed to restart loop on ended for', soundId, ':', err);
+      });
+    };
+    
+    sound._seamlessLoopEndedHandler = endedHandler;
+    sound.addEventListener('ended', endedHandler);
+    
     // Store looping sounds so we can stop them later
     this.playingSounds[soundId] = sound;
-    console.log('[AUDIO] Set loop=true for', soundId);
+    console.log('[AUDIO] Set up seamless looping for', soundId);
   } else {
     // For one-shot sounds, reuse the original but reset currentTime to allow "restarting"
     // HTML5 Audio can play multiple times if we reset currentTime to 0
@@ -251,6 +289,16 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
 
 AudioManager.prototype.stop = function(soundId) {
   if (this.playingSounds[soundId]) {
+    var sound = this.playingSounds[soundId];
+    // Clean up seamless loop event listeners
+    if (sound._seamlessLoopHandler) {
+      sound.removeEventListener('timeupdate', sound._seamlessLoopHandler);
+      sound._seamlessLoopHandler = null;
+    }
+    if (sound._seamlessLoopEndedHandler) {
+      sound.removeEventListener('ended', sound._seamlessLoopEndedHandler);
+      sound._seamlessLoopEndedHandler = null;
+    }
     this.playingSounds[soundId].pause();
     this.playingSounds[soundId].currentTime = 0;
     delete this.playingSounds[soundId];
