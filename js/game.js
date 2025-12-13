@@ -1,13 +1,34 @@
-// AUDIO MANAGER - Using HTML5 Audio API (compatible with all Three.js versions)
+// AUDIO MANAGER - Using Web Audio API for seamless looping (like Aviator2)
 var AudioManager = function() {
-  this.sounds = {};
+  this.sounds = {}; // HTML5 Audio for one-shot sounds
+  this.webAudioSounds = {}; // Web Audio API for looping sounds (seamless)
   this.categories = {};
-  this.playingSounds = {};
+  this.playingSounds = {}; // HTML5 Audio instances
+  this.playingWebAudioSounds = {}; // Web Audio API instances
   this.userInteracted = false;
   this.pendingPlays = [];
   this.startTime = performance.now();
   this.loadTimes = {}; // Track when each sound starts loading
   this.loadedTimes = {}; // Track when each sound finishes loading
+  
+  // Initialize Web Audio API context
+  try {
+    var AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) {
+      this.audioContext = new AudioContext();
+      this.webAudioSupported = true;
+      console.log('[AUDIO] Web Audio API initialized for seamless looping');
+    } else {
+      this.webAudioSupported = false;
+      console.warn('[AUDIO] Web Audio API not supported, falling back to HTML5 Audio');
+    }
+  } catch (e) {
+    this.webAudioSupported = false;
+    console.warn('[AUDIO] Failed to initialize Web Audio API:', e);
+  }
+  
+  this.audioBuffers = {}; // Store loaded audio buffers for Web Audio API
+  
   console.log('[AUDIO] AudioManager initialized at', (performance.now() - this.startTime).toFixed(2), 'ms');
 };
 
@@ -22,6 +43,16 @@ AudioManager.prototype.init = function(camera) {
     var interactionTime = performance.now();
     console.log('[AUDIO] ✓ Valid user interaction detected (click/touch/keydown) at', (interactionTime - _this.startTime).toFixed(2), 'ms');
     _this.userInteracted = true;
+    
+    // Resume Web Audio API context if suspended (required by some browsers)
+    if (_this.webAudioSupported && _this.audioContext && _this.audioContext.state === 'suspended') {
+      _this.audioContext.resume().then(function() {
+        console.log('[AUDIO] Web Audio context resumed');
+      }).catch(function(err) {
+        console.warn('[AUDIO] Failed to resume audio context:', err);
+      });
+    }
+    
     console.log('[AUDIO] Pending plays:', _this.pendingPlays.length);
     // Play any pending sounds
     for (var i = 0; i < _this.pendingPlays.length; i++) {
@@ -36,25 +67,31 @@ AudioManager.prototype.init = function(camera) {
       var attemptTime = performance.now();
       console.log('[AUDIO] Attempting to play background sounds at', (attemptTime - _this.startTime).toFixed(2), 'ms');
       
-      if (_this.sounds['propeller']) {
+      // Check if sounds are loaded (either HTML5 Audio or Web Audio buffer)
+      var propellerLoaded = _this.sounds['propeller'] || (_this.webAudioSupported && _this.audioBuffers['propeller']);
+      var oceanLoaded = _this.sounds['ocean'] || (_this.webAudioSupported && _this.audioBuffers['ocean']);
+      
+      if (propellerLoaded) {
         console.log('[AUDIO] propeller is loaded, playing now');
         _this.play('propeller', {loop: true, volume: 0.6});
       } else {
         console.log('[AUDIO] propeller NOT loaded yet, will retry in 200ms');
         setTimeout(function() {
-          if (_this.sounds['propeller']) {
+          var propellerLoadedRetry = _this.sounds['propeller'] || (_this.webAudioSupported && _this.audioBuffers['propeller']);
+          if (propellerLoadedRetry) {
             console.log('[AUDIO] propeller now loaded, playing');
             _this.play('propeller', {loop: true, volume: 0.6});
           }
         }, 200);
       }
-      if (_this.sounds['ocean']) {
+      if (oceanLoaded) {
         console.log('[AUDIO] ocean is loaded, playing now');
         _this.play('ocean', {loop: true, volume: 0.4});
       } else {
         console.log('[AUDIO] ocean NOT loaded yet, will retry in 200ms');
         setTimeout(function() {
-          if (_this.sounds['ocean']) {
+          var oceanLoadedRetry = _this.sounds['ocean'] || (_this.webAudioSupported && _this.audioBuffers['ocean']);
+          if (oceanLoadedRetry) {
             console.log('[AUDIO] ocean now loaded, playing');
             _this.play('ocean', {loop: true, volume: 0.4});
           }
@@ -80,37 +117,48 @@ AudioManager.prototype.load = function(soundId, category, path) {
   console.log('[AUDIO] load() called for', soundId, 'at', (loadStartTime - this.startTime).toFixed(2), 'ms, path:', path);
   
   return new Promise(function(resolve, reject) {
+    // Load both HTML5 Audio (for one-shot sounds) and Web Audio API buffer (for looping sounds)
     var audio = new Audio();
     audio.preload = 'auto';
     
     var loadEventTime = performance.now();
     console.log('[AUDIO] Audio element created for', soundId, 'at', (loadEventTime - _this.startTime).toFixed(2), 'ms');
     
-    // Use 'loadeddata' for faster loading (doesn't wait for entire file)
-    var onLoaded = function(eventType) {
-      var loadedTime = performance.now();
-      var loadDuration = loadedTime - loadStartTime;
-      _this.loadedTimes[soundId] = loadedTime;
-      _this.sounds[soundId] = audio;
-      
-      console.log('[AUDIO] ✓', soundId, 'loaded via', eventType, 'at', (loadedTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)');
-      console.log('[AUDIO]   Audio readyState:', audio.readyState, '(0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA)');
-      console.log('[AUDIO]   Audio duration:', audio.duration, 'seconds');
-      console.log('[AUDIO]   Audio buffered:', audio.buffered.length, 'ranges');
-      
+    var html5Loaded = false;
+    var webAudioLoaded = false;
+    
+    var checkBothLoaded = function() {
+      if (html5Loaded && webAudioLoaded) {
+        var loadedTime = performance.now();
+        var loadDuration = loadedTime - loadStartTime;
+        _this.loadedTimes[soundId] = loadedTime;
+        
+        console.log('[AUDIO] ✓', soundId, 'fully loaded at', (loadedTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)');
+        console.log('[AUDIO]   HTML5 Audio duration:', audio.duration, 'seconds');
+        if (_this.audioBuffers[soundId]) {
+          console.log('[AUDIO]   Web Audio buffer duration:', _this.audioBuffers[soundId].duration, 'seconds');
+        }
+        
         if (category !== null) {
           if (!_this.categories[category]) {
             _this.categories[category] = [];
           }
           _this.categories[category].push(soundId);
-        console.log('[AUDIO]   Added to category:', category);
+          console.log('[AUDIO]   Added to category:', category);
         }
-      
-      // Clean up listeners
-      audio.removeEventListener('loadeddata', onLoadedData);
-      audio.removeEventListener('canplaythrough', onCanPlayThrough);
-      audio.removeEventListener('error', onError);
+        
         resolve();
+      }
+    };
+    
+    // Use 'loadeddata' for faster loading (doesn't wait for entire file)
+    var onLoaded = function(eventType) {
+      if (!html5Loaded) {
+        html5Loaded = true;
+        _this.sounds[soundId] = audio;
+        console.log('[AUDIO] ✓', soundId, 'HTML5 Audio loaded via', eventType, 'at', (performance.now() - _this.startTime).toFixed(2), 'ms');
+        checkBothLoaded();
+      }
     };
     
     var onLoadedData = function() {
@@ -125,11 +173,6 @@ AudioManager.prototype.load = function(soundId, category, path) {
       var errorTime = performance.now();
       var loadDuration = errorTime - loadStartTime;
       console.error('[AUDIO] ✗ Failed to load audio:', soundId, 'at', (errorTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)', e);
-      console.error('[AUDIO]   Error details:', {
-        name: e.target.error ? e.target.error.name : 'unknown',
-        code: e.target.error ? e.target.error.code : 'unknown',
-        message: e.target.error ? e.target.error.message : 'unknown'
-      });
       audio.removeEventListener('loadeddata', onLoadedData);
       audio.removeEventListener('canplaythrough', onCanPlayThrough);
       audio.removeEventListener('error', onError);
@@ -148,6 +191,31 @@ AudioManager.prototype.load = function(soundId, category, path) {
     var loadCallTime = performance.now();
     audio.load(); // Force loading to start
     console.log('[AUDIO] Called audio.load() for', soundId, 'at', (loadCallTime - _this.startTime).toFixed(2), 'ms');
+    
+    // Also load as Web Audio API buffer for seamless looping (like Aviator2)
+    if (_this.webAudioSupported && _this.audioContext) {
+      fetch(path)
+        .then(function(response) { return response.arrayBuffer(); })
+        .then(function(arrayBuffer) {
+          return _this.audioContext.decodeAudioData(arrayBuffer);
+        })
+        .then(function(audioBuffer) {
+          _this.audioBuffers[soundId] = audioBuffer;
+          webAudioLoaded = true;
+          console.log('[AUDIO] ✓', soundId, 'Web Audio buffer loaded at', (performance.now() - _this.startTime).toFixed(2), 'ms');
+          checkBothLoaded();
+        })
+        .catch(function(err) {
+          console.warn('[AUDIO] Failed to load Web Audio buffer for', soundId, ':', err);
+          // Continue with HTML5 Audio only
+          webAudioLoaded = true;
+          checkBothLoaded();
+        });
+    } else {
+      // Web Audio not supported, just use HTML5 Audio
+      webAudioLoaded = true;
+      checkBothLoaded();
+    }
   });
 };
 
@@ -171,9 +239,12 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
     }
   }
 
+  // Check if sound is loaded (either HTML5 Audio or Web Audio buffer)
   var audio = this.sounds[soundId];
-  if (!audio) {
-    console.warn('[AUDIO] ✗ Audio not loaded:', soundId, '- available sounds:', Object.keys(this.sounds));
+  var webAudioBuffer = this.webAudioSupported ? this.audioBuffers[soundId] : null;
+  
+  if (!audio && !webAudioBuffer) {
+    console.warn('[AUDIO] ✗ Audio not loaded:', soundId, '- available HTML5 sounds:', Object.keys(this.sounds), '- available Web Audio buffers:', Object.keys(this.audioBuffers || {}));
     if (this.loadTimes[soundId]) {
       console.warn('[AUDIO]   Loading started at', (this.loadTimes[soundId] - this.startTime).toFixed(2), 'ms but not yet loaded');
     }
@@ -190,54 +261,50 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
   var sound;
   var playCallTime = performance.now();
   
-  // For looping sounds, implement seamless looping using timeupdate event
-  // This prevents the noticeable gap that occurs with HTML5 Audio's native loop property
+  // For looping sounds, use Web Audio API for seamless looping (like Aviator2)
+  // This provides truly seamless looping without any gaps
   if (options.loop) {
-    sound = audio; // Reuse original element for looping sounds
-    console.log('[AUDIO] Reusing original audio element for looping sound:', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
-    
-    // Instead of using sound.loop = true (which can have gaps),
-    // implement seamless looping by restarting just before the end
-    sound.loop = false; // Disable native loop to control it manually
-    
-    // Remove any existing timeupdate listener to avoid duplicates
-    var existingHandler = sound._seamlessLoopHandler;
-    if (existingHandler) {
-      sound.removeEventListener('timeupdate', existingHandler);
-    }
-    
-    // Create seamless loop handler
-    var seamlessLoopHandler = function() {
-      // Restart the audio when it's very close to the end (within 0.1 seconds)
-      // This creates a seamless loop without gaps
-      if (sound.duration && !isNaN(sound.duration) && sound.currentTime >= sound.duration - 0.1) {
-        sound.currentTime = 0;
-        // Ensure it keeps playing (should already be playing, but check just in case)
-        if (sound.paused) {
-          sound.play().catch(function(err) {
-            console.warn('[AUDIO] Failed to restart loop for', soundId, ':', err);
-          });
-        }
+    // Use Web Audio API if available (seamless looping like Aviator2)
+    if (this.webAudioSupported && this.audioContext && this.audioBuffers[soundId]) {
+      // Resume audio context if it's suspended (required by some browsers)
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().then(function() {
+          console.log('[AUDIO] Audio context resumed');
+        });
       }
-    };
-    
-    sound._seamlessLoopHandler = seamlessLoopHandler;
-    sound.addEventListener('timeupdate', seamlessLoopHandler);
-    
-    // Also handle the ended event as a fallback
-    var endedHandler = function() {
-      sound.currentTime = 0;
-      sound.play().catch(function(err) {
-        console.warn('[AUDIO] Failed to restart loop on ended for', soundId, ':', err);
-      });
-    };
-    
-    sound._seamlessLoopEndedHandler = endedHandler;
-    sound.addEventListener('ended', endedHandler);
-    
-    // Store looping sounds so we can stop them later
-    this.playingSounds[soundId] = sound;
-    console.log('[AUDIO] Set up seamless looping for', soundId);
+      
+      var buffer = this.audioBuffers[soundId];
+      var source = this.audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true; // Web Audio API provides seamless looping
+      
+      var gainNode = this.audioContext.createGain();
+      if (options.volume !== undefined) {
+        gainNode.gain.value = Math.max(0, Math.min(1, options.volume));
+      } else {
+        gainNode.gain.value = 1.0;
+      }
+      
+      source.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      source.start(0);
+      
+      // Store the source so we can stop it later
+      this.playingWebAudioSounds[soundId] = {
+        source: source,
+        gainNode: gainNode
+      };
+      
+      console.log('[AUDIO] Playing', soundId, 'with Web Audio API (seamless loop) at', (playCallTime - this.startTime).toFixed(2), 'ms');
+      return source;
+    } else {
+      // Fallback to HTML5 Audio if Web Audio API not available
+      console.warn('[AUDIO] Web Audio API not available for', soundId, ', using HTML5 Audio (may have gaps)');
+      sound = audio;
+      sound.loop = true;
+      this.playingSounds[soundId] = sound;
+    }
   } else {
     // For one-shot sounds, reuse the original but reset currentTime to allow "restarting"
     // HTML5 Audio can play multiple times if we reset currentTime to 0
@@ -288,17 +355,21 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
 };
 
 AudioManager.prototype.stop = function(soundId) {
+  // Stop Web Audio API sound if playing
+  if (this.playingWebAudioSounds[soundId]) {
+    try {
+      this.playingWebAudioSounds[soundId].source.stop();
+      this.playingWebAudioSounds[soundId].source.disconnect();
+      this.playingWebAudioSounds[soundId].gainNode.disconnect();
+    } catch (e) {
+      // Source may already be stopped
+      console.warn('[AUDIO] Error stopping Web Audio source:', e);
+    }
+    delete this.playingWebAudioSounds[soundId];
+  }
+  
+  // Stop HTML5 Audio sound if playing
   if (this.playingSounds[soundId]) {
-    var sound = this.playingSounds[soundId];
-    // Clean up seamless loop event listeners
-    if (sound._seamlessLoopHandler) {
-      sound.removeEventListener('timeupdate', sound._seamlessLoopHandler);
-      sound._seamlessLoopHandler = null;
-    }
-    if (sound._seamlessLoopEndedHandler) {
-      sound.removeEventListener('ended', sound._seamlessLoopEndedHandler);
-      sound._seamlessLoopEndedHandler = null;
-    }
     this.playingSounds[soundId].pause();
     this.playingSounds[soundId].currentTime = 0;
     delete this.playingSounds[soundId];
@@ -407,9 +478,11 @@ function resetGame(){
   console.log('[AUDIO] resetGame: Called at', (resetTime - audioManager.startTime).toFixed(2), 'ms');
   if (audioManager.userInteracted) {
     console.log('[AUDIO] resetGame: User has interacted, checking if sounds are loaded...');
-    console.log('[AUDIO] resetGame: propeller loaded?', !!audioManager.sounds['propeller']);
-    console.log('[AUDIO] resetGame: ocean loaded?', !!audioManager.sounds['ocean']);
-    if (audioManager.sounds['propeller'] && audioManager.sounds['ocean']) {
+    var propellerLoaded = audioManager.sounds['propeller'] || (audioManager.webAudioSupported && audioManager.audioBuffers['propeller']);
+    var oceanLoaded = audioManager.sounds['ocean'] || (audioManager.webAudioSupported && audioManager.audioBuffers['ocean']);
+    console.log('[AUDIO] resetGame: propeller loaded?', !!propellerLoaded);
+    console.log('[AUDIO] resetGame: ocean loaded?', !!oceanLoaded);
+    if (propellerLoaded && oceanLoaded) {
       console.log('[AUDIO] resetGame: Both sounds loaded, playing now');
       audioManager.play('propeller', {loop: true, volume: 0.6});
       audioManager.play('ocean', {loop: true, volume: 0.4});
