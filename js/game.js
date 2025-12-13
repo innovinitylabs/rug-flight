@@ -1,16 +1,15 @@
-// AUDIO MANAGER - Using Three.js Audio API for seamless looping (like Aviator2)
+// AUDIO MANAGER - Using Three.js Audio API exactly like Aviator2
 var AudioManager = function() {
   this.sounds = {}; // HTML5 Audio for one-shot sounds
   this.categories = {};
-  this.playingSounds = {}; // HTML5 Audio instances
-  this.playingThreeJSSounds = {}; // Three.js Audio instances for looping sounds
+  this.playingSounds = {}; // HTML5 Audio instances (only for one-shot sounds)
   this.userInteracted = false;
   this.pendingPlays = [];
   this.startTime = performance.now();
   this.loadTimes = {}; // Track when each sound starts loading
   this.loadedTimes = {}; // Track when each sound finishes loading
   
-  // Initialize Three.js Audio API (like Aviator2)
+  // Initialize Three.js Audio API (exactly like Aviator2)
   if (typeof THREE !== 'undefined' && THREE.AudioLoader && THREE.Audio && THREE.AudioListener) {
     this.loader = new THREE.AudioLoader();
     this.listener = new THREE.AudioListener();
@@ -218,30 +217,17 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
 
   var sound;
   
-  // For looping sounds, use Three.js Audio API for seamless looping (like Aviator2)
+  // For looping sounds, use Three.js Audio API exactly like Aviator2
+  // Aviator2 doesn't stop existing sounds - it creates new instances and lets them play
   // This provides truly seamless looping without any gaps
   if (options.loop) {
-    // Use Three.js Audio API if available (seamless looping like Aviator2)
+    // Use Three.js Audio API if available (exactly like Aviator2)
     if (this.threeJSSupported && this.listener && this.buffers[soundId]) {
-      // Stop existing Three.js Audio if already playing
-      if (this.playingThreeJSSounds[soundId]) {
-        try {
-          this.playingThreeJSSounds[soundId].stop();
-          this.playingThreeJSSounds[soundId].disconnect();
-          if (soundId === 'propeller') {
-            console.log('[PROPELLER] Stopped existing airplane sound before restarting');
-          }
-        } catch (e) {
-          // Sound may already be stopped (this is OK)
-        }
-        delete this.playingThreeJSSounds[soundId];
-      }
-      
-      // Create new Three.js Audio instance (like Aviator2)
+      // Create new Three.js Audio instance (like Aviator2 - no stopping of existing)
       var buffer = this.buffers[soundId];
       var threeJSSound = new THREE.Audio(this.listener);
       threeJSSound.setBuffer(buffer);
-      threeJSSound.setLoop(true); // Three.js provides seamless looping
+      threeJSSound.setLoop(true);
       
       if (options.volume !== undefined) {
         threeJSSound.setVolume(Math.max(0, Math.min(1, options.volume)));
@@ -251,9 +237,6 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       
       threeJSSound.play();
       
-      // Store the sound so we can stop it later
-      this.playingThreeJSSounds[soundId] = threeJSSound;
-      
       // Log only for propeller sound
       if (soundId === 'propeller') {
         console.log('[PROPELLER] Airplane sound playing (Three.js Audio, seamless loop)');
@@ -262,20 +245,13 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       return threeJSSound;
     } else {
       // Fallback to HTML5 Audio if Three.js Audio not available
-      // Also stop existing HTML5 Audio if playing
-      if (this.playingSounds[soundId]) {
-        this.playingSounds[soundId].pause();
-        this.playingSounds[soundId].currentTime = 0;
-        delete this.playingSounds[soundId];
-      }
-      
       if (soundId === 'propeller') {
         console.warn('[PROPELLER] Using HTML5 Audio (may have gaps)');
       }
       
       sound = audio;
       sound.loop = true;
-      this.playingSounds[soundId] = sound;
+      // Don't track HTML5 Audio for looping sounds (let multiple instances play)
     }
   } else {
     // For one-shot sounds, reuse the original but reset currentTime to allow "restarting"
@@ -308,27 +284,14 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
 };
 
 AudioManager.prototype.stop = function(soundId) {
-  // Stop Three.js Audio sound if playing
-  if (this.playingThreeJSSounds[soundId]) {
-    try {
-      this.playingThreeJSSounds[soundId].stop();
-      this.playingThreeJSSounds[soundId].disconnect();
-      if (soundId === 'propeller') {
-        console.log('[PROPELLER] Stopped airplane sound');
-      }
-    } catch (e) {
-      // Sound may already be stopped
-    }
-    delete this.playingThreeJSSounds[soundId];
-  }
+  // For looping sounds, we don't track them (like Aviator2)
+  // So we can't stop them individually - they just play until page unload
+  // This is intentional to match Aviator2's behavior
   
-  // Stop HTML5 Audio sound if playing
-  if (this.playingSounds[soundId]) {
+  // Only stop HTML5 Audio one-shot sounds if needed
+  if (this.playingSounds[soundId] && !this.playingSounds[soundId].loop) {
     this.playingSounds[soundId].pause();
     this.playingSounds[soundId].currentTime = 0;
-    if (soundId === 'propeller') {
-      console.log('[PROPELLER] Stopped airplane sound (HTML5)');
-    }
     delete this.playingSounds[soundId];
   }
 };
