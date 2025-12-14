@@ -269,29 +269,38 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       var buffer = this.buffers[soundId];
       var threeJSSound;
 
-      // Special handling for propeller - use direct Web Audio API
+      // --- PROPELLER: single persistent engine ---
       if (soundId === 'propeller') {
-        // Create AudioBufferSourceNode directly for better loop control
-        const source = this.listener.context.createBufferSource();
+
+        // If already running, just update volume
+        if (this.propellerSource) {
+          if (this.propellerGain && options.volume !== undefined) {
+            this.propellerGain.gain.value = Math.max(0, Math.min(1, options.volume));
+          }
+          return this.propellerSource;
+        }
+
+        const ctx = this.listener.context;
+        const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.loop = true;
-        source.loopStart = 0.022; // Skip initial silence
-        source.loopEnd = 3.628;   // End before fade-out
+        source.loopStart = 0.022;
+        source.loopEnd = 3.628;
 
-        // Create gain node for volume control
-        const gainNode = this.listener.context.createGain();
-        if (options.volume !== undefined) {
-          gainNode.gain.value = Math.max(0, Math.min(1, options.volume));
-        } else {
-          gainNode.gain.value = 1.0;
-        }
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = options.volume !== undefined
+          ? Math.max(0, Math.min(1, options.volume))
+          : 0.6;
 
         source.connect(gainNode);
         gainNode.connect(this.listener.gain);
-
-        console.log('[PROPELLER] Using direct Web Audio API with loopStart=0.022s, loopEnd=3.628s');
         source.start();
-        return sound; // Skip THREE.Audio creation
+
+        this.propellerSource = source;
+        this.propellerGain = gainNode;
+
+        console.log('[PROPELLER] Engine started once, looping forever');
+        return source;
       } else {
         threeJSSound = new THREE.Audio(this.listener);
       }
@@ -677,8 +686,11 @@ function resetGame(){
     var oceanLoaded = audioManager.sounds['ocean'] || (audioManager.threeJSSupported && audioManager.buffers['ocean']);
     console.log('[PROPELLER] resetGame called - propellerLoaded =', propellerLoaded, 'oceanLoaded =', oceanLoaded);
     if (propellerLoaded && oceanLoaded) {
-      console.log('[PROPELLER] Restarting airplane sound on game reset');
-      audioManager.play('propeller', {loop: true, volume: 0.6});
+      if (audioManager.propellerGain) {
+        // Do NOT restart engine — just restore volume
+        audioManager.propellerGain.gain.value = 0.6;
+      }
+
       audioManager.play('ocean', {loop: true, volume: 0.4});
     } else {
       console.warn('[PROPELLER] resetGame: Sounds not loaded, skipping');
