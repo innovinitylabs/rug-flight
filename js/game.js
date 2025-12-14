@@ -267,7 +267,34 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       
       // Create new Three.js Audio instance (like Aviator2 - no stopping of existing)
       var buffer = this.buffers[soundId];
-      var threeJSSound = new THREE.Audio(this.listener);
+      var threeJSSound;
+
+      // Special handling for propeller - use direct Web Audio API
+      if (soundId === 'propeller') {
+        // Create AudioBufferSourceNode directly for better loop control
+        const source = this.listener.context.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.loopStart = 0.022; // Skip initial silence
+        source.loopEnd = 3.628;   // End before fade-out
+
+        // Create gain node for volume control
+        const gainNode = this.listener.context.createGain();
+        if (options.volume !== undefined) {
+          gainNode.gain.value = Math.max(0, Math.min(1, options.volume));
+        } else {
+          gainNode.gain.value = 1.0;
+        }
+
+        source.connect(gainNode);
+        gainNode.connect(this.listener.gain);
+
+        console.log('[PROPELLER] Using direct Web Audio API with loopStart=0.022s, loopEnd=3.628s');
+        source.start();
+        return sound; // Skip THREE.Audio creation
+      } else {
+        threeJSSound = new THREE.Audio(this.listener);
+      }
       
       if (soundId === 'propeller') {
         console.log('[PROPELLER] Created new THREE.Audio instance');
