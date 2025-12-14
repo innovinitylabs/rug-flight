@@ -162,9 +162,12 @@ a:focus-visible {
 	vertical-align: top;
 }
 
-.score__content:nth-child(2) {
+.score__content {
 	border-right: 1px solid #d1b790;
-	border-left: 1px solid #d1b790;
+}
+
+.score__content:last-child {
+	border-right: none;
 }
 
 .score__content--fixed {
