@@ -234,20 +234,27 @@ a:focus-visible {
 	background-color: var(--color-accent);
 }
 
+/* --- HARD LOCK LIFE HEART HUD SIZE --- */
+#lifes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  font-size: 0;
+}
+
 #lifes .heart {
-	display: inline-block;
-	width: 8px;
-	height: 8px;
-	margin-top: 9px;
-	margin-left: 1px;
-	margin-right: 1px;
-	opacity: 0.95;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  margin: 0 2px;
+  transform: scale(1);
 }
 
 #lifes .heart img {
-	width: 8px;
-	height: 8px;
-	display: block;
+  width: 8px;
+  height: 8px;
+  display: block;
 }
 
 #lifes .heart.invisible {
