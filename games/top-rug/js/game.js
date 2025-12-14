@@ -1860,6 +1860,10 @@ function updateDistance(){
   var d = 502*(1-(game.distance%game.distanceForLevelUpdate)/game.distanceForLevelUpdate);
   levelCircle.setAttribute("stroke-dashoffset", d);
 
+  // Debug: Check if UI is updating
+  if (Math.floor(game.distance) > 0) {
+    console.log('[Top Rug] Distance updated:', Math.floor(game.distance), 'fieldDistance:', fieldDistance.innerHTML);
+  }
 }
 
 var blinkEnergy=false;
@@ -1869,6 +1873,11 @@ function updateEnergy(){
   game.energy = Math.max(0, game.energy);
   energyBar.style.right = (100-game.energy)+"%";
   energyBar.style.backgroundColor = (game.energy<50)? "#f25346" : "#68c3c0";
+
+  // Debug: Check if energy UI is updating
+  if (game.energy < 100) {
+    console.log('[Top Rug] Energy updated:', game.energy, 'energyBar right:', energyBar.style.right);
+  }
 
   if (game.energy<30){
     energyBar.style.animationName = "blinking";
@@ -2407,6 +2416,20 @@ function init(event){
     fieldLevel: !!fieldLevel,
     levelCircle: !!levelCircle
   });
+
+  // Debug: Check CSS styles
+  setTimeout(() => {
+    if (fieldDistance) {
+      const style = window.getComputedStyle(fieldDistance);
+      console.log('[Top Rug] fieldDistance styles:', {
+        display: style.display,
+        visibility: style.visibility,
+        opacity: style.opacity,
+        position: style.position,
+        zIndex: style.zIndex
+      });
+    }
+  }, 1000);
 
   resetGame();
   createScene();

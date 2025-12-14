@@ -74,6 +74,12 @@
         css.rel = 'stylesheet';
         css.type = 'text/css';
         css.href = 'games/top-rug/css/styles.css';
+        css.onload = function() {
+          console.log('[Game Controller] Top Rug CSS loaded successfully');
+        };
+        css.onerror = function() {
+          console.error('[Game Controller] Failed to load Top Rug CSS');
+        };
         document.head.appendChild(css);
 
         var script = document.createElement('script');
