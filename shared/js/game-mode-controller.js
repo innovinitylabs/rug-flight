@@ -6,8 +6,8 @@
 
   var GameModeController = {
     currentMode: null,
-    aviator1Loaded: false,
-    aviator2Loaded: false,
+    toprug1Loaded: false,
+    toprug2Loaded: false,
 
     init: function() {
       var selector = document.getElementById('gameModeSelector');
@@ -46,29 +46,29 @@
 
       this.currentMode = mode;
 
-      if (mode === 'aviator1') {
-        this.loadAviator1();
-      } else if (mode === 'aviator2') {
-        this.loadAviator2();
+      if (mode === 'toprug1') {
+        this.loadTopRug1();
+      } else if (mode === 'toprug2') {
+        this.loadTopRug2();
       }
     },
 
-    loadAviator1: function() {
+    loadTopRug1: function() {
       var container = document.getElementById('gameHolderAviator1');
       if (!container) {
         console.error('Aviator1 container not found');
         return;
       }
 
-      // Hide Aviator2 if it's showing
-      var aviator2Container = document.getElementById('gameHolderAviator2');
-      if (aviator2Container) {
-        aviator2Container.style.display = 'none';
+      // Hide Top Rug Maverick if it's showing
+      var maverickContainer = document.getElementById('gameHolderAviator2');
+      if (maverickContainer) {
+        maverickContainer.style.display = 'none';
       }
 
       container.style.display = 'block';
 
-      if (!this.aviator1Loaded) {
+      if (!this.toprug1Loaded) {
         // Load the game script and CSS
         var css = document.createElement('link');
         css.rel = 'stylesheet';
@@ -85,17 +85,17 @@
         var script = document.createElement('script');
         script.src = 'games/top-rug/js/game.js?v=7';
         script.onload = function() {
-          console.log('Aviator1 game loaded');
+          console.log('Top Rug game loaded');
           // Initialize the game
           if (typeof window.Aviator1Game !== 'undefined' && window.Aviator1Game.init) {
             window.Aviator1Game.init();
           }
         };
         script.onerror = function() {
-          console.error('Failed to load Aviator1 game script');
+          console.error('Failed to load Top Rug game script');
         };
         document.head.appendChild(script);
-        this.aviator1Loaded = true;
+        this.toprug1Loaded = true;
       } else {
         // Game already loaded, just show it
         if (typeof window.Aviator1Game !== 'undefined' && window.Aviator1Game.show) {
@@ -104,22 +104,22 @@
       }
     },
 
-    loadAviator2: function() {
+    loadTopRug2: function() {
       var container = document.getElementById('gameHolderAviator2');
       if (!container) {
         console.error('Aviator2 container not found');
         return;
       }
 
-      // Hide Aviator1 if it's showing
-      var aviator1Container = document.getElementById('gameHolderAviator1');
-      if (aviator1Container) {
-        aviator1Container.style.display = 'none';
+      // Hide Top Rug if it's showing
+      var classicContainer = document.getElementById('gameHolderAviator1');
+      if (classicContainer) {
+        classicContainer.style.display = 'none';
       }
 
       container.style.display = 'block';
 
-      if (!this.aviator2Loaded) {
+      if (!this.toprug2Loaded) {
         // Check if we need to load additional scripts for Aviator2
         var scriptsToLoad = [
           'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/loaders/OBJLoader.js',
@@ -163,7 +163,7 @@
           var script = document.createElement('script');
           script.src = 'games/top-rug-maverick/js/game.js';
           script.onload = function() {
-            console.log('Aviator2 game loaded');
+            console.log('Top Rug Maverick game loaded');
             // Initialize the game
             if (typeof window.Aviator2Game !== 'undefined' && window.Aviator2Game.init) {
               window.Aviator2Game.init();
@@ -173,12 +173,12 @@
             }
           };
           script.onerror = function() {
-            console.error('Failed to load Aviator2 game script');
+            console.error('Failed to load Top Rug Maverick game script');
           };
           document.head.appendChild(script);
         });
 
-        this.aviator2Loaded = true;
+        this.toprug2Loaded = true;
       } else {
         // Game already loaded, just show it
         if (typeof window.Aviator2Game !== 'undefined' && window.Aviator2Game.show) {
