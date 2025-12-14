@@ -366,7 +366,7 @@ class ModelManager {
 	}
 }
 
-const modelManager = new ModelManager('/models')
+const modelManager = new ModelManager('models')
 
 
 
@@ -1923,38 +1923,38 @@ function startMap() {
 
 function onWebsiteLoaded(event) {
 	// load audio
-	audioManager.load('ocean', null, '/audio/ocean.mp3')
-	audioManager.load('propeller', null, '/audio/propeller.mp3')
+	audioManager.load('ocean', null, 'games/aviator-2/assets/audio/ocean.mp3')
+	audioManager.load('propeller', null, 'games/aviator-2/assets/audio/propeller.mp3')
 
-	audioManager.load('coin-1', 'coin', '/audio/coin-1.mp3')
-	audioManager.load('coin-2', 'coin', '/audio/coin-2.mp3')
-	audioManager.load('coin-3', 'coin', '/audio/coin-3.mp3')
-	audioManager.load('jar-1', 'coin', '/audio/jar-1.mp3')
-	audioManager.load('jar-2', 'coin', '/audio/jar-2.mp3')
-	audioManager.load('jar-3', 'coin', '/audio/jar-3.mp3')
-	audioManager.load('jar-4', 'coin', '/audio/jar-4.mp3')
-	audioManager.load('jar-5', 'coin', '/audio/jar-5.mp3')
-	audioManager.load('jar-6', 'coin', '/audio/jar-6.mp3')
-	audioManager.load('jar-7', 'coin', '/audio/jar-7.mp3')
+	audioManager.load('coin-1', 'coin', 'games/aviator-2/assets/audio/coin-1.mp3')
+	audioManager.load('coin-2', 'coin', 'games/aviator-2/assets/audio/coin-2.mp3')
+	audioManager.load('coin-3', 'coin', 'games/aviator-2/assets/audio/coin-3.mp3')
+	audioManager.load('jar-1', 'coin', 'games/aviator-2/assets/audio/jar-1.mp3')
+	audioManager.load('jar-2', 'coin', 'games/aviator-2/assets/audio/jar-2.mp3')
+	audioManager.load('jar-3', 'coin', 'games/aviator-2/assets/audio/jar-3.mp3')
+	audioManager.load('jar-4', 'coin', 'games/aviator-2/assets/audio/jar-4.mp3')
+	audioManager.load('jar-5', 'coin', 'games/aviator-2/assets/audio/jar-5.mp3')
+	audioManager.load('jar-6', 'coin', 'games/aviator-2/assets/audio/jar-6.mp3')
+	audioManager.load('jar-7', 'coin', 'games/aviator-2/assets/audio/jar-7.mp3')
 
-	audioManager.load('airplane-crash-1', 'airplane-crash', '/audio/airplane-crash-1.mp3')
-	audioManager.load('airplane-crash-2', 'airplane-crash', '/audio/airplane-crash-2.mp3')
-	audioManager.load('airplane-crash-3', 'airplane-crash', '/audio/airplane-crash-3.mp3')
+	audioManager.load('airplane-crash-1', 'airplane-crash', 'games/aviator-2/assets/audio/airplane-crash-1.mp3')
+	audioManager.load('airplane-crash-2', 'airplane-crash', 'games/aviator-2/assets/audio/airplane-crash-2.mp3')
+	audioManager.load('airplane-crash-3', 'airplane-crash', 'games/aviator-2/assets/audio/airplane-crash-3.mp3')
 
-	audioManager.load('bubble', 'bubble', '/audio/bubble.mp3')
+	audioManager.load('bubble', 'bubble', 'games/aviator-2/assets/audio/bubble.mp3')
 
-	audioManager.load('shot-soft', 'shot-soft', '/audio/shot-soft.mp3')
+	audioManager.load('shot-soft', 'shot-soft', 'games/aviator-2/assets/audio/shot-soft.mp3')
 
-	audioManager.load('shot-hard', 'shot-hard', '/audio/shot-hard.mp3')
+	audioManager.load('shot-hard', 'shot-hard', 'games/aviator-2/assets/audio/shot-hard.mp3')
 
-	audioManager.load('bullet-impact', 'bullet-impact', '/audio/bullet-impact-rock.mp3')
+	audioManager.load('bullet-impact', 'bullet-impact', 'games/aviator-2/assets/audio/bullet-impact-rock.mp3')
 
-	audioManager.load('water-splash', 'water-splash', '/audio/water-splash.mp3')
-	audioManager.load('rock-shatter-1', 'rock-shatter', '/audio/rock-shatter-1.mp3')
-	audioManager.load('rock-shatter-2', 'rock-shatter', '/audio/rock-shatter-2.mp3')
+	audioManager.load('water-splash', 'water-splash', 'games/aviator-2/assets/audio/water-splash.mp3')
+	audioManager.load('rock-shatter-1', 'rock-shatter', 'games/aviator-2/assets/audio/rock-shatter-1.mp3')
+	audioManager.load('rock-shatter-2', 'rock-shatter', 'games/aviator-2/assets/audio/rock-shatter-2.mp3')
 
 	// load models
-	modelManager.load('heart')
+	modelManager.load('games/aviator-2/assets/models/heart')
 
 	ui = new UI(startMap)
 	loadingProgressManager
@@ -1964,4 +1964,27 @@ function onWebsiteLoaded(event) {
 }
 
 
-window.addEventListener('load', onWebsiteLoaded, false)
+// Wrap in Aviator2Game namespace for modular loading
+window.Aviator2Game = {
+  _initialized: false,
+  init: function() {
+    // Only initialize if not already initialized
+    if (window.Aviator2Game._initialized) {
+      return;
+    }
+    window.Aviator2Game._initialized = true;
+    onWebsiteLoaded();
+  },
+  show: function() {
+    // Show the game container if needed
+    var container = document.getElementById('gameHolderAviator2');
+    if (container) {
+      container.style.display = 'block';
+    }
+  }
+};
+
+// Auto-initialize only if game mode selector is not present (backward compatibility)
+if (!document.getElementById('gameModeSelector')) {
+  window.addEventListener('load', onWebsiteLoaded, false);
+}
