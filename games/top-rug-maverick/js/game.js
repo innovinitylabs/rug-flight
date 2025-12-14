@@ -2021,7 +2021,7 @@ window.Aviator2Game = {
   },
   show: function() {
     // Show the game container if needed
-    var container = document.getElementById('gameHolderAviator2');
+    var container = document.getElementById('gameHolderTopRug2');
     if (container) {
       container.style.display = 'block';
     }

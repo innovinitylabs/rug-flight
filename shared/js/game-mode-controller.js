@@ -71,9 +71,9 @@
     },
 
     loadTopRug1: function() {
-      var container = document.getElementById('gameHolderAviator1');
+      var container = document.getElementById('gameHolderTopRug1');
       if (!container) {
-        console.error('Aviator1 container not found');
+        console.error('Top Rug container not found');
         return;
       }
 
@@ -122,9 +122,9 @@
     },
 
     loadTopRug2: function() {
-      var container = document.getElementById('gameHolderAviator2');
+      var container = document.getElementById('gameHolderTopRug2');
       if (!container) {
-        console.error('Aviator2 container not found');
+        console.error('Top Rug Maverick container not found');
         return;
       }
 
