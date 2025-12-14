@@ -167,6 +167,10 @@ a:focus-visible {
 	border-left: 1px solid #d1b790;
 }
 
+.score__content--fixed {
+	min-width: 90px;
+}
+
 .score__label {
 	font-size: 9px;
 	position: relative;
@@ -241,6 +245,10 @@ a:focus-visible {
   justify-content: center;
   line-height: 0;
   font-size: 0;
+}
+
+#lifes-toprug2 .score__value--lifes {
+  margin-top: 5px;
 }
 
 .score__value--lifes .heart {
