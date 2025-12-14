@@ -235,7 +235,7 @@ a:focus-visible {
 }
 
 /* --- HARD LOCK LIFE HEART HUD SIZE --- */
-#lifes-toprug2 {
+.score__value--lifes {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -243,7 +243,7 @@ a:focus-visible {
   font-size: 0;
 }
 
-#lifes-toprug2 .heart {
+.score__value--lifes .heart {
   width: 8px;
   height: 8px;
   flex: 0 0 8px;
@@ -251,21 +251,21 @@ a:focus-visible {
   transform: scale(1);
 }
 
-#lifes-toprug2 .heart img {
+.score__value--lifes .heart img {
   width: 8px;
   height: 8px;
   display: block;
 }
 
-#lifes-toprug2 .heart.invisible {
+.score__value--lifes .heart.invisible {
 	visibility: hidden;
 }
 
-#lifes-toprug2 .heart.visible {
+.score__value--lifes .heart.visible {
 	animation: appearScale 0.1s ease-in-out;
 }
 
-#lifes-toprug2 .heart.invisible {
+.score__value--lifes .heart.invisible {
 	animation: disappearScale 0.1s ease-in-out;
 }
 
