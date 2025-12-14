@@ -10,21 +10,33 @@
     toprug2Loaded: false,
 
     init: function() {
+      console.log('[Game Controller] Initializing...');
       var selector = document.getElementById('gameModeSelector');
       if (!selector) {
         console.error('Game mode selector not found');
         return;
       }
 
+      console.log('[Game Controller] Found selector, setting up buttons...');
+
       // Add event listeners to mode buttons
       var buttons = selector.querySelectorAll('.mode-button');
+      console.log('[Game Controller] Found', buttons.length, 'mode buttons');
+
       for (var i = 0; i < buttons.length; i++) {
+        var mode = buttons[i].getAttribute('data-mode');
+        console.log('[Game Controller] Button', i, 'has mode:', mode);
         buttons[i].addEventListener('click', this.handleModeSelection.bind(this));
       }
+
+      console.log('[Game Controller] Initialization complete');
     },
 
     handleModeSelection: function(event) {
+      console.log('[Game Controller] Button clicked');
       var mode = event.currentTarget.getAttribute('data-mode');
+      console.log('[Game Controller] Mode selected:', mode);
+
       if (!mode) {
         console.error('No mode specified');
         return;
@@ -34,9 +46,14 @@
     },
 
     loadGameMode: function(mode) {
+      console.log('[Game Controller] Loading game mode:', mode);
+
       if (this.currentMode === mode) {
+        console.log('[Game Controller] Mode already loaded, skipping');
         return; // Already loaded
       }
+
+      console.log('[Game Controller] Hiding selector and setting current mode to:', mode);
 
       // Hide selector
       var selector = document.getElementById('gameModeSelector');
