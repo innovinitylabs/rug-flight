@@ -1519,6 +1519,7 @@ function loop() {
 			game.baseSpeed += (game.targetBaseSpeed - game.baseSpeed) * deltaTime * 0.02
 			game.speed = game.baseSpeed * game.planeSpeed
 			ui.updateDistanceDisplay()
+			ui.updateEnergy()
 
 			if (game.lifes<=0 && canDie) {
 				game.status = "gameover"
@@ -1619,8 +1620,7 @@ class UI {
 		this._elemReplayMessage = document.getElementById("replayMessage-toprug2")
 		this._elemLevelCounter = document.getElementById("levelValue-toprug2")
 		this._elemLevelCircle = document.getElementById("levelCircleStroke-toprug2")
-		this._elemsLifes = document.querySelectorAll('#lifes-toprug2 img')
-		this._elemCoinsCount = document.getElementById('coinsValue-toprug2')
+		this._elemEnergyBar = document.getElementById("energyBar-toprug2")
 
 		document.querySelector('#intro-screen button').onclick = () => {
 			document.getElementById('intro-screen').classList.remove('visible')
@@ -1719,9 +1719,7 @@ class UI {
 			sea2.updateColor()
 
 			ui.updateDistanceDisplay()
-			ui.updateLevelCount()
-			ui.updateLifesDisplay()
-			ui.updateCoinsCount()
+			ui.updateEnergy()
 
 			ui.hideReplay()
 		}
@@ -1749,32 +1747,18 @@ class UI {
 	}
 
 
-	updateLevelCount() {
-		this._elemLevelCounter.innerText = game.level
-	}
-
-	updateCoinsCount() {
-		this._elemCoinsCount.innerText = game.coins
-	}
-
 	updateDistanceDisplay() {
 		this._elemDistanceCounter.innerText = Math.floor(game.distance)
 		const d = 502 * (1-(game.distance%world.distanceForLevelUpdate) / world.distanceForLevelUpdate)
 		this._elemLevelCircle.setAttribute("stroke-dashoffset", d)
 	}
 
-	updateLifesDisplay() {
-		for (let i=0, len=this._elemsLifes.length; i<len; i+=1) {
-			const hasThisLife = i < game.lifes
-			const elem = this._elemsLifes[i]
-			if (hasThisLife && !elem.classList.contains('visible')) {
-				elem.classList.remove('invisible')
-				elem.classList.add('visible')
-			}
-			else if (!hasThisLife && !elem.classList.contains('invisible')) {
-				elem.classList.remove('visible')
-				elem.classList.add('invisible')
-			}
+	updateEnergy() {
+		if (game.energy !== undefined) {
+			game.energy -= game.speed * deltaTime * world.ratioSpeedEnergy
+			game.energy = Math.max(0, game.energy)
+			this._elemEnergyBar.style.right = (100 - game.energy) + "%"
+			this._elemEnergyBar.style.backgroundColor = (game.energy < 50) ? "#f25346" : "#68c3c0"
 		}
 	}
 
@@ -1890,6 +1874,8 @@ function resetMap() {
 		speedLastUpdate: 0,
 
 		distance: 0,
+		energy: 100,
+		ratioSpeedEnergy: 3,
 
 		coins: 0,
 		fpv: false,
@@ -1927,9 +1913,7 @@ function resetMap() {
 
 	// update ui
 	ui.updateDistanceDisplay()
-	ui.updateLevelCount()
-	ui.updateLifesDisplay()
-	ui.updateCoinsCount()
+	ui.updateEnergy()
 
 	sceneManager.clear()
 
