@@ -78,7 +78,7 @@
       }
 
       // Hide Top Rug Maverick if it's showing
-      var maverickContainer = document.getElementById('gameHolderAviator2');
+      var maverickContainer = document.getElementById('gameHolderTopRug2');
       if (maverickContainer) {
         maverickContainer.style.display = 'none';
       }
@@ -129,7 +129,7 @@
       }
 
       // Hide Top Rug if it's showing
-      var classicContainer = document.getElementById('gameHolderAviator1');
+      var classicContainer = document.getElementById('gameHolderTopRug1');
       if (classicContainer) {
         classicContainer.style.display = 'none';
       }

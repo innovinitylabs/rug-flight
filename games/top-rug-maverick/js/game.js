@@ -1615,12 +1615,12 @@ function setFollowView() {
 
 class UI {
 	constructor(onStart) {
-		this._elemDistanceCounter = document.getElementById("distValue-aviator2")
-		this._elemReplayMessage = document.getElementById("replayMessage-aviator2")
-		this._elemLevelCounter = document.getElementById("levelValue-aviator2")
-		this._elemLevelCircle = document.getElementById("levelCircleStroke-aviator2")
-		this._elemsLifes = document.querySelectorAll('#lifes-aviator2 img')
-		this._elemCoinsCount = document.getElementById('coinsValue-aviator2')
+		this._elemDistanceCounter = document.getElementById("distValue-toprug2")
+		this._elemReplayMessage = document.getElementById("replayMessage-toprug2")
+		this._elemLevelCounter = document.getElementById("levelValue-toprug2")
+		this._elemLevelCircle = document.getElementById("levelCircleStroke-toprug2")
+		this._elemsLifes = document.querySelectorAll('#lifes-toprug2 img')
+		this._elemCoinsCount = document.getElementById('coinsValue-toprug2')
 
 		document.querySelector('#intro-screen button').onclick = () => {
 			document.getElementById('intro-screen').classList.remove('visible')
