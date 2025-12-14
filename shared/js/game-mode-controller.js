@@ -69,9 +69,15 @@
       container.style.display = 'block';
 
       if (!this.aviator1Loaded) {
-        // Load the game script
+        // Load the game script and CSS
+        var css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.type = 'text/css';
+        css.href = 'games/aviator-classic/css/styles.css';
+        document.head.appendChild(css);
+
         var script = document.createElement('script');
-        script.src = 'js/game.js?v=7';
+        script.src = 'games/aviator-classic/js/game.js?v=7';
         script.onload = function() {
           console.log('Aviator1 game loaded');
           // Initialize the game
@@ -116,12 +122,12 @@
         ];
 
         // Also need to load Aviator2 CSS if not already loaded
-        var existingLink = document.querySelector('link[href="TheAviator2-reference/game.css"]');
+        var existingLink = document.querySelector('link[href="games/aviator-2/css/styles.css"]');
         if (!existingLink) {
           var link = document.createElement('link');
           link.rel = 'stylesheet';
           link.type = 'text/css';
-          link.href = 'TheAviator2-reference/game.css';
+          link.href = 'games/aviator-2/css/styles.css';
           document.head.appendChild(link);
         }
 
@@ -149,7 +155,7 @@
         this.loadScriptsSequentially(scriptsToLoad, function() {
           // Now load the Aviator2 game script
           var script = document.createElement('script');
-          script.src = 'TheAviator2-reference/game.js';
+          script.src = 'games/aviator-2/js/game.js';
           script.onload = function() {
             console.log('Aviator2 game loaded');
             // Initialize the game
