@@ -2417,16 +2417,81 @@ function init(event){
     levelCircle: !!levelCircle
   });
 
-  // Debug: Check CSS styles
+  // Debug: Check CSS styles for all HUD elements
   setTimeout(() => {
-    if (fieldDistance) {
-      const style = window.getComputedStyle(fieldDistance);
-      console.log('[Top Rug] fieldDistance styles:', {
-        display: style.display,
-        visibility: style.visibility,
-        opacity: style.opacity,
-        position: style.position,
-        zIndex: style.zIndex
+    const elements = [
+      {name: 'fieldDistance', el: fieldDistance},
+      {name: 'energyBar', el: energyBar},
+      {name: 'fieldLevel', el: fieldLevel},
+      {name: 'levelCircle', el: levelCircle}
+    ];
+
+    elements.forEach(({name, el}) => {
+      if (el) {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        console.log(`[Top Rug] ${name} styles:`, {
+          display: style.display,
+          visibility: style.visibility,
+          opacity: style.opacity,
+          position: style.position,
+          zIndex: style.zIndex,
+          top: style.top,
+          left: style.left,
+          width: rect.width,
+          height: rect.height,
+          innerHTML: el.innerHTML ? el.innerHTML.substring(0, 20) : 'N/A'
+        });
+      }
+    });
+
+    // Check parent containers
+    const scoreContainer = document.getElementById('score');
+    if (scoreContainer) {
+      const scoreStyle = window.getComputedStyle(scoreContainer);
+      const scoreRect = scoreContainer.getBoundingClientRect();
+      console.log('[Top Rug] score container styles:', {
+        display: scoreStyle.display,
+        visibility: scoreStyle.visibility,
+        opacity: scoreStyle.opacity,
+        zIndex: scoreStyle.zIndex,
+        position: scoreStyle.position,
+        width: scoreRect.width,
+        height: scoreRect.height
+      });
+
+      // TEMPORARY: Force show score container for debugging
+      scoreContainer.style.backgroundColor = 'rgba(255, 0, 0, 0.5)'; // Red background
+      scoreContainer.style.border = '2px solid yellow';
+      console.log('[Top Rug] Applied red background to score container for visibility');
+    }
+
+    const headerContainer = document.querySelector('.header');
+    if (headerContainer) {
+      const headerStyle = window.getComputedStyle(headerContainer);
+      const headerRect = headerContainer.getBoundingClientRect();
+      console.log('[Top Rug] header container styles:', {
+        display: headerStyle.display,
+        visibility: headerStyle.visibility,
+        opacity: headerStyle.opacity,
+        zIndex: headerStyle.zIndex,
+        position: headerStyle.position,
+        top: headerStyle.top,
+        width: headerRect.width,
+        height: headerRect.height
+      });
+    }
+
+    // Check if world canvas is covering header
+    const worldContainer = document.querySelector('.world');
+    if (worldContainer) {
+      const worldStyle = window.getComputedStyle(worldContainer);
+      const worldRect = worldContainer.getBoundingClientRect();
+      console.log('[Top Rug] world container styles:', {
+        zIndex: worldStyle.zIndex,
+        position: worldStyle.position,
+        width: worldRect.width,
+        height: worldRect.height
       });
     }
   }, 1000);
