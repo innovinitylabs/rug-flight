@@ -307,20 +307,6 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
       
       threeJSSound.play();
 
-      // FIX: Set loop points AFTER play() creates the source, but before audio starts
-      if (soundId === 'propeller') {
-        // Need to wait for source to be created
-        setTimeout(() => {
-          if (threeJSSound.source) {
-            threeJSSound.source.loopStart = 0.022; // Skip initial silence
-            threeJSSound.source.loopEnd = 3.628;   // End before fade-out
-            console.log('[PROPELLER] ✅ FIXED loop points AFTER play(): loopStart=0.022s, loopEnd=3.628s');
-          } else {
-            console.error('[PROPELLER] Source still null after play()');
-          }
-        }, 0);
-      }
-
       if (soundId === 'propeller') {
         console.log('[PROPELLER] play() called, isPlaying after:', threeJSSound.isPlaying);
         console.log('[PROPELLER] Sound source:', threeJSSound.source);
