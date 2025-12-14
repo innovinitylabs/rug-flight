@@ -288,6 +288,10 @@ class AudioManager {
 		this.loader = new THREE.AudioLoader()
 		this.listener = new THREE.AudioListener()
 		this.categories = {}
+
+		// Persistent propeller engine state (same fix as Aviator 1)
+		this.propellerSource = null;
+		this.propellerGain = null;
 	}
 
 	setCamera(camera) {
@@ -324,6 +328,42 @@ class AudioManager {
 		}
 
 		const buffer = this.buffers[soundId]
+
+		// --- PROPELLER: single persistent engine (same fix as Aviator 1) ---
+		if (soundId === 'propeller') {
+
+			// If already running, just update volume
+			if (this.propellerSource) {
+				if (this.propellerGain && options.volume !== undefined) {
+					this.propellerGain.gain.value = Math.max(0, Math.min(1, options.volume));
+				}
+				return this.propellerSource;
+			}
+
+			const ctx = this.listener.context;
+			const source = ctx.createBufferSource();
+			source.buffer = buffer;
+			source.loop = true;
+			source.loopStart = 0.022;
+			source.loopEnd = 3.628;
+
+			const gainNode = ctx.createGain();
+			gainNode.gain.value = options.volume !== undefined
+				? Math.max(0, Math.min(1, options.volume))
+				: 0.6;
+
+			source.connect(gainNode);
+			gainNode.connect(this.listener.gain);
+			source.start();
+
+			this.propellerSource = source;
+			this.propellerGain = gainNode;
+
+			console.log('[PROPELLER] Aviator 2 engine started once, looping forever');
+			return source;
+		}
+
+		// For other sounds, use the original THREE.Audio approach
 		const sound = new THREE.Audio(this.listener)
 		sound.setBuffer(buffer)
 		if (options.loop) {
@@ -1482,6 +1522,10 @@ function loop() {
 
 			if (game.lifes<=0 && canDie) {
 				game.status = "gameover"
+				// Engine idles on game over, doesn't stop
+				if (audioManager.propellerGain) {
+					audioManager.propellerGain.gain.value = 0.15;
+				}
 			}
 		}
 	}
