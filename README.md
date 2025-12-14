@@ -1,20 +1,24 @@
-# The Aviator - Dual Game Edition
+# Top Rug - NFT Flight Game
 
-A modernized version of Karim Maaloul's "The Aviator" featuring **two distinct game modes** with a clean, organized codebase.
+A modernized flight game featuring **two distinct game modes** with a clean, organized codebase. Collect coins, avoid obstacles, and showcase your NFTs while flying through beautiful skies!
+
+**🎮 Choose Your Adventure:**
+- **Top Rug** - Classic coin-collecting flight action
+- **Top Rug: Maverick** - Enhanced combat with weapons and enemies
 
 ## 🎮 Game Modes
 
-### Aviator Classic
-- **Original game** with NFT banner support
-- **Seamless propeller audio looping** (fixed from original)
+### Top Rug
+- **Classic flight game** with NFT banner support
+- **Seamless propeller audio looping**
 - Collect coins, avoid obstacles, showcase NFTs
-- Based on the original Codrops tutorial
+- Perfect for casual NFT gaming
 
-### Aviator 2
-- **Enhanced version** with weapons and enemies
-- Combat system with shooting mechanics
+### Top Rug: Maverick
+- **Enhanced combat version** with weapons and enemies
+- Full combat system with shooting mechanics
 - Health system and enemy AI
-- Advanced 3D graphics and effects
+- Advanced 3D graphics and challenging gameplay
 
 ## 🏗️ Project Structure
 
@@ -23,7 +27,7 @@ TheAviator/
 ├── index.html                 # Main entry point with game mode selector
 ├── README.md                  # This file
 ├── games/                     # Game-specific code and assets
-│   ├── aviator-classic/       # Aviator Classic game
+│   ├── aviator-classic/       # Top Rug (Classic)
 │   │   ├── js/
 │   │   │   └── game.js       # Main game logic
 │   │   ├── css/
@@ -32,7 +36,7 @@ TheAviator/
 │   │       ├── audio/        # Sound effects
 │   │       ├── models/       # 3D models (.obj, .mtl)
 │   │       └── images/       # UI images
-│   └── aviator-2/            # Aviator 2 game
+│   └── aviator-2/            # Top Rug: Maverick
 │       ├── js/
 │       │   └── game.js       # Enhanced game logic
 │       ├── css/
@@ -127,9 +131,9 @@ The project uses vanilla JavaScript with no build process required. Simply serve
 
 ## 🎯 Technical Highlights
 
-- **Web Audio API mastery** - Proper AudioBufferSourceNode lifecycle
-- **Three.js optimization** - Efficient 3D rendering
-- **Modular JavaScript** - Namespace isolation for multiple games
+- **Web Audio API mastery** - Seamless propeller audio looping
+- **Three.js optimization** - Efficient 3D rendering and game modes
+- **Modular JavaScript** - Clean separation between game versions
 - **Cross-browser compatibility** - Works on modern browsers
 - **Performance optimized** - Smooth 60fps gameplay
 
@@ -156,7 +160,7 @@ Read more: [Codrops Licensing](http://tympanus.net/codrops/licensing/)
 
 ---
 
-**Built with ❤️ for the NFT and gaming community**
+**🛩️ Top Rug - Fly High, Collect Big!** 🚀
 
 
 
