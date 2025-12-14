@@ -750,7 +750,7 @@ function createScene() {
 
   renderer.shadowMap.enabled = true;
 
-  container = document.getElementById('world');
+  container = document.getElementById('world-aviator1');
   container.appendChild(renderer.domElement);
 
   // Texture loader for banner
@@ -2395,11 +2395,11 @@ function init(event){
   // UI
   console.log('[Top Rug] Initializing UI elements...');
 
-  fieldDistance = document.getElementById("distValue");
-  energyBar = document.getElementById("energyBar");
-  replayMessage = document.getElementById("replayMessage");
-  fieldLevel = document.getElementById("levelValue");
-  levelCircle = document.getElementById("levelCircleStroke");
+  fieldDistance = document.getElementById("distValue-aviator1");
+  energyBar = document.getElementById("energyBar-aviator1");
+  replayMessage = document.getElementById("replayMessage-aviator1");
+  fieldLevel = document.getElementById("levelValue-aviator1");
+  levelCircle = document.getElementById("levelCircleStroke-aviator1");
 
   console.log('[Top Rug] UI elements found:', {
     fieldDistance: !!fieldDistance,
