@@ -160,6 +160,7 @@ a:focus-visible {
 	display: inline-block;
 	padding: 0 1em;
 	vertical-align: top;
+	height: 90px;
 }
 
 .score__content {
@@ -188,6 +189,10 @@ a:focus-visible {
 	font-family: 'Playfair Display';
 	font-weight: bold;
 	color: #d1b790;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 42px;
 }
 
 .score__value--level {
@@ -251,20 +256,20 @@ a:focus-visible {
 }
 
 #lifes-toprug2 .score__value--lifes {
-  margin-top: 5px;
+  gap: 6px;
 }
 
 .score__value--lifes .heart {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 8px;
-  margin: 0 2px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
   transform: scale(1);
 }
 
 .score__value--lifes .heart img {
-  width: 8px;
-  height: 8px;
+  width: 16px;
+  height: 16px;
   display: block;
 }
 
