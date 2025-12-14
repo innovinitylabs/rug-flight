@@ -406,7 +406,7 @@ class ModelManager {
 	}
 }
 
-const modelManager = new ModelManager('games/aviator-2/assets/models')
+const modelManager = new ModelManager('games/top-rug-maverick/assets/models')
 
 
 

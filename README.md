@@ -3,7 +3,7 @@
 A modernized flight game featuring **two distinct game modes** with a clean, organized codebase. Collect coins, avoid obstacles, and showcase your NFTs while flying through beautiful skies!
 
 **🎮 Choose Your Adventure:**
-- **Top Rug** - Classic coin-collecting flight action
+- **Top Rug** - Classic endless run flight action
 - **Top Rug: Maverick** - Enhanced combat with weapons and enemies
 
 ## 🎮 Game Modes
@@ -27,7 +27,7 @@ TheAviator/
 ├── index.html                 # Main entry point with game mode selector
 ├── README.md                  # This file
 ├── games/                     # Game-specific code and assets
-│   ├── aviator-classic/       # Top Rug (Classic)
+│   ├── top-rug/              # Top Rug (Classic)
 │   │   ├── js/
 │   │   │   └── game.js       # Main game logic
 │   │   ├── css/
@@ -36,7 +36,7 @@ TheAviator/
 │   │       ├── audio/        # Sound effects
 │   │       ├── models/       # 3D models (.obj, .mtl)
 │   │       └── images/       # UI images
-│   └── aviator-2/            # Top Rug: Maverick
+│   └── top-rug-maverick/     # Top Rug: Maverick
 │       ├── js/
 │       │   └── game.js       # Enhanced game logic
 │       ├── css/

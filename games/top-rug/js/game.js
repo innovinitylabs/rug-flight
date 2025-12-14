@@ -2392,12 +2392,21 @@ var fieldDistance, energyBar, replayMessage, fieldLevel, levelCircle;
 function init(event){
 
   // UI
+  console.log('[Top Rug] Initializing UI elements...');
 
   fieldDistance = document.getElementById("distValue");
   energyBar = document.getElementById("energyBar");
   replayMessage = document.getElementById("replayMessage");
   fieldLevel = document.getElementById("levelValue");
   levelCircle = document.getElementById("levelCircleStroke");
+
+  console.log('[Top Rug] UI elements found:', {
+    fieldDistance: !!fieldDistance,
+    energyBar: !!energyBar,
+    replayMessage: !!replayMessage,
+    fieldLevel: !!fieldLevel,
+    levelCircle: !!levelCircle
+  });
 
   resetGame();
   createScene();
