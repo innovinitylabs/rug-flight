@@ -750,7 +750,7 @@ function createScene() {
 
   renderer.shadowMap.enabled = true;
 
-  container = document.getElementById('world');
+  container = document.getElementById('world-toprug1');
   container.appendChild(renderer.domElement);
 
   // Texture loader for banner
@@ -1870,6 +1870,7 @@ function updateEnergy(){
   energyBar.style.right = (100-game.energy)+"%";
   energyBar.style.backgroundColor = (game.energy<50)? "#f25346" : "#68c3c0";
 
+
   if (game.energy<30){
     energyBar.style.animationName = "blinking";
   }else{
@@ -2392,12 +2393,22 @@ var fieldDistance, energyBar, replayMessage, fieldLevel, levelCircle;
 function init(event){
 
   // UI
+  console.log('[Top Rug] Initializing UI elements...');
 
-  fieldDistance = document.getElementById("distValue");
-  energyBar = document.getElementById("energyBar");
-  replayMessage = document.getElementById("replayMessage");
-  fieldLevel = document.getElementById("levelValue");
-  levelCircle = document.getElementById("levelCircleStroke");
+  fieldDistance = document.getElementById("distValue-toprug1");
+  energyBar = document.getElementById("energyBar-toprug1");
+  replayMessage = document.getElementById("replayMessage-toprug1");
+  fieldLevel = document.getElementById("levelValue-toprug1");
+  levelCircle = document.getElementById("levelCircleStroke-toprug1");
+
+  console.log('[Top Rug] UI elements found:', {
+    fieldDistance: !!fieldDistance,
+    energyBar: !!energyBar,
+    replayMessage: !!replayMessage,
+    fieldLevel: !!fieldLevel,
+    levelCircle: !!levelCircle
+  });
+
 
   resetGame();
   createScene();
@@ -2412,24 +2423,24 @@ function init(event){
   createParticles();
 
   // Load audio files
-  audioManager.load('ocean', null, 'games/aviator-classic/assets/audio/ocean.mp3');
-  audioManager.load('propeller', null, 'games/aviator-classic/assets/audio/propeller.mp3');
+  audioManager.load('ocean', null, 'games/top-rug/assets/audio/ocean.mp3');
+  audioManager.load('propeller', null, 'games/top-rug/assets/audio/propeller.mp3');
 
-  audioManager.load('coin-1', 'coin', 'games/aviator-classic/assets/audio/coin-1.mp3');
-  audioManager.load('coin-2', 'coin', 'games/aviator-classic/assets/audio/coin-2.mp3');
-  audioManager.load('coin-3', 'coin', 'games/aviator-classic/assets/audio/coin-3.mp3');
-  audioManager.load('jar-1', 'coin', 'games/aviator-classic/assets/audio/jar-1.mp3');
-  audioManager.load('jar-2', 'coin', 'games/aviator-classic/assets/audio/jar-2.mp3');
-  audioManager.load('jar-3', 'coin', 'games/aviator-classic/assets/audio/jar-3.mp3');
-  audioManager.load('jar-4', 'coin', 'games/aviator-classic/assets/audio/jar-4.mp3');
-  audioManager.load('jar-5', 'coin', 'games/aviator-classic/assets/audio/jar-5.mp3');
-  audioManager.load('jar-6', 'coin', 'games/aviator-classic/assets/audio/jar-6.mp3');
-  audioManager.load('jar-7', 'coin', 'games/aviator-classic/assets/audio/jar-7.mp3');
+  audioManager.load('coin-1', 'coin', 'games/top-rug/assets/audio/coin-1.mp3');
+  audioManager.load('coin-2', 'coin', 'games/top-rug/assets/audio/coin-2.mp3');
+  audioManager.load('coin-3', 'coin', 'games/top-rug/assets/audio/coin-3.mp3');
+  audioManager.load('jar-1', 'coin', 'games/top-rug/assets/audio/jar-1.mp3');
+  audioManager.load('jar-2', 'coin', 'games/top-rug/assets/audio/jar-2.mp3');
+  audioManager.load('jar-3', 'coin', 'games/top-rug/assets/audio/jar-3.mp3');
+  audioManager.load('jar-4', 'coin', 'games/top-rug/assets/audio/jar-4.mp3');
+  audioManager.load('jar-5', 'coin', 'games/top-rug/assets/audio/jar-5.mp3');
+  audioManager.load('jar-6', 'coin', 'games/top-rug/assets/audio/jar-6.mp3');
+  audioManager.load('jar-7', 'coin', 'games/top-rug/assets/audio/jar-7.mp3');
 
-  audioManager.load('airplane-crash-1', 'airplane-crash', 'games/aviator-classic/assets/audio/airplane-crash-1.mp3');
-  audioManager.load('airplane-crash-2', 'airplane-crash', 'games/aviator-classic/assets/audio/airplane-crash-2.mp3');
-  audioManager.load('airplane-crash-3', 'airplane-crash', 'games/aviator-classic/assets/audio/airplane-crash-3.mp3');
-  audioManager.load('airplane-crash-4', 'airplane-crash', 'games/aviator-classic/assets/audio/airplane-crash-4.mp3');
+  audioManager.load('airplane-crash-1', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-1.mp3');
+  audioManager.load('airplane-crash-2', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-2.mp3');
+  audioManager.load('airplane-crash-3', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-3.mp3');
+  audioManager.load('airplane-crash-4', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-4.mp3');
 
   // Background sounds will start after user interaction (handled in audioManager.init)
 

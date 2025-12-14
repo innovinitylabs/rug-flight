@@ -406,7 +406,7 @@ class ModelManager {
 	}
 }
 
-const modelManager = new ModelManager('games/aviator-2/assets/models')
+const modelManager = new ModelManager('games/top-rug-maverick/assets/models')
 
 
 
@@ -1615,12 +1615,12 @@ function setFollowView() {
 
 class UI {
 	constructor(onStart) {
-		this._elemDistanceCounter = document.getElementById("distValue")
-		this._elemReplayMessage = document.getElementById("replayMessage")
-		this._elemLevelCounter = document.getElementById("levelValue")
-		this._elemLevelCircle = document.getElementById("levelCircleStroke")
-		this._elemsLifes = document.querySelectorAll('#lifes img')
-		this._elemCoinsCount = document.getElementById('coinsValue')
+		this._elemDistanceCounter = document.getElementById("distValue-toprug2")
+		this._elemReplayMessage = document.getElementById("replayMessage-toprug2")
+		this._elemLevelCounter = document.getElementById("levelValue-toprug2")
+		this._elemLevelCircle = document.getElementById("levelCircleStroke-toprug2")
+		this._elemsLifes = document.querySelectorAll('#lifes-toprug2 img')
+		this._elemCoinsCount = document.getElementById('coinsValue-toprug2')
 
 		document.querySelector('#intro-screen button').onclick = () => {
 			document.getElementById('intro-screen').classList.remove('visible')
@@ -1719,9 +1719,7 @@ class UI {
 			sea2.updateColor()
 
 			ui.updateDistanceDisplay()
-			ui.updateLevelCount()
-			ui.updateLifesDisplay()
-			ui.updateCoinsCount()
+			ui.updateEnergy()
 
 			ui.hideReplay()
 		}
@@ -1967,35 +1965,35 @@ function startMap() {
 
 function onWebsiteLoaded(event) {
 	// load audio
-	audioManager.load('ocean', null, 'games/aviator-2/assets/audio/ocean.mp3')
-	audioManager.load('propeller', null, 'games/aviator-2/assets/audio/propeller.mp3')
+	audioManager.load('ocean', null, 'games/top-rug-maverick/assets/audio/ocean.mp3')
+	audioManager.load('propeller', null, 'games/top-rug-maverick/assets/audio/propeller.mp3')
 
-	audioManager.load('coin-1', 'coin', 'games/aviator-2/assets/audio/coin-1.mp3')
-	audioManager.load('coin-2', 'coin', 'games/aviator-2/assets/audio/coin-2.mp3')
-	audioManager.load('coin-3', 'coin', 'games/aviator-2/assets/audio/coin-3.mp3')
-	audioManager.load('jar-1', 'coin', 'games/aviator-2/assets/audio/jar-1.mp3')
-	audioManager.load('jar-2', 'coin', 'games/aviator-2/assets/audio/jar-2.mp3')
-	audioManager.load('jar-3', 'coin', 'games/aviator-2/assets/audio/jar-3.mp3')
-	audioManager.load('jar-4', 'coin', 'games/aviator-2/assets/audio/jar-4.mp3')
-	audioManager.load('jar-5', 'coin', 'games/aviator-2/assets/audio/jar-5.mp3')
-	audioManager.load('jar-6', 'coin', 'games/aviator-2/assets/audio/jar-6.mp3')
-	audioManager.load('jar-7', 'coin', 'games/aviator-2/assets/audio/jar-7.mp3')
+	audioManager.load('coin-1', 'coin', 'games/top-rug-maverick/assets/audio/coin-1.mp3')
+	audioManager.load('coin-2', 'coin', 'games/top-rug-maverick/assets/audio/coin-2.mp3')
+	audioManager.load('coin-3', 'coin', 'games/top-rug-maverick/assets/audio/coin-3.mp3')
+	audioManager.load('jar-1', 'coin', 'games/top-rug-maverick/assets/audio/jar-1.mp3')
+	audioManager.load('jar-2', 'coin', 'games/top-rug-maverick/assets/audio/jar-2.mp3')
+	audioManager.load('jar-3', 'coin', 'games/top-rug-maverick/assets/audio/jar-3.mp3')
+	audioManager.load('jar-4', 'coin', 'games/top-rug-maverick/assets/audio/jar-4.mp3')
+	audioManager.load('jar-5', 'coin', 'games/top-rug-maverick/assets/audio/jar-5.mp3')
+	audioManager.load('jar-6', 'coin', 'games/top-rug-maverick/assets/audio/jar-6.mp3')
+	audioManager.load('jar-7', 'coin', 'games/top-rug-maverick/assets/audio/jar-7.mp3')
 
-	audioManager.load('airplane-crash-1', 'airplane-crash', 'games/aviator-2/assets/audio/airplane-crash-1.mp3')
-	audioManager.load('airplane-crash-2', 'airplane-crash', 'games/aviator-2/assets/audio/airplane-crash-2.mp3')
-	audioManager.load('airplane-crash-3', 'airplane-crash', 'games/aviator-2/assets/audio/airplane-crash-3.mp3')
+	audioManager.load('airplane-crash-1', 'airplane-crash', 'games/top-rug-maverick/assets/audio/airplane-crash-1.mp3')
+	audioManager.load('airplane-crash-2', 'airplane-crash', 'games/top-rug-maverick/assets/audio/airplane-crash-2.mp3')
+	audioManager.load('airplane-crash-3', 'airplane-crash', 'games/top-rug-maverick/assets/audio/airplane-crash-3.mp3')
 
-	audioManager.load('bubble', 'bubble', 'games/aviator-2/assets/audio/bubble.mp3')
+	audioManager.load('bubble', 'bubble', 'games/top-rug-maverick/assets/audio/bubble.mp3')
 
-	audioManager.load('shot-soft', 'shot-soft', 'games/aviator-2/assets/audio/shot-soft.mp3')
+	audioManager.load('shot-soft', 'shot-soft', 'games/top-rug-maverick/assets/audio/shot-soft.mp3')
 
-	audioManager.load('shot-hard', 'shot-hard', 'games/aviator-2/assets/audio/shot-hard.mp3')
+	audioManager.load('shot-hard', 'shot-hard', 'games/top-rug-maverick/assets/audio/shot-hard.mp3')
 
-	audioManager.load('bullet-impact', 'bullet-impact', 'games/aviator-2/assets/audio/bullet-impact-rock.mp3')
+	audioManager.load('bullet-impact', 'bullet-impact', 'games/top-rug-maverick/assets/audio/bullet-impact-rock.mp3')
 
-	audioManager.load('water-splash', 'water-splash', 'games/aviator-2/assets/audio/water-splash.mp3')
-	audioManager.load('rock-shatter-1', 'rock-shatter', 'games/aviator-2/assets/audio/rock-shatter-1.mp3')
-	audioManager.load('rock-shatter-2', 'rock-shatter', 'games/aviator-2/assets/audio/rock-shatter-2.mp3')
+	audioManager.load('water-splash', 'water-splash', 'games/top-rug-maverick/assets/audio/water-splash.mp3')
+	audioManager.load('rock-shatter-1', 'rock-shatter', 'games/top-rug-maverick/assets/audio/rock-shatter-1.mp3')
+	audioManager.load('rock-shatter-2', 'rock-shatter', 'games/top-rug-maverick/assets/audio/rock-shatter-2.mp3')
 
 	// load models
 	modelManager.load('heart')
@@ -2021,7 +2019,7 @@ window.Aviator2Game = {
   },
   show: function() {
     // Show the game container if needed
-    var container = document.getElementById('gameHolderAviator2');
+    var container = document.getElementById('gameHolderTopRug2');
     if (container) {
       container.style.display = 'block';
     }
