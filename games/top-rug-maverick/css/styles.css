@@ -164,11 +164,21 @@ a:focus-visible {
 }
 
 .score__content {
-	border-right: 1px solid #d1b790;
+	border-right: none;
 }
 
-.score__content:last-child {
-	border-right: none;
+.score__content::after {
+	content: "";
+	position: absolute;
+	right: 0;
+	top: 22px;
+	height: 46px;
+	width: 1px;
+	background: #d1b790;
+}
+
+.score__content:last-child::after {
+	display: none;
 }
 
 .score__content--fixed {
@@ -257,19 +267,20 @@ a:focus-visible {
 
 #lifes-toprug2 .score__value--lifes {
   gap: 6px;
+  transform: translateY(4px);
 }
 
 .score__value--lifes .heart {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   margin: 0;
   transform: scale(1);
 }
 
 .score__value--lifes .heart img {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: block;
 }
 
