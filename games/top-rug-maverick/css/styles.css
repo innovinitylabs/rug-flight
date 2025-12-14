@@ -122,7 +122,7 @@ a:focus-visible {
 }
 
 .header__title-main {
-	font-size: 2.5rem;
+	font-size: 1.8rem;
 }
 
 .header__tagline {
@@ -156,7 +156,7 @@ a:focus-visible {
 	text-align: center;
 	white-space: nowrap;
 	border-radius: 1rem;
-	padding: 1rem;
+	padding: 0.75rem;
 }
 
 .score__content {
@@ -188,7 +188,7 @@ a:focus-visible {
 	text-align: center;
 	color: var(--color-accent);
 	text-transform: uppercase;
-	font-size: 0.65rem;
+	font-size: 0.55rem;
 	letter-spacing: 0.15rem;
 	font-weight: bold;
 }
@@ -200,11 +200,11 @@ a:focus-visible {
 }
 
 .score__value--level {
-	font-size: 1.2rem;
+	font-size: 1rem;
 }
 
 .score__value--dist {
-	font-size: 1.4rem;
+	font-size: 1.1rem;
 	line-height: 1;
 }
 
