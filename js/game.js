@@ -1,66 +1,102 @@
-// AUDIO MANAGER - Using HTML5 Audio API (compatible with all Three.js versions)
+// AUDIO MANAGER - Using Three.js Audio API exactly like Aviator2
 var AudioManager = function() {
-  this.sounds = {};
+  this.sounds = {}; // HTML5 Audio for one-shot sounds
   this.categories = {};
-  this.playingSounds = {};
+  this.playingSounds = {}; // HTML5 Audio instances (only for one-shot sounds)
   this.userInteracted = false;
   this.pendingPlays = [];
   this.startTime = performance.now();
   this.loadTimes = {}; // Track when each sound starts loading
   this.loadedTimes = {}; // Track when each sound finishes loading
-  console.log('[AUDIO] AudioManager initialized at', (performance.now() - this.startTime).toFixed(2), 'ms');
+  
+  // Initialize Three.js Audio API (exactly like Aviator2)
+  if (typeof THREE !== 'undefined' && THREE.AudioLoader && THREE.Audio && THREE.AudioListener) {
+    this.loader = new THREE.AudioLoader();
+    this.listener = new THREE.AudioListener();
+    this.buffers = {}; // Store loaded audio buffers for Three.js Audio
+    this.threeJSSupported = true;
+    
+    // Track all Three.js Audio instances for debugging
+    this.allPropellerInstances = [];
+    
+    // Monitor audio context state
+    if (this.listener.context) {
+      console.log('[PROPELLER] Audio context state:', this.listener.context.state);
+      this.listener.context.addEventListener('statechange', function() {
+        console.log('[PROPELLER] Audio context state changed to:', this.listener.context.state);
+      }.bind(this));
+    }
+  } else {
+    this.threeJSSupported = false;
+    console.warn('[PROPELLER] Three.js Audio API not available');
+  }
 };
 
 AudioManager.prototype.init = function(camera) {
-  var initTime = performance.now();
-  console.log('[AUDIO] init() called at', (initTime - this.startTime).toFixed(2), 'ms');
-  // No initialization needed for HTML5 Audio
-  // This method is kept for compatibility
   var _this = this;
+  
+  // Attach Three.js AudioListener to camera (like Aviator2)
+  if (this.threeJSSupported && camera && this.listener) {
+    camera.add(this.listener);
+    console.log('[PROPELLER] AudioListener attached to camera');
+    if (this.listener.context) {
+      console.log('[PROPELLER] Audio context state after attaching:', this.listener.context.state);
+      // Monitor context state changes
+      this.listener.context.addEventListener('statechange', function() {
+        console.log('[PROPELLER] Audio context state changed to:', this.listener.context.state);
+        if (this.listener.context.state === 'suspended') {
+          console.warn('[PROPELLER] ⚠️ Audio context SUSPENDED - this will cause audio to stop!');
+        }
+      }.bind(this));
+    }
+  }
+  
   // Enable audio after first user interaction (click, touchstart, or keydown)
   var enableAudio = function() {
-    var interactionTime = performance.now();
-    console.log('[AUDIO] ✓ Valid user interaction detected (click/touch/keydown) at', (interactionTime - _this.startTime).toFixed(2), 'ms');
     _this.userInteracted = true;
-    console.log('[AUDIO] Pending plays:', _this.pendingPlays.length);
+    
     // Play any pending sounds
     for (var i = 0; i < _this.pendingPlays.length; i++) {
       var pending = _this.pendingPlays[i];
-      console.log('[AUDIO] Playing pending sound:', pending.soundId);
       _this.play(pending.soundId, pending.options);
     }
     _this.pendingPlays = [];
     
     // Start background sounds immediately on valid interaction
     setTimeout(function() {
-      var attemptTime = performance.now();
-      console.log('[AUDIO] Attempting to play background sounds at', (attemptTime - _this.startTime).toFixed(2), 'ms');
+      // Check if sounds are loaded (either HTML5 Audio or Three.js buffer)
+      var propellerLoaded = _this.sounds['propeller'] || (_this.threeJSSupported && _this.buffers['propeller']);
+      var oceanLoaded = _this.sounds['ocean'] || (_this.threeJSSupported && _this.buffers['ocean']);
       
-      if (_this.sounds['propeller']) {
-        console.log('[AUDIO] propeller is loaded, playing now');
+      console.log('[PROPELLER] enableAudio: propellerLoaded =', propellerLoaded, 'threeJSSupported =', _this.threeJSSupported, 'buffer exists =', !!_this.buffers['propeller']);
+      
+      if (propellerLoaded) {
+        console.log('[PROPELLER] Starting airplane sound (first attempt)');
         _this.play('propeller', {loop: true, volume: 0.6});
       } else {
-        console.log('[AUDIO] propeller NOT loaded yet, will retry in 200ms');
+        console.log('[PROPELLER] Propeller not loaded yet, will retry in 200ms');
         setTimeout(function() {
-          if (_this.sounds['propeller']) {
-            console.log('[AUDIO] propeller now loaded, playing');
+          var propellerLoadedRetry = _this.sounds['propeller'] || (_this.threeJSSupported && _this.buffers['propeller']);
+          console.log('[PROPELLER] Retry check: propellerLoaded =', propellerLoadedRetry);
+          if (propellerLoadedRetry) {
+            console.log('[PROPELLER] Starting airplane sound (delayed retry)');
             _this.play('propeller', {loop: true, volume: 0.6});
+          } else {
+            console.warn('[PROPELLER] Still not loaded after retry');
           }
         }, 200);
       }
-      if (_this.sounds['ocean']) {
-        console.log('[AUDIO] ocean is loaded, playing now');
+      if (oceanLoaded) {
         _this.play('ocean', {loop: true, volume: 0.4});
       } else {
-        console.log('[AUDIO] ocean NOT loaded yet, will retry in 200ms');
         setTimeout(function() {
-          if (_this.sounds['ocean']) {
-            console.log('[AUDIO] ocean now loaded, playing');
+          var oceanLoadedRetry = _this.sounds['ocean'] || (_this.threeJSSupported && _this.buffers['ocean']);
+          if (oceanLoadedRetry) {
             _this.play('ocean', {loop: true, volume: 0.4});
           }
         }, 200);
       }
-    }, 10); // Small delay to ensure audio context is ready
+    }, 10);
     
     document.removeEventListener('click', enableAudio);
     document.removeEventListener('touchstart', enableAudio);
@@ -69,94 +105,121 @@ AudioManager.prototype.init = function(camera) {
   document.addEventListener('click', enableAudio, {once: true});
   document.addEventListener('touchstart', enableAudio, {once: true});
   document.addEventListener('keydown', enableAudio, {once: true});
-  console.log('[AUDIO] init() completed in', (performance.now() - initTime).toFixed(2), 'ms');
-  console.log('[AUDIO] Waiting for user interaction (click/touch/keydown) to start audio...');
 };
 
 AudioManager.prototype.load = function(soundId, category, path) {
   var loadStartTime = performance.now();
   var _this = this;
   _this.loadTimes[soundId] = loadStartTime;
-  console.log('[AUDIO] load() called for', soundId, 'at', (loadStartTime - this.startTime).toFixed(2), 'ms, path:', path);
+  
+  // Log only for propeller sound
+  if (soundId === 'propeller') {
+    console.log('[PROPELLER] Loading airplane sound from:', path);
+  }
   
   return new Promise(function(resolve, reject) {
-    var audio = new Audio();
-    audio.preload = 'auto';
+    var html5Loaded = false;
+    var threeJSLoaded = false;
     
-    var loadEventTime = performance.now();
-    console.log('[AUDIO] Audio element created for', soundId, 'at', (loadEventTime - _this.startTime).toFixed(2), 'ms');
-    
-    // Use 'loadeddata' for faster loading (doesn't wait for entire file)
-    var onLoaded = function(eventType) {
+    var checkBothLoaded = function() {
+      if (html5Loaded && threeJSLoaded) {
       var loadedTime = performance.now();
-      var loadDuration = loadedTime - loadStartTime;
       _this.loadedTimes[soundId] = loadedTime;
-      _this.sounds[soundId] = audio;
-      
-      console.log('[AUDIO] ✓', soundId, 'loaded via', eventType, 'at', (loadedTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)');
-      console.log('[AUDIO]   Audio readyState:', audio.readyState, '(0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA)');
-      console.log('[AUDIO]   Audio duration:', audio.duration, 'seconds');
-      console.log('[AUDIO]   Audio buffered:', audio.buffered.length, 'ranges');
+        
+        // Log only for propeller sound
+        if (soundId === 'propeller') {
+          var loadDuration = loadedTime - loadStartTime;
+          console.log('[PROPELLER] Airplane sound loaded in', loadDuration.toFixed(2), 'ms');
+          if (_this.buffers[soundId]) {
+            console.log('[PROPELLER] Duration:', _this.buffers[soundId].duration.toFixed(2), 'seconds');
+          }
+        }
       
         if (category !== null) {
           if (!_this.categories[category]) {
             _this.categories[category] = [];
           }
           _this.categories[category].push(soundId);
-        console.log('[AUDIO]   Added to category:', category);
         }
       
-      // Clean up listeners
-      audio.removeEventListener('loadeddata', onLoadedData);
-      audio.removeEventListener('canplaythrough', onCanPlayThrough);
-      audio.removeEventListener('error', onError);
         resolve();
+      }
+    };
+    
+    // Load HTML5 Audio for one-shot sounds
+    var audio = new Audio();
+    audio.preload = 'auto';
+    
+    var onLoaded = function() {
+      if (!html5Loaded) {
+        html5Loaded = true;
+        _this.sounds[soundId] = audio;
+        checkBothLoaded();
+      }
     };
     
     var onLoadedData = function() {
-      onLoaded('loadeddata');
+      onLoaded();
     };
     
     var onCanPlayThrough = function() {
-      onLoaded('canplaythrough');
+      onLoaded();
     };
     
     var onError = function(e) {
-      var errorTime = performance.now();
-      var loadDuration = errorTime - loadStartTime;
-      console.error('[AUDIO] ✗ Failed to load audio:', soundId, 'at', (errorTime - _this.startTime).toFixed(2), 'ms (took', loadDuration.toFixed(2), 'ms)', e);
-      console.error('[AUDIO]   Error details:', {
-        name: e.target.error ? e.target.error.name : 'unknown',
-        code: e.target.error ? e.target.error.code : 'unknown',
-        message: e.target.error ? e.target.error.message : 'unknown'
-      });
+      if (soundId === 'propeller') {
+        console.error('[PROPELLER] Failed to load airplane sound:', e);
+      }
       audio.removeEventListener('loadeddata', onLoadedData);
       audio.removeEventListener('canplaythrough', onCanPlayThrough);
       audio.removeEventListener('error', onError);
       reject(e);
     };
     
-    // Try loadeddata first (faster), fallback to canplaythrough
     audio.addEventListener('loadeddata', onLoadedData, {once: true});
     audio.addEventListener('canplaythrough', onCanPlayThrough, {once: true});
     audio.addEventListener('error', onError, {once: true});
     
-    var setSrcTime = performance.now();
     audio.src = path;
-    console.log('[AUDIO] Set src for', soundId, 'at', (setSrcTime - _this.startTime).toFixed(2), 'ms');
+    audio.load();
     
-    var loadCallTime = performance.now();
-    audio.load(); // Force loading to start
-    console.log('[AUDIO] Called audio.load() for', soundId, 'at', (loadCallTime - _this.startTime).toFixed(2), 'ms');
+    // Load Three.js Audio buffer for looping sounds (like Aviator2)
+    if (_this.threeJSSupported && _this.loader) {
+      _this.loader.load(
+        path,
+        function(audioBuffer) {
+          _this.buffers[soundId] = audioBuffer;
+          threeJSLoaded = true;
+          checkBothLoaded();
+        },
+        function() {
+          // Progress callback (not needed)
+        },
+        function(err) {
+          // Error loading Three.js buffer, continue with HTML5 Audio
+          if (soundId === 'propeller') {
+            console.warn('[PROPELLER] Failed to load Three.js buffer, using HTML5 Audio fallback');
+          }
+          threeJSLoaded = true;
+          checkBothLoaded();
+        }
+      );
+    } else {
+      // Three.js not supported, just use HTML5 Audio
+      threeJSLoaded = true;
+      checkBothLoaded();
+    }
   });
 };
 
 AudioManager.prototype.play = function(soundIdOrCategory, options) {
-  var playStartTime = performance.now();
   options = options || {};
   
-  console.log('[AUDIO] play() called for', soundIdOrCategory, 'at', (playStartTime - this.startTime).toFixed(2), 'ms', 
-              '(options:', JSON.stringify(options) + ')');
+  if (soundIdOrCategory === 'propeller') {
+    console.log('[PROPELLER] ===== play() CALLED =====');
+    console.log('[PROPELLER] Options:', JSON.stringify(options));
+    console.log('[PROPELLER] Stack trace:', new Error().stack.split('\n').slice(1, 4).join('\n'));
+  }
 
   var soundId = soundIdOrCategory;
   // Check if it's a category (array of sounds)
@@ -164,96 +227,359 @@ AudioManager.prototype.play = function(soundIdOrCategory, options) {
     var categorySounds = this.categories[soundIdOrCategory];
     if (categorySounds.length > 0) {
     soundId = categorySounds[Math.floor(Math.random() * categorySounds.length)];
-      console.log('[AUDIO] Selected from category:', soundIdOrCategory, '->', soundId);
     } else {
-      console.warn('[AUDIO] Category has no sounds:', soundIdOrCategory);
       return null;
     }
   }
 
+  // Check if sound is loaded (either HTML5 Audio or Three.js buffer)
   var audio = this.sounds[soundId];
-  if (!audio) {
-    console.warn('[AUDIO] ✗ Audio not loaded:', soundId, '- available sounds:', Object.keys(this.sounds));
-    if (this.loadTimes[soundId]) {
-      console.warn('[AUDIO]   Loading started at', (this.loadTimes[soundId] - this.startTime).toFixed(2), 'ms but not yet loaded');
+  var threeJSBuffer = this.threeJSSupported ? this.buffers[soundId] : null;
+  
+  if (!audio && !threeJSBuffer) {
+    if (soundId === 'propeller') {
+      console.warn('[PROPELLER] Airplane sound not loaded yet');
     }
     return null;
   }
 
   // If user hasn't interacted yet and this is a looping sound, queue it
   if (!this.userInteracted && options.loop) {
-    console.log('[AUDIO] User not interacted yet, queuing sound:', soundId);
+    if (soundId === 'propeller') {
+      console.log('[PROPELLER] User not interacted, queuing sound');
+    }
     this.pendingPlays.push({soundId: soundId, options: options});
     return null;
   }
 
   var sound;
-  var playCallTime = performance.now();
   
-  // For looping sounds, reuse the same element (don't clone - cloned elements lose loaded data)
-  // For one-shot sounds, reuse as well but reset currentTime for overlapping playback
+  // For looping sounds, use Three.js Audio API exactly like Aviator2
+  // Aviator2 doesn't stop existing sounds - it creates new instances and lets them play
+  // This provides truly seamless looping without any gaps
   if (options.loop) {
-    sound = audio; // Reuse original element for looping sounds
-    console.log('[AUDIO] Reusing original audio element for looping sound:', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
-    
+    // Use Three.js Audio API if available (exactly like Aviator2)
+    if (this.threeJSSupported && this.listener && this.buffers[soundId]) {
+      if (soundId === 'propeller') {
+        console.log('[PROPELLER] play() called - threeJSSupported =', this.threeJSSupported, 'listener =', !!this.listener, 'buffer =', !!this.buffers[soundId]);
+        console.log('[PROPELLER] Buffer duration:', this.buffers[soundId].duration, 'seconds');
+      }
+      
+      // Create new Three.js Audio instance (like Aviator2 - no stopping of existing)
+      var buffer = this.buffers[soundId];
+      var threeJSSound;
+
+      // --- PROPELLER: single persistent engine ---
+      if (soundId === 'propeller') {
+
+        // If already running, just update volume
+        if (this.propellerSource) {
+          if (this.propellerGain && options.volume !== undefined) {
+            this.propellerGain.gain.value = Math.max(0, Math.min(1, options.volume));
+          }
+          return this.propellerSource;
+        }
+
+        const ctx = this.listener.context;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.loopStart = 0.022;
+        source.loopEnd = 3.628;
+
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = options.volume !== undefined
+          ? Math.max(0, Math.min(1, options.volume))
+          : 0.6;
+
+        source.connect(gainNode);
+        gainNode.connect(this.listener.gain);
+        source.start();
+
+        this.propellerSource = source;
+        this.propellerGain = gainNode;
+
+        console.log('[PROPELLER] Engine started once, looping forever');
+        return source;
+      } else {
+        threeJSSound = new THREE.Audio(this.listener);
+      }
+      
+      if (soundId === 'propeller') {
+        console.log('[PROPELLER] Created new THREE.Audio instance');
+        // Track this instance
+        this.allPropellerInstances.push({
+          instance: threeJSSound,
+          createdAt: new Date().toISOString(),
+          uuid: threeJSSound.uuid
+        });
+        console.log('[PROPELLER] Total instances created:', this.allPropellerInstances.length);
+      }
+      
+      threeJSSound.setBuffer(buffer);
+      threeJSSound.setLoop(true);
+      
+      if (soundId === 'propeller') {
+        console.log('[PROPELLER] Set buffer and loop = true');
+        console.log('[PROPELLER] Buffer sampleRate:', buffer.sampleRate);
+        console.log('[PROPELLER] Buffer numberOfChannels:', buffer.numberOfChannels);
+        console.log('[PROPELLER] Buffer length:', buffer.length, 'samples');
+      }
+      
+      if (options.volume !== undefined) {
+        threeJSSound.setVolume(Math.max(0, Math.min(1, options.volume)));
+        if (soundId === 'propeller') {
+          console.log('[PROPELLER] Set volume to', options.volume);
+        }
+      } else {
+        threeJSSound.setVolume(1.0);
+      }
+      
+      if (soundId === 'propeller') {
+        console.log('[PROPELLER] Calling play() on THREE.Audio instance');
+        console.log('[PROPELLER] Sound isPlaying before play():', threeJSSound.isPlaying);
+        console.log('[PROPELLER] Audio context state before play():', this.listener.context ? this.listener.context.state : 'no-context');
+      }
+      
+      threeJSSound.play();
+
+      if (soundId === 'propeller') {
+        console.log('[PROPELLER] play() called, isPlaying after:', threeJSSound.isPlaying);
+        console.log('[PROPELLER] Sound source:', threeJSSound.source);
+        console.log('[PROPELLER] Sound context:', threeJSSound.context);
+        if (threeJSSound.source) {
+          console.log('[PROPELLER] Source loop:', threeJSSound.source.loop);
+          console.log('[PROPELLER] Source buffer:', !!threeJSSound.source.buffer);
+          console.log('[PROPELLER] Source playbackRate:', threeJSSound.source.playbackRate.value);
+          console.log('[PROPELLER] Source loopStart:', threeJSSound.source.loopStart);
+          console.log('[PROPELLER] Source loopEnd:', threeJSSound.source.loopEnd);
+          console.log('[PROPELLER] Buffer duration:', buffer.duration, 'seconds');
+
+          // FIX: Set proper loop points to avoid silence gaps
+          // Skip 0.022s of silence at start, end loop before 0.003s fade at end
+          if (soundId === 'propeller') {
+            threeJSSound.source.loopStart = 0.022; // Skip initial silence
+            threeJSSound.source.loopEnd = 3.628;   // End before fade-out
+            console.log('[PROPELLER] ✅ FIXED loop points: loopStart=0.022s, loopEnd=3.628s');
+            console.log('[PROPELLER] Effective loop duration:', (3.628 - 0.022).toFixed(3), 'seconds');
+          }
+
+          // CRITICAL: Check if loopEnd is set correctly
+          // When loopEnd is 0, it means "use buffer length", but let's verify
+          if (threeJSSound.source.loopEnd === 0) {
+            console.log('[PROPELLER] loopEnd is 0 (defaults to buffer length =', buffer.duration, 'seconds)');
+          } else if (threeJSSound.source.loopEnd !== buffer.duration) {
+            console.warn('[PROPELLER] ⚠️ loopEnd (' + threeJSSound.source.loopEnd + ') != buffer duration (' + buffer.duration + ')');
+          }
+          
+          // Analyze buffer for silence at start/end and waveform discontinuity
+          if (buffer.getChannelData) {
+            try {
+              var channelData = buffer.getChannelData(0);
+              var startSamples = channelData.slice(0, 100); // First 100 samples
+              var endSamples = channelData.slice(-100); // Last 100 samples
+              var startAvg = Math.abs(startSamples.reduce(function(a, b) { return a + Math.abs(b); }, 0) / startSamples.length);
+              var endAvg = Math.abs(endSamples.reduce(function(a, b) { return a + Math.abs(b); }, 0) / endSamples.length);
+              var startEndDiff = Math.abs(channelData[0] - channelData[channelData.length - 1]);
+              
+              console.log('[PROPELLER] ===== BUFFER ANALYSIS =====');
+              console.log('[PROPELLER] Start samples (first 100) avg amplitude:', startAvg.toFixed(6));
+              console.log('[PROPELLER] End samples (last 100) avg amplitude:', endAvg.toFixed(6));
+              console.log('[PROPELLER] First sample value:', channelData[0].toFixed(6));
+              console.log('[PROPELLER] Last sample value:', channelData[channelData.length - 1].toFixed(6));
+              console.log('[PROPELLER] Start/End sample difference:', startEndDiff.toFixed(6));
+              
+              // Check for silence (very low amplitude)
+              var silenceThreshold = 0.001;
+              if (startAvg < silenceThreshold) {
+                console.error('[PROPELLER] ⚠️⚠️⚠️ START OF BUFFER HAS SILENCE! (avg amplitude:', startAvg.toFixed(6), ')');
+                console.error('[PROPELLER] This creates a gap when looping back to start');
+              }
+              if (endAvg < silenceThreshold) {
+                console.error('[PROPELLER] ⚠️⚠️⚠️ END OF BUFFER HAS SILENCE! (avg amplitude:', endAvg.toFixed(6), ')');
+                console.error('[PROPELLER] This creates a gap before looping');
+              }
+              if (startEndDiff > 0.1) {
+                console.error('[PROPELLER] ⚠️⚠️⚠️ WAVEFORM DISCONTINUITY! (difference:', startEndDiff.toFixed(6), ')');
+                console.error('[PROPELLER] First sample (', channelData[0].toFixed(6), ') != Last sample (', channelData[channelData.length - 1].toFixed(6), ')');
+                console.error('[PROPELLER] This will cause a click/pop at loop point');
+              }
+              
+              // Check how many samples of silence at start
+              var silenceStartCount = 0;
+              for (var i = 0; i < Math.min(1000, channelData.length); i++) {
+                if (Math.abs(channelData[i]) < silenceThreshold) {
+                  silenceStartCount++;
+                } else {
+                  break;
+                }
+              }
+              if (silenceStartCount > 0) {
+                var silenceStartDuration = (silenceStartCount / buffer.sampleRate);
+                console.warn('[PROPELLER] ⚠️', silenceStartCount, 'samples of silence at start =', silenceStartDuration.toFixed(3), 'seconds');
+              }
+              
+              // Check how many samples of silence at end
+              var silenceEndCount = 0;
+              for (var i = channelData.length - 1; i >= Math.max(0, channelData.length - 1000); i--) {
+                if (Math.abs(channelData[i]) < silenceThreshold) {
+                  silenceEndCount++;
+                } else {
+                  break;
+                }
+              }
+              if (silenceEndCount > 0) {
+                var silenceEndDuration = (silenceEndCount / buffer.sampleRate);
+                console.warn('[PROPELLER] ⚠️', silenceEndCount, 'samples of silence at end =', silenceEndDuration.toFixed(3), 'seconds');
+                console.warn('[PROPELLER] This matches the ~0.099s gap we detected!');
+              }
+            } catch (e) {
+              console.warn('[PROPELLER] Could not analyze buffer:', e);
+            }
+          }
+          
+          // Monitor source for ended event (shouldn't happen with loop=true, but check)
+          threeJSSound.source.onended = function() {
+            console.error('[PROPELLER] ⚠️⚠️⚠️ SOURCE ENDED EVENT FIRED - This should not happen with loop=true!');
+            console.error('[PROPELLER] Source ended at:', new Date().toISOString());
+            console.error('[PROPELLER] This is why you hear gaps - the source is ending despite loop=true!');
+          };
+          
+          // Monitor playback position to detect loop points
+          var lastPosition = 0;
+          var loopCount = 0;
+          var positionCheckInterval = setInterval(function() {
+            if (threeJSSound.source && threeJSSound.context) {
+              try {
+                // Try to get current playback time (if available)
+                var currentTime = threeJSSound.context.currentTime;
+                var bufferDuration = buffer.duration;
+                
+                // Calculate expected position based on time
+                // Note: This is approximate since we can't directly read BufferSource position
+                var expectedPosition = (currentTime % bufferDuration);
+                
+                // Detect if we've looped (position reset to near 0)
+                if (lastPosition > bufferDuration * 0.9 && expectedPosition < bufferDuration * 0.1) {
+                  loopCount++;
+                  console.log('[PROPELLER] 🔄 LOOP DETECTED #' + loopCount + ' at:', new Date().toISOString());
+                  console.log('[PROPELLER] Last position before loop:', lastPosition.toFixed(3), 's');
+                  console.log('[PROPELLER] New position after loop:', expectedPosition.toFixed(3), 's');
+                  console.log('[PROPELLER] Gap detected:', (bufferDuration - lastPosition + expectedPosition).toFixed(3), 's');
+                }
+                lastPosition = expectedPosition;
+              } catch (e) {
+                // Can't read position directly, that's OK
+              }
+            }
+          }, 100); // Check every 100ms to catch loop points
+          
+          // Monitor isPlaying state periodically to detect if it stops
+          var checkInterval = setInterval(function() {
+            if (!threeJSSound.isPlaying) {
+              console.error('[PROPELLER] ⚠️⚠️⚠️ Sound stopped playing! isPlaying = false');
+              console.error('[PROPELLER] This happened at:', new Date().toISOString());
+              clearInterval(checkInterval);
+              clearInterval(positionCheckInterval);
+            }
+          }, 1000); // Check every second
+          
+          // Check if source still exists and is connected
+          var sourceCheckInterval = setInterval(function() {
+            if (!threeJSSound.source) {
+              console.warn('[PROPELLER] Source is null/undefined');
+              clearInterval(sourceCheckInterval);
+            } else {
+              // Check if source is still in the audio graph
+              try {
+                var numberOfInputs = threeJSSound.source.numberOfInputs;
+                var numberOfOutputs = threeJSSound.source.numberOfOutputs;
+                // This is just to verify source still exists
+              } catch (e) {
+                console.warn('[PROPELLER] Cannot access source properties:', e);
+              }
+            }
+          }, 2000);
+        }
+        console.log('[PROPELLER] Three.js Audio instance created at:', new Date().toISOString());
+        console.log('[PROPELLER] Instance UUID:', threeJSSound.uuid);
+        
+        // Check audio context state
+        if (this.listener.context) {
+          console.log('[PROPELLER] Audio context state after play():', this.listener.context.state);
+          if (this.listener.context.state === 'suspended') {
+            console.error('[PROPELLER] ⚠️⚠️⚠️ Audio context is SUSPENDED - this will cause gaps!');
+          }
+          
+          // Monitor context state changes
+          this.listener.context.addEventListener('statechange', function() {
+            console.warn('[PROPELLER] ⚠️ Audio context state changed to:', this.listener.context.state);
+            if (this.listener.context.state === 'suspended') {
+              console.error('[PROPELLER] ⚠️⚠️⚠️ Context SUSPENDED - audio will stop!');
+            }
+          }.bind(this));
+        }
+      }
+      
+      return threeJSSound;
+    } else {
+      // Fallback to HTML5 Audio if Three.js Audio not available
+      if (soundId === 'propeller') {
+        console.warn('[PROPELLER] Using HTML5 Audio fallback - threeJSSupported =', this.threeJSSupported, 'listener =', !!this.listener, 'buffer =', !!this.buffers[soundId]);
+      }
+      
+      sound = audio;
     sound.loop = true;
-    // Store looping sounds so we can stop them later
-    this.playingSounds[soundId] = sound;
-    console.log('[AUDIO] Set loop=true for', soundId);
+      // Don't track HTML5 Audio for looping sounds (let multiple instances play)
+    }
   } else {
     // For one-shot sounds, reuse the original but reset currentTime to allow "restarting"
     // HTML5 Audio can play multiple times if we reset currentTime to 0
     sound = audio;
-    console.log('[AUDIO] Reusing original audio element for one-shot sound:', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
-    
     // Reset to beginning to allow overlapping playback of the same sound
     sound.currentTime = 0;
-    console.log('[AUDIO] Reset currentTime to 0 for overlapping playback');
   }
   
   if (options.volume !== undefined) {
     sound.volume = Math.max(0, Math.min(1, options.volume));
-    console.log('[AUDIO] Set volume to', options.volume, 'for', soundId);
   } else {
     sound.volume = 1.0;
   }
-
-  var timeSinceLoad = this.loadedTimes[soundId] ? (playCallTime - this.loadedTimes[soundId]) : -1;
-  console.log('[AUDIO] Calling sound.play() for', soundId, 'at', (playCallTime - this.startTime).toFixed(2), 'ms');
-  if (timeSinceLoad >= 0) {
-    console.log('[AUDIO]   Time since load:', timeSinceLoad.toFixed(2), 'ms');
-  }
-  console.log('[AUDIO]   Audio readyState:', sound.readyState, sound.readyState >= 2 ? '(ready)' : '(not ready)');
   
   var playPromise = sound.play();
   if (playPromise !== undefined) {
     playPromise.then(function() {
-      var actuallyPlayingTime = performance.now();
-      var totalTime = actuallyPlayingTime - playStartTime;
-      console.log('[AUDIO] ✓', soundId, 'actually started playing at', (actuallyPlayingTime - this.startTime).toFixed(2), 'ms (play() took', totalTime.toFixed(2), 'ms)');
+      if (soundId === 'propeller') {
+        console.log('[PROPELLER] Airplane sound started successfully');
+      }
     }.bind(this)).catch(function(err) {
-      var errorTime = performance.now();
-      var totalTime = errorTime - playStartTime;
-      console.error('[AUDIO] ✗ Failed to play', soundId, 'at', (errorTime - this.startTime).toFixed(2), 'ms (play() took', totalTime.toFixed(2), 'ms)');
-      // Only log if it's not a user interaction error
-      if (err.name !== 'NotAllowedError') {
-        console.error('[AUDIO]   Error:', err.name, err.message);
-      } else {
-        console.warn('[AUDIO]   NotAllowedError - user interaction required');
+      if (soundId === 'propeller') {
+        console.error('[PROPELLER] Failed to start airplane sound:', err.name, err.message);
       }
     }.bind(this));
-  } else {
-    console.warn('[AUDIO] play() returned undefined for', soundId);
   }
   
   return sound;
 };
 
 AudioManager.prototype.stop = function(soundId) {
-  if (this.playingSounds[soundId]) {
+  if (soundId === 'propeller') {
+    console.log('[PROPELLER] ===== stop() CALLED =====');
+    console.log('[PROPELLER] Stack trace:', new Error().stack.split('\n').slice(1, 4).join('\n'));
+    console.warn('[PROPELLER] WARNING: stop() called on looping sound - this may cause gaps!');
+  }
+  
+  // For looping sounds, we don't track them (like Aviator2)
+  // So we can't stop them individually - they just play until page unload
+  // This is intentional to match Aviator2's behavior
+  
+  // Only stop HTML5 Audio one-shot sounds if needed
+  if (this.playingSounds[soundId] && !this.playingSounds[soundId].loop) {
     this.playingSounds[soundId].pause();
     this.playingSounds[soundId].currentTime = 0;
     delete this.playingSounds[soundId];
+  } else if (soundId === 'propeller') {
+    console.log('[PROPELLER] No tracked sound to stop (Three.js Audio instances not tracked)');
   }
 };
 
@@ -355,21 +681,22 @@ function resetGame(){
   }
   
   // Restart background sounds when game resets (only if user has interacted)
-  var resetTime = performance.now();
-  console.log('[AUDIO] resetGame: Called at', (resetTime - audioManager.startTime).toFixed(2), 'ms');
   if (audioManager.userInteracted) {
-    console.log('[AUDIO] resetGame: User has interacted, checking if sounds are loaded...');
-    console.log('[AUDIO] resetGame: propeller loaded?', !!audioManager.sounds['propeller']);
-    console.log('[AUDIO] resetGame: ocean loaded?', !!audioManager.sounds['ocean']);
-    if (audioManager.sounds['propeller'] && audioManager.sounds['ocean']) {
-      console.log('[AUDIO] resetGame: Both sounds loaded, playing now');
-      audioManager.play('propeller', {loop: true, volume: 0.6});
+    var propellerLoaded = audioManager.sounds['propeller'] || (audioManager.threeJSSupported && audioManager.buffers['propeller']);
+    var oceanLoaded = audioManager.sounds['ocean'] || (audioManager.threeJSSupported && audioManager.buffers['ocean']);
+    console.log('[PROPELLER] resetGame called - propellerLoaded =', propellerLoaded, 'oceanLoaded =', oceanLoaded);
+    if (propellerLoaded && oceanLoaded) {
+      if (audioManager.propellerGain) {
+        // Do NOT restart engine — just restore volume
+        audioManager.propellerGain.gain.value = 0.6;
+      }
+
       audioManager.play('ocean', {loop: true, volume: 0.4});
     } else {
-      console.warn('[AUDIO] resetGame: Sounds not loaded yet, skipping audio playback');
+      console.warn('[PROPELLER] resetGame: Sounds not loaded, skipping');
     }
   } else {
-    console.log('[AUDIO] resetGame: User not interacted yet, skipping audio');
+    console.log('[PROPELLER] resetGame: User not interacted yet');
   }
 }
 
@@ -1551,8 +1878,7 @@ function updateEnergy(){
 
   if (game.energy <1){
     game.status = "gameover";
-    // Stop background sounds
-    audioManager.stop('propeller');
+    // Stop background sounds (but not propeller - it idles)
     audioManager.stop('ocean');
     // Play crash sound when game over
     audioManager.play('airplane-crash', {volume: 1.0});
@@ -2115,4 +2441,26 @@ function init(event){
     loop();
 }
 
+// Wrap in Aviator1Game namespace for modular loading
+window.Aviator1Game = {
+  init: function() {
+    // Only initialize if not already initialized
+    if (window.Aviator1Game._initialized) {
+      return;
+    }
+    window.Aviator1Game._initialized = true;
+    init();
+  },
+  show: function() {
+    // Show the game container if needed
+    var container = document.getElementById('gameHolderAviator1');
+    if (container) {
+      container.style.display = 'block';
+    }
+  }
+};
+
+// Auto-initialize only if game mode selector is not present (backward compatibility)
+if (!document.getElementById('gameModeSelector')) {
 window.addEventListener('load', init, false);
+}
