@@ -366,7 +366,7 @@ class ModelManager {
 	}
 }
 
-const modelManager = new ModelManager('models')
+const modelManager = new ModelManager('games/aviator-2/assets/models')
 
 
 
@@ -1954,7 +1954,7 @@ function onWebsiteLoaded(event) {
 	audioManager.load('rock-shatter-2', 'rock-shatter', 'games/aviator-2/assets/audio/rock-shatter-2.mp3')
 
 	// load models
-	modelManager.load('games/aviator-2/assets/models/heart')
+	modelManager.load('heart')
 
 	ui = new UI(startMap)
 	loadingProgressManager
