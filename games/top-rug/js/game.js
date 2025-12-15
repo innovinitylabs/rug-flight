@@ -760,10 +760,10 @@ function createScene() {
   textureLoader.crossOrigin = 'anonymous';
 
   // Determine correct path based on protocol (file:// vs http://)
-  var texturePath = 'onchainrugs.png';
+  var texturePath = 'shared/assets/icons/onchainrugs.png';
   if (window.location.protocol === 'file:') {
     // For file:// protocol, use absolute path from current directory
-    texturePath = './onchainrugs.png';
+    texturePath = './shared/assets/icons/onchainrugs.png';
     console.log('Using file:// protocol, texture path:', texturePath);
     console.warn('Note: file:// protocol has WebGL security restrictions. Use a local server for best results.');
   }

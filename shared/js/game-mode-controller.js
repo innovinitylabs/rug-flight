@@ -13,7 +13,8 @@
       console.log('[Game Controller] Initializing...');
       var selector = document.getElementById('gameModeSelector');
       if (!selector) {
-        console.error('Game mode selector not found');
+        console.error('[Game Controller] Game mode selector not found');
+        console.log('[Game Controller] Available elements with IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
         return;
       }
 
@@ -58,7 +59,11 @@
       // Hide selector
       var selector = document.getElementById('gameModeSelector');
       if (selector) {
-        selector.style.display = 'none';
+        console.log('[Game Controller] Found selector to hide, removing from DOM');
+        selector.parentNode.removeChild(selector);
+        console.log('[Game Controller] Selector removed from DOM');
+      } else {
+        console.error('[Game Controller] Could not find selector to hide!');
       }
 
       this.currentMode = mode;
