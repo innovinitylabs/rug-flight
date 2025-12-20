@@ -324,11 +324,6 @@ class GameEngine {
       return;
     }
 
-    if (!this.currentMode) {
-      console.warn('[GameEngine] No mode selected, cannot start');
-      return;
-    }
-
     console.log('[GameEngine] Starting game loop');
     this.isRunning = true;
     this.gameLoop();
