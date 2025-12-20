@@ -150,7 +150,7 @@ class GameController {
     }
 
     this.gameEngine = new GameEngine();
-    await this.gameEngine.init();
+    await this.gameEngine.init('gameHolder');
 
     // Connect core systems to game engine
     this.gameEngine.setAudioManager(this.audioManager);
