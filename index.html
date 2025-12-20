@@ -22,6 +22,19 @@
 		<script type="text/javascript" src="modes/classic/ClassicGame.js"></script>
 		<script type="text/javascript" src="modes/classic/ClassicHUD.js"></script>
 		<script type="text/javascript" src="modes/classic/BannerSystem.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatGame.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatHUD.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatSceneManager.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatAirplane.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatPilot.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatSea.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatSky.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatCloud.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatCoin.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatEnemy.js"></script>
+		<script type="text/javascript" src="modes/combat/CombatProjectile.js"></script>
+		<script type="text/javascript" src="modes/combat/WeaponSystem.js"></script>
+		<script type="text/javascript" src="modes/combat/EnemySystem.js"></script>
 		<!--[if IE]>
 		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
 		<![endif]-->
@@ -37,9 +50,9 @@
 						<div class="mode-title">Top Rug Classic</div>
 						<div class="mode-description">Classic flight game with NFT banner support</div>
 					</button>
-					<button class="mode-button" data-mode="combat" disabled>
+					<button class="mode-button" data-mode="combat">
 						<div class="mode-title">Top Rug Combat</div>
-						<div class="mode-description">Enhanced version with weapons and enemies (Coming Soon)</div>
+						<div class="mode-description">Enhanced version with weapons and enemies</div>
 					</button>
 				</div>
 			</div>
@@ -154,6 +167,17 @@
 				</div>
 				<br/>
 				Thanks for playing!
+			</div>
+
+			<!-- Combat HUD -->
+			<div class="combat-hud" id="combat-hud" style="display: none;">
+				<div class="combat-lives" id="combat-lives"></div>
+				<div class="combat-stats">
+					<div class="combat-score" id="combat-score">0</div>
+					<div class="combat-weapon" id="combat-weapon">SIMPLE</div>
+					<div class="combat-ammo" id="combat-ammo">100</div>
+					<div class="combat-level" id="combat-level">1</div>
+				</div>
 			</div>
 		</div>
 

@@ -161,18 +161,21 @@ class GameController {
       console.warn('[GameController] ClassicGame not found, skipping registration');
     }
 
-    // TODO: Register Combat mode when it's ready
-    // let CombatGame;
-    // if (typeof require !== 'undefined') {
-    //   CombatGame = require('./modes/combat/CombatGame.js');
-    // } else {
-    //   CombatGame = window.CombatGame;
-    // }
-    // if (CombatGame) {
-    //   const combatGame = new CombatGame(this.gameEngine, this.audioManager, this.textureManager, this.uiManager);
-    //   this.gameEngine.registerModeSystem('combat', 'game', combatGame);
-    //   console.log('[GameController] Combat mode registered');
-    // }
+    // Register Combat mode
+    let CombatGame;
+    if (typeof require !== 'undefined') {
+      CombatGame = require('./modes/combat/CombatGame.js');
+    } else {
+      CombatGame = window.CombatGame;
+    }
+
+    if (CombatGame) {
+      const combatGame = new CombatGame(this.gameEngine, this.audioManager, this.textureManager, this.uiManager);
+      this.gameEngine.registerModeSystem('combat', 'game', combatGame);
+      console.log('[GameController] Combat mode registered');
+    } else {
+      console.warn('[GameController] CombatGame not available, skipping registration');
+    }
   }
 
   /**
