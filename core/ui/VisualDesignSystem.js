@@ -347,13 +347,20 @@ class VisualDesignSystem {
       }
 
       /* Game mode selector should be hidden when game starts */
-      .game-mode-selector.game-hidden {
+      .game-mode-selector.game-hidden,
+      .game-mode-selector[style*="display: none"] {
         display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
       }
 
       /* Game container should be visible when game starts */
-      .game-holder.game-visible {
+      .game-holder.game-visible,
+      .game-holder[style*="display: block"] {
         display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
       }
 
       /* ===== TEST PANEL STYLES ===== */

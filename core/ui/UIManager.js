@@ -20,14 +20,20 @@ class UIManager {
    * Initialize the UI manager with DOM containers
    */
   init(gameContainerId = 'gameHolder', modeSelectorId = 'gameModeSelector') {
+    console.log(`[UIManager] Looking for containers: ${gameContainerId}, ${modeSelectorId}`);
     this.gameContainer = document.getElementById(gameContainerId);
     this.modeSelectorContainer = document.getElementById(modeSelectorId);
 
+    console.log('[UIManager] Found gameContainer:', !!this.gameContainer);
+    console.log('[UIManager] Found modeSelectorContainer:', !!this.modeSelectorContainer);
+
     if (!this.gameContainer) {
       console.warn(`[UIManager] Game container not found: ${gameContainerId}`);
+      console.log('[UIManager] Available IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
     }
     if (!this.modeSelectorContainer) {
       console.warn(`[UIManager] Mode selector not found: ${modeSelectorId}`);
+      console.log('[UIManager] Available IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
     }
 
     console.log('[UIManager] Initialized with containers');
@@ -262,6 +268,11 @@ class UIManager {
     if (this.modeSelectorContainer) {
       this.modeSelectorContainer.classList.add('game-hidden');
       this.modeSelectorContainer.style.display = 'none'; // Fallback
+      console.log('[UIManager] Mode selector element:', this.modeSelectorContainer);
+      console.log('[UIManager] Mode selector classes:', this.modeSelectorContainer.className);
+      console.log('[UIManager] Mode selector display:', this.modeSelectorContainer.style.display);
+    } else {
+      console.error('[UIManager] Mode selector container not found!');
     }
 
     console.log('[UIManager] Mode selector hidden');
@@ -276,6 +287,11 @@ class UIManager {
     if (this.gameContainer) {
       this.gameContainer.classList.add('game-visible');
       this.gameContainer.style.display = 'block'; // Fallback
+      console.log('[UIManager] Game container element:', this.gameContainer);
+      console.log('[UIManager] Game container classes:', this.gameContainer.className);
+      console.log('[UIManager] Game container display:', this.gameContainer.style.display);
+    } else {
+      console.error('[UIManager] Game container not found!');
     }
 
     console.log('[UIManager] Game screen shown');
