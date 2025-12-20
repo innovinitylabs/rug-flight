@@ -111,6 +111,9 @@ class ClassicGame {
     console.log('[ClassicGame] sceneManager:', !!this.gameEngine?.sceneManager);
     console.log('[ClassicGame] camera:', !!this.gameEngine?.sceneManager?.camera);
 
+    // Initialize game state first
+    this.resetGame();
+
     // Set screen dimensions
     this.HEIGHT = window.innerHeight;
     this.WIDTH = window.innerWidth;

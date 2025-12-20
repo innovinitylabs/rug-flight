@@ -257,15 +257,7 @@ function createAirplaneMesh() {
 }
 
 // Colors utility (from original code)
-const Colors = {
-  red: 0xf25346,
-  white: 0xd8d0d1,
-  brown: 0x59332e,
-  brownDark: 0x23190f,
-  pink: 0xF5986E,
-  yellow: 0xf4ce93,
-  blue: 0x68c3c0
-};
+// Colors is defined in ClassicGame.js and shared
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
@@ -273,6 +265,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof window !== 'undefined') {
   window.CombatAirplane = CombatAirplane;
   window.createAirplaneMesh = createAirplaneMesh;
-  window.Colors = Colors;
   window.utils = utils;
 }
