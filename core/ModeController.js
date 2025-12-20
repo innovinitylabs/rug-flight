@@ -83,6 +83,14 @@ class ModeController {
       this.currentMode = targetMode;
       console.log(`[ModeController] Successfully switched to ${targetMode}`);
 
+      // Dispatch custom event for UI updates
+      window.dispatchEvent(new CustomEvent('modeSwitched', {
+        detail: {
+          newMode: targetMode,
+          previousMode: this.previousMode
+        }
+      }));
+
       // Trigger callback
       if (this.onModeSwitchComplete) {
         this.onModeSwitchComplete(targetMode, this.previousMode);

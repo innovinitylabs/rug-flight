@@ -418,6 +418,87 @@ class UIManager {
         opacity: 0.5;
         cursor: not-allowed;
       }
+
+      /* Mode Switcher Styles */
+      .mode-switcher {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.9);
+        border: 2px solid #68c3c0;
+        border-radius: 10px;
+        padding: 20px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 200px;
+      }
+
+      .mode-switch-button {
+        background: #333;
+        color: #d1b790;
+        border: 1px solid #68c3c0;
+        border-radius: 5px;
+        padding: 10px 15px;
+        font-size: 16px;
+        font-family: 'Playfair Display', serif;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .mode-switch-button:hover:not(:disabled) {
+        background: #68c3c0;
+        color: white;
+      }
+
+      .mode-switch-button.active {
+        background: #68c3c0;
+        color: white;
+      }
+
+      .mode-switch-close {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: none;
+        border: none;
+        color: #d1b790;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .mode-switch-close:hover {
+        color: #f25346;
+      }
+
+      .mode-switch-toggle {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: #d1b790;
+        border: 1px solid #68c3c0;
+        border-radius: 5px;
+        padding: 10px 15px;
+        font-size: 14px;
+        font-family: 'Playfair Display', serif;
+        cursor: pointer;
+        z-index: 999;
+        transition: all 0.3s ease;
+      }
+
+      .mode-switch-toggle:hover {
+        background: rgba(104, 195, 192, 0.8);
+        color: white;
+      }
     `;
     document.head.appendChild(style);
     console.log('[UIManager] Transition styles added');

@@ -249,6 +249,9 @@ class GameController {
       this.uiManager.hideModeSelector();
       this.uiManager.showGame();
 
+      // Show mode switch toggle
+      this.showModeSwitchToggle();
+
       console.log(`[GameController] Game started successfully in ${mode} mode`);
 
     } catch (error) {
@@ -290,6 +293,29 @@ class GameController {
 
     this.isRunning = false;
     this.currentMode = null;
+
+    // Hide mode switch toggle
+    this.hideModeSwitchToggle();
+  }
+
+  /**
+   * Show the mode switch toggle button
+   */
+  showModeSwitchToggle() {
+    const toggle = document.getElementById('modeSwitchToggle');
+    if (toggle) {
+      toggle.style.display = 'block';
+    }
+  }
+
+  /**
+   * Hide the mode switch toggle button
+   */
+  hideModeSwitchToggle() {
+    const toggle = document.getElementById('modeSwitchToggle');
+    if (toggle) {
+      toggle.style.display = 'none';
+    }
   }
 
   /**
