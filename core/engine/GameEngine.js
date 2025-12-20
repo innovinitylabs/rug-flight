@@ -379,18 +379,11 @@ class GameEngine {
   }
 
   /**
-   * Render all systems
+   * Render the Three.js scene
    */
   render() {
-    if (!this.currentMode || !this.modeSystems[this.currentMode]) return;
-
-    const modeSystems = this.modeSystems[this.currentMode];
-
-    // Render each system
-    for (const [systemName, system] of Object.entries(modeSystems)) {
-      if (system && typeof system.render === 'function') {
-        system.render();
-      }
+    if (this.scene && this.camera && this.renderer) {
+      this.renderer.render(this.scene, this.camera);
     }
   }
 
