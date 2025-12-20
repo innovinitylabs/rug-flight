@@ -294,8 +294,15 @@ class CombatGame {
       score: 0,
       ammo: 100,
       weaponLevel: 1,
-      paused: true
+      paused: true,
+
+      // Statistics tracking
+      enemiesKilled: 0,
+      coinsCollected: 0
     };
+
+    // Record game start time for statistics
+    this.gameStartTime = Date.now();
 
     // Reset collections
     this.clouds = [];
@@ -562,6 +569,10 @@ class CombatGame {
 
     if (this.game.energy <= 0) {
       this.game.status = "gameover";
+
+      // Save high score and statistics
+      this.saveGameResults();
+
       if (this.audioManager) {
         this.audioManager.stop('ocean');
         // Fade out propeller instead of stopping (better continuity)
@@ -917,6 +928,34 @@ class CombatGame {
   handleWindowResize() {
     this.HEIGHT = window.innerHeight;
     this.WIDTH = window.innerWidth;
+  }
+
+  /**
+   * Save game results (high score, statistics)
+   */
+  saveGameResults() {
+    if (!this.game) return;
+
+    // Save high score
+    if (window.getGameController) {
+      const controller = window.getGameController();
+      if (controller.saveHighScore) {
+        controller.saveHighScore(this.game.score, this.game.level);
+      }
+
+      // Update statistics
+      if (controller.updateStats) {
+        controller.updateStats({
+          gamesPlayed: 1,
+          totalScore: this.game.score,
+          enemiesKilled: this.game.enemiesKilled,
+          coinsCollected: this.game.coinsCollected,
+          timePlayed: Math.floor((Date.now() - this.gameStartTime) / 1000) || 0
+        });
+      }
+    }
+
+    console.log(`[CombatGame] Game ended - Score: ${this.game.score}, Enemies: ${this.game.enemiesKilled}, Coins: ${this.game.coinsCollected}`);
   }
 
   /**

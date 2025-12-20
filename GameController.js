@@ -9,6 +9,7 @@ class GameController {
     this.audioManager = null;
     this.textureManager = null;
     this.modeController = null;
+    this.storageManager = null;
     this.currentMode = null;
 
     this.isInitialized = false;
@@ -91,6 +92,22 @@ class GameController {
 
     this.textureManager = new TextureManager();
     console.log('[GameController] TextureManager created');
+
+    // Initialize StorageManager
+    let StorageManager;
+    if (typeof require !== 'undefined') {
+      const storageModule = require('./core/StorageManager.js');
+      StorageManager = storageModule.StorageManager;
+    } else {
+      StorageManager = window.StorageManager;
+    }
+
+    if (StorageManager) {
+      this.storageManager = new StorageManager();
+      console.log('[GameController] StorageManager created');
+    } else {
+      console.warn('[GameController] StorageManager not available');
+    }
   }
 
   /**
@@ -316,6 +333,115 @@ class GameController {
     if (toggle) {
       toggle.style.display = 'none';
     }
+  }
+
+  // ===== STORAGE MANAGEMENT =====
+
+  /**
+   * Save high score for current mode
+   */
+  saveHighScore(score, level = 1) {
+    if (this.storageManager && this.currentMode) {
+      const isNewRecord = this.storageManager.saveHighScore(this.currentMode, score, level);
+      if (isNewRecord) {
+        console.log(`[GameController] New high score for ${this.currentMode}: ${score}`);
+      }
+      return isNewRecord;
+    }
+    return false;
+  }
+
+  /**
+   * Get high score for a mode
+   */
+  getHighScore(mode = null) {
+    const targetMode = mode || this.currentMode;
+    if (this.storageManager && targetMode) {
+      return this.storageManager.getHighScore(targetMode);
+    }
+    return { score: 0, level: 1 };
+  }
+
+  /**
+   * Save game settings
+   */
+  saveSettings(settings) {
+    if (this.storageManager) {
+      return this.storageManager.saveSettings(settings);
+    }
+    return false;
+  }
+
+  /**
+   * Load game settings
+   */
+  loadSettings() {
+    if (this.storageManager) {
+      return this.storageManager.loadSettings();
+    }
+    return {};
+  }
+
+  /**
+   * Update game statistics
+   */
+  updateStats(stats) {
+    if (this.storageManager) {
+      return this.storageManager.updateStats(stats);
+    }
+    return false;
+  }
+
+  /**
+   * Get game statistics
+   */
+  getStats() {
+    if (this.storageManager) {
+      return this.storageManager.loadStats();
+    }
+    return {};
+  }
+
+  /**
+   * Clear all saved data
+   */
+  clearAllData() {
+    if (this.storageManager) {
+      this.storageManager.clear();
+      console.log('[GameController] All saved data cleared');
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Export all game data
+   */
+  exportData() {
+    if (this.storageManager) {
+      return this.storageManager.exportData();
+    }
+    return null;
+  }
+
+  /**
+   * Import game data
+   */
+  importData(data) {
+    if (this.storageManager) {
+      return this.storageManager.importData(data);
+    }
+    return false;
+  }
+
+  /**
+   * Get storage information
+   */
+  getStorageInfo() {
+    if (this.storageManager) {
+      return this.storageManager.getStorageInfo();
+    }
+    return { available: false };
   }
 
   /**

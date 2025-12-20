@@ -8,6 +8,7 @@ class ModeController {
     this.gameEngine = gameController.gameEngine;
     this.uiManager = gameController.uiManager;
     this.audioManager = gameController.audioManager;
+    this.storageManager = gameController.storageManager;
 
     // Mode state
     this.currentMode = null;
@@ -17,12 +18,6 @@ class ModeController {
     // Transition state
     this.isTransitioning = false;
     this.transitionDuration = 500; // ms
-
-    // Saved states for each mode
-    this.modeStates = {
-      classic: null,
-      combat: null
-    };
 
     // Transition callbacks
     this.onModeSwitchStart = null;
@@ -248,10 +243,21 @@ class ModeController {
   async saveModeState(mode) {
     console.log(`[ModeController] Saving state for mode: ${mode}`);
 
+    if (!this.storageManager) {
+      console.warn('[ModeController] No storage manager available');
+      return;
+    }
+
     const modeInstance = this.gameEngine.getModeSystem(mode, 'game');
     if (modeInstance && typeof modeInstance.getState === 'function') {
-      this.modeStates[mode] = await modeInstance.getState();
-      console.log(`[ModeController] State saved for ${mode}`);
+      const state = await modeInstance.getState();
+      const success = this.storageManager.saveGameState(mode, state);
+
+      if (success) {
+        console.log(`[ModeController] State saved for ${mode}`);
+      } else {
+        console.error(`[ModeController] Failed to save state for ${mode}`);
+      }
     }
   }
 
@@ -261,12 +267,19 @@ class ModeController {
   async restoreModeState(mode) {
     console.log(`[ModeController] Restoring state for mode: ${mode}`);
 
+    if (!this.storageManager) {
+      console.warn('[ModeController] No storage manager available');
+      return;
+    }
+
     const modeInstance = this.gameEngine.getModeSystem(mode, 'game');
-    const savedState = this.modeStates[mode];
+    const savedState = this.storageManager.loadGameState(mode);
 
     if (modeInstance && savedState && typeof modeInstance.setState === 'function') {
       await modeInstance.setState(savedState);
       console.log(`[ModeController] State restored for ${mode}`);
+    } else if (!savedState) {
+      console.log(`[ModeController] No saved state found for ${mode}`);
     }
   }
 
@@ -329,12 +342,17 @@ class ModeController {
    * Get current mode status
    */
   getStatus() {
+    const savedStates = this.availableModes.map(mode => {
+      const state = this.storageManager ? this.storageManager.loadGameState(mode) : null;
+      return { mode, hasState: !!state };
+    });
+
     return {
       currentMode: this.currentMode,
       previousMode: this.previousMode,
       isTransitioning: this.isTransitioning,
       availableModes: this.availableModes,
-      hasSavedStates: Object.keys(this.modeStates).filter(mode => this.modeStates[mode] !== null)
+      savedStates: savedStates
     };
   }
 
@@ -343,7 +361,12 @@ class ModeController {
    */
   resetMode(mode) {
     console.log(`[ModeController] Resetting mode: ${mode}`);
-    this.modeStates[mode] = null;
+
+    if (this.storageManager) {
+      // Remove the saved game state
+      this.storageManager.remove(`gamestate_${mode}`);
+      console.log(`[ModeController] Cleared saved state for ${mode}`);
+    }
   }
 
   /**
