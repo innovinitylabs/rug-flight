@@ -422,6 +422,54 @@ class UIManager {
     document.head.appendChild(style);
     console.log('[UIManager] Transition styles added');
   }
+
+  /**
+   * Show UI for a specific mode
+   */
+  showModeUI(mode) {
+    console.log(`[UIManager] Showing UI for mode: ${mode}`);
+
+    // Hide all mode-specific elements first
+    this.hideAllModeUI();
+
+    // Show mode-specific elements
+    const modeElements = document.querySelectorAll(`[data-mode-ui="${mode}"]`);
+    modeElements.forEach(element => {
+      element.style.display = 'block';
+    });
+
+    // Update current HUD if it exists
+    if (this.currentHUD && typeof this.currentHUD.show === 'function') {
+      this.currentHUD.show();
+    }
+  }
+
+  /**
+   * Hide UI for a specific mode
+   */
+  hideModeUI(mode) {
+    console.log(`[UIManager] Hiding UI for mode: ${mode}`);
+
+    const modeElements = document.querySelectorAll(`[data-mode-ui="${mode}"]`);
+    modeElements.forEach(element => {
+      element.style.display = 'none';
+    });
+
+    // Hide current HUD if it exists
+    if (this.currentHUD && typeof this.currentHUD.hide === 'function') {
+      this.currentHUD.hide();
+    }
+  }
+
+  /**
+   * Hide all mode-specific UI elements
+   */
+  hideAllModeUI() {
+    const allModeElements = document.querySelectorAll('[data-mode-ui]');
+    allModeElements.forEach(element => {
+      element.style.display = 'none';
+    });
+  }
 }
 
 // Export for use in other modules

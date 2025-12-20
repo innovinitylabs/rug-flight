@@ -8,6 +8,7 @@ class GameController {
     this.uiManager = null;
     this.audioManager = null;
     this.textureManager = null;
+    this.modeController = null;
     this.currentMode = null;
 
     this.isInitialized = false;
@@ -36,6 +37,9 @@ class GameController {
 
       // Initialize game engine
       await this.initGameEngine();
+
+      // Initialize mode controller
+      await this.initModeController();
 
       // Register game modes
       await this.registerGameModes();
@@ -140,6 +144,27 @@ class GameController {
   }
 
   /**
+   * Initialize mode controller
+   */
+  async initModeController() {
+    console.log('[GameController] Initializing mode controller...');
+
+    let ModeController;
+    if (typeof require !== 'undefined') {
+      ModeController = require('./core/ModeController.js');
+    } else {
+      ModeController = window.ModeController;
+    }
+
+    if (!ModeController) {
+      throw new Error('ModeController not found');
+    }
+
+    this.modeController = new ModeController(this);
+    console.log('[GameController] ModeController initialized');
+  }
+
+  /**
    * Register available game modes
    */
   async registerGameModes() {
@@ -235,24 +260,21 @@ class GameController {
   /**
    * Switch to a different game mode
    */
-  async switchMode(mode) {
+  async switchMode(mode, options = {}) {
     console.log(`[GameController] Switching to mode: ${mode}`);
 
-    if (this.currentMode === mode) {
-      console.log('[GameController] Already in requested mode');
-      return;
+    if (!this.modeController) {
+      throw new Error('ModeController not initialized');
     }
 
-    try {
-      // Switch mode in game engine
-      await this.gameEngine.switchMode(mode);
+    // Use the ModeController for seamless switching
+    const success = await this.modeController.switchMode(mode, options);
+
+    if (success) {
       this.currentMode = mode;
-
       console.log(`[GameController] Successfully switched to ${mode} mode`);
-
-    } catch (error) {
-      console.error(`[GameController] Failed to switch to ${mode} mode:`, error);
-      throw error;
+    } else {
+      throw new Error(`Failed to switch to ${mode} mode`);
     }
   }
 

@@ -41,6 +41,72 @@ class CombatGame {
   }
 
   /**
+   * Get current game state for mode switching
+   */
+  getState() {
+    return {
+      game: this.game ? { ...this.game } : null,
+      airplane: this.airplane ? {
+        position: this.airplane.mesh.position.clone(),
+        rotation: this.airplane.mesh.rotation.clone()
+      } : null,
+      camera: this.gameEngine.camera ? {
+        position: this.gameEngine.camera.position.clone(),
+        rotation: this.gameEngine.camera.rotation.clone()
+      } : null,
+      weaponSystem: this.weaponSystem ? this.weaponSystem.getWeaponInfo() : null,
+      enemySystem: this.enemySystem ? this.enemySystem.getStats() : null
+    };
+  }
+
+  /**
+   * Set game state for mode switching
+   */
+  setState(state) {
+    if (state.game) {
+      this.game = { ...state.game };
+    }
+
+    if (state.airplane && this.airplane) {
+      this.airplane.mesh.position.copy(state.airplane.position);
+      this.airplane.mesh.rotation.copy(state.airplane.rotation);
+    }
+
+    if (state.camera && this.gameEngine.camera) {
+      this.gameEngine.camera.position.copy(state.camera.position);
+      this.gameEngine.camera.rotation.copy(state.camera.rotation);
+    }
+
+    if (state.weaponSystem && this.weaponSystem) {
+      this.weaponSystem.equipWeapon(state.weaponSystem.name);
+    }
+  }
+
+  /**
+   * Activate this mode (called by ModeController)
+   */
+  async activate(options = {}) {
+    console.log('[CombatGame] Activating');
+
+    // Start the game if not already running
+    if (!this.isRunning) {
+      this.startGame();
+    }
+  }
+
+  /**
+   * Deactivate this mode (called by ModeController)
+   */
+  async deactivate() {
+    console.log('[CombatGame] Deactivating');
+
+    // Stop the game
+    if (this.isRunning) {
+      this.stop();
+    }
+  }
+
+  /**
    * Initialize the combat game mode
    */
   async init() {

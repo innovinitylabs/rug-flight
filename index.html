@@ -18,6 +18,7 @@
 		<script type="text/javascript" src="core/engine/GameEngine.js"></script>
 		<script type="text/javascript" src="core/ui/UIManager.js"></script>
 		<script type="text/javascript" src="core/assets/TextureManager.js"></script>
+		<script type="text/javascript" src="core/ModeController.js"></script>
 		<!-- Game modes -->
 		<script type="text/javascript" src="modes/classic/ClassicGame.js"></script>
 		<script type="text/javascript" src="modes/classic/ClassicHUD.js"></script>
@@ -66,27 +67,27 @@
 				<div class="score" id="score-toprug1">
 					<div class="score__content" id="level-toprug1">
 						<div class="score__label">level</div>
-						<div class="score__value score__value--level" id="levelValue-toprug1">1</div>
-						<svg class="level-circle" id="levelCircle-toprug1" viewbox="0 0 200 200">
+						<div class="score__value score__value--level" id="levelValue-toprug1" data-mode-ui="classic">1</div>
+						<svg class="level-circle" id="levelCircle-toprug1" data-mode-ui="classic" viewbox="0 0 200 200">
 							<circle id="levelCircleBgr-toprug1" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
 							<circle id="levelCircleStroke-toprug1" r="80" cx="100" cy="100" fill="none" #f25346 stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
 						</svg>
 					</div>
 					<div class="score__content" id="dist-toprug1">
 						<div class="score__label">distance</div>
-						<div class="score__value score__value--dist" id="distValue-toprug1">000</div>
+						<div class="score__value score__value--dist" id="distValue-toprug1" data-mode-ui="classic">000</div>
 					</div>
 					<div class="score__content" id="energy-toprug1">
 						<div class="score__label">energy</div>
 						<div class="score__value score__value--energy" id="energyValue-toprug1">
-							<div class="energy-bar" id="energyBar-toprug1"></div>
+							<div class="energy-bar" id="energyBar-toprug1" data-mode-ui="classic"></div>
 						</div>
 					</div>
 				</div>
 			</div>
 			<div class="world" id="world-toprug1"></div>
-			<div class="message message--replay" id="replayMessage-toprug1">Click to Replay</div>
-			<div class="message message--instructions" id="instructions-toprug1">Grab the blue pills<span>avoid the red ones</span></div>
+			<div class="message message--replay" id="replayMessage-toprug1" data-mode-ui="classic">Click to Replay</div>
+			<div class="message message--instructions" id="instructions-toprug1" data-mode-ui="classic">Grab the blue pills<span>avoid the red ones</span></div>
 		</div>
 
 		<!-- Top Rug: Maverick Game Container -->
@@ -170,13 +171,13 @@
 			</div>
 
 			<!-- Combat HUD -->
-			<div class="combat-hud" id="combat-hud" style="display: none;">
-				<div class="combat-lives" id="combat-lives"></div>
-				<div class="combat-stats">
-					<div class="combat-score" id="combat-score">0</div>
-					<div class="combat-weapon" id="combat-weapon">SIMPLE</div>
-					<div class="combat-ammo" id="combat-ammo">100</div>
-					<div class="combat-level" id="combat-level">1</div>
+			<div class="combat-hud" id="combat-hud" data-mode-ui="combat" style="display: none;">
+				<div class="combat-lives" id="combat-lives" data-mode-ui="combat"></div>
+				<div class="combat-stats" data-mode-ui="combat">
+					<div class="combat-score" id="combat-score" data-mode-ui="combat">0</div>
+					<div class="combat-weapon" id="combat-weapon" data-mode-ui="combat">SIMPLE</div>
+					<div class="combat-ammo" id="combat-ammo" data-mode-ui="combat">100</div>
+					<div class="combat-level" id="combat-level" data-mode-ui="combat">1</div>
 				</div>
 			</div>
 		</div>
