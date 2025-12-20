@@ -50,6 +50,8 @@ class GameEngine {
     // Initialize scene manager
     this.sceneManager = {
       scene: this.scene,
+      camera: this.camera,
+      renderer: this.renderer,
       add: function(obj) { this.scene.add(obj); },
       remove: function(obj) { this.scene.remove(obj); },
       clear: function() {
