@@ -498,7 +498,10 @@ class CombatGame {
       this.game.status = "gameover";
       if (this.audioManager) {
         this.audioManager.stop('ocean');
-        this.audioManager.stop('propeller');
+        // Fade out propeller instead of stopping (better continuity)
+        if (this.audioManager.propellerGain) {
+          this.audioManager.propellerGain.gain.value = 0;
+        }
         this.audioManager.play('airplane-crash', {volume: 1.0});
       }
     }
@@ -747,6 +750,19 @@ class CombatGame {
     // Clear all objects
     this.clearObjects();
 
+    // Ensure propeller audio system is ready (like Classic mode)
+    if (this.audioManager && this.audioManager.userInteracted) {
+      const propellerLoaded = this.audioManager.sounds['propeller'] ||
+                             (this.audioManager.threeJSSupported && this.audioManager.buffers['propeller']);
+      const oceanLoaded = this.audioManager.sounds['ocean'] ||
+                         (this.audioManager.threeJSSupported && this.audioManager.buffers['ocean']);
+      console.log('[CombatGame] resetGame - propellerLoaded =', propellerLoaded, 'oceanLoaded =', oceanLoaded);
+
+      if (!propellerLoaded || !oceanLoaded) {
+        console.warn('[CombatGame] resetGame: Sounds not loaded, will try to start anyway');
+      }
+    }
+
     // Start new game
     this.startGame();
   }
@@ -760,11 +776,27 @@ class CombatGame {
     this.game.status = "playing";
     this.game.paused = false;
 
-    // Start audio
-    if (this.audioManager && !this.soundPlaying) {
-      this.audioManager.play('propeller', {loop: true, volume: 1.0});
-      this.audioManager.play('ocean', {loop: true, volume: 1.0});
-      this.soundPlaying = true;
+    // Start audio using improved propeller system (like Classic mode)
+    if (this.audioManager && this.audioManager.userInteracted) {
+      const propellerLoaded = this.audioManager.sounds['propeller'] ||
+                             (this.audioManager.threeJSSupported && this.audioManager.buffers['propeller']);
+      const oceanLoaded = this.audioManager.sounds['ocean'] ||
+                         (this.audioManager.threeJSSupported && this.audioManager.buffers['ocean']);
+
+      console.log('[CombatGame] startGame - propellerLoaded =', propellerLoaded, 'oceanLoaded =', oceanLoaded);
+
+      if (propellerLoaded && oceanLoaded) {
+        // Use the persistent propeller system (gap-free looping)
+        if (this.audioManager.propellerGain) {
+          this.audioManager.propellerGain.gain.value = 0.8; // Higher volume for combat
+        }
+        this.audioManager.play('ocean', {loop: true, volume: 0.3}); // Lower ocean for combat focus
+        this.soundPlaying = true;
+      } else {
+        console.warn('[CombatGame] startGame: Sounds not loaded, skipping');
+      }
+    } else {
+      console.log('[CombatGame] startGame: Audio not interacted yet');
     }
 
     // Show HUD
