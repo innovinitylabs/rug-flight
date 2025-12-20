@@ -186,7 +186,7 @@ class TextureManager {
     texture.generateMipmaps = true;
 
     // Anisotropic filtering for sharp textures at angles
-    const maxAnisotropy = renderer?.capabilities?.getMaxAnisotropy?.() || 16;
+    const maxAnisotropy = this.renderer?.capabilities?.getMaxAnisotropy?.() || 16;
     texture.anisotropy = maxAnisotropy;
 
     texture.needsUpdate = true;
