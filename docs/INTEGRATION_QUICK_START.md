@@ -51,16 +51,24 @@
 4. **Ask questions** - the plan is detailed but implementation may need clarification
 
 ### **Timeline Reminder**
-- **Phase 1 (Foundation)**: 2-3 days - Get the architecture right
+- **Phase 1 (Foundation)**: 2-3 days - Get the architecture right (including NFT texture system)
 - **Phase 2 (Classic)**: 3-4 days - Integrate the cleaner game first
 - **Phase 3 (Combat)**: 4-5 days - Add the complex features
 - **Total**: 14-19 days of focused work
+
+### **🎨 NFT Texture System (Key Requirement)**
+- **Current**: `onchainrugs.png` as placeholder
+- **Future**: Load textures from user NFTs
+- **Architecture**: Flexible system supporting URLs, blobs, data URLs
+- **Integration**: Built for external project integration
+- **Step**: Phase 1, Step 1.6 - Create TextureManager.js
 
 ## 🎮 **What You'll Have at the End**
 
 - **One unified game** with two amazing modes
 - **Seamless audio** (from Classic's proven system)
 - **Rich gameplay** (combat + polish from both)
+- **NFT-ready texture system** (external image loading for user NFTs)
 - **Modern architecture** (maintainable, extensible)
 - **All original features** preserved
 

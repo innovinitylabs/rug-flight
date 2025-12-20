@@ -19,6 +19,7 @@
   - **Classic Mode**: Polished flight experience (best of Top Rug)
   - **Combat Mode**: Enhanced gameplay (best of Maverick)
 - **Unified Architecture**: Shared systems, dynamic mode switching
+- **NFT-Ready Texture System**: External image loading for user NFTs
 - **Best Features**: Audio from Classic, gameplay from Maverick, polish from both
 
 ---
@@ -170,6 +171,71 @@ class UIManager {
 - Add mode switching UI elements
 - Update container IDs for unified system
 - Add loading indicators for mode switching
+
+### **Step 1.6: Create NFT-Ready Texture System**
+**Create:** `core/assets/TextureManager.js`
+
+```javascript
+class TextureManager {
+  constructor() {
+    this.textures = new Map();
+    this.currentNFTTexture = null;
+  }
+
+  // Load placeholder texture (current onchainrugs.png)
+  async loadPlaceholderTexture() {
+    return this.loadTexture('onchainrugs.png');
+  }
+
+  // Load external NFT texture (for integration)
+  async loadNFTTexture(imageUrl, options = {}) {
+    // Support: base64 data URLs, blob URLs, or regular URLs
+    // Handle CORS issues for external NFT images
+    // Apply texture processing (rotation, filtering, etc.)
+    return this.loadTexture(imageUrl, {
+      cors: true,
+      nftMode: true,
+      ...options
+    });
+  }
+
+  // Unified texture loading with processing
+  async loadTexture(source, options = {}) {
+    // Handle different input types:
+    // - File path (placeholder)
+    // - URL string (NFT image)
+    // - Blob/File object (user uploaded)
+    // - Data URL (base64)
+
+    // Apply consistent processing:
+    // - Rotation (180 degrees)
+    // - Filtering (anisotropic)
+    // - Format handling
+    // - Error fallback
+  }
+
+  // Set texture on banner material
+  applyToBanner(texture, material) {
+    // Apply to emissiveMap and map
+    // Handle texture updates dynamically
+    // Support live texture switching
+  }
+
+  // Cleanup and memory management
+  dispose() {
+    this.textures.forEach(texture => texture.dispose());
+    this.textures.clear();
+  }
+}
+```
+
+**Key Requirements:**
+- Support multiple input formats (URL, blob, data URL, file path)
+- Handle CORS for external NFT images
+- Apply consistent processing (rotation, filtering)
+- Live texture switching capability
+- Memory management and cleanup
+- Fallback to placeholder on errors
 
 ---
 
