@@ -262,8 +262,7 @@
 					});
 				});
 
-				// Set up in-game mode switcher (disabled for now)
-				// setupModeSwitcher();
+				// Mode switcher disabled for testing
 
 				console.log('Game initialization complete. Click a mode to start!');
 
@@ -402,101 +401,11 @@
 			testPanel.style.display = isVisible ? 'none' : 'block';
 		}
 
-		// Set up in-game mode switching UI
-		function setupModeSwitcher() {
-			const modeSwitcher = document.getElementById('modeSwitcher');
-			const modeSwitchToggle = document.getElementById('modeSwitchToggle');
-			const closeButton = document.getElementById('closeModeSwitcher');
-			const switchButtons = document.querySelectorAll('.mode-switch-button');
+		// Mode switcher temporarily disabled
+		// Set up test panel
+		setupTestPanel();
 
-			// Check if all required elements exist
-			if (!modeSwitcher || !modeSwitchToggle || !closeButton) {
-				console.warn('Mode switcher elements not found, skipping setup:', {
-					modeSwitcher: !!modeSwitcher,
-					modeSwitchToggle: !!modeSwitchToggle,
-					closeButton: !!closeButton
-				});
-				return; // Skip setup instead of throwing error
-			}
-
-			// Toggle mode switcher visibility
-			modeSwitchToggle.addEventListener('click', function() {
-				const isVisible = modeSwitcher.style.display !== 'none';
-				modeSwitcher.style.display = isVisible ? 'none' : 'flex';
-			});
-
-			// Close mode switcher
-			closeButton.addEventListener('click', function() {
-				modeSwitcher.style.display = 'none';
-			});
-
-			// Handle mode switching
-			switchButtons.forEach(button => {
-				button.addEventListener('click', async function() {
-					const targetMode = this.getAttribute('data-switch-mode');
-
-					// Close the switcher
-					modeSwitcher.style.display = 'none';
-
-					// Switch mode
-					try {
-						const controller = window.getGameController && window.getGameController();
-						if (controller && controller.modeController) {
-							const success = await controller.modeController.switchMode(targetMode);
-							if (success) {
-								console.log(`Switched to ${targetMode} mode`);
-								updateModeSwitcherButtons(targetMode);
-							}
-						}
-					} catch (error) {
-						console.error('Failed to switch mode:', error);
-						alert('Failed to switch mode. Check console for details.');
-					}
-				});
-			});
-
-			// Update button states based on current mode
-			function updateModeSwitcherButtons(currentMode) {
-				switchButtons.forEach(button => {
-					const buttonMode = button.getAttribute('data-switch-mode');
-					button.classList.toggle('active', buttonMode === currentMode);
-				});
-			}
-
-			// Listen for mode switch events
-			window.addEventListener('modeSwitched', function(event) {
-				updateModeSwitcherButtons(event.detail.newMode);
-			});
-
-			// Hide mode switcher when clicking outside
-			document.addEventListener('click', function(event) {
-				if (!modeSwitcher.contains(event.target) &&
-					!modeSwitchToggle.contains(event.target) &&
-					modeSwitcher.style.display !== 'none') {
-					modeSwitcher.style.display = 'none';
-				}
-			});
-
-			// Add keyboard shortcuts
-			document.addEventListener('keydown', function(event) {
-				// Tab key for mode switcher
-				if (event.key === 'Tab') {
-					event.preventDefault();
-					modeSwitchToggle.click();
-				}
-
-				// T key for test panel
-				if (event.key === 't' || event.key === 'T') {
-					event.preventDefault();
-					toggleTestPanel();
-				}
-			});
-
-			// Set up test panel
-			setupTestPanel();
-
-			console.log('Mode switcher UI initialized');
-		}
+		console.log('Game initialization complete. Click a mode to start!');
 		</script>
 	</body>
 </html>
