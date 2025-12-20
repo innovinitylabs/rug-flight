@@ -23,13 +23,45 @@ class GameEngine {
   /**
    * Initialize the game engine
    */
-  async init() {
+  async init(containerId = 'gameHolder') {
     if (this.isInitialized) {
       console.warn('[GameEngine] Already initialized');
       return;
     }
 
     console.log('[GameEngine] Initializing...');
+
+    // Get the container
+    this.container = document.getElementById(containerId);
+    if (!this.container) {
+      throw new Error(`Game container not found: ${containerId}`);
+    }
+
+    // Initialize Three.js scene, camera, and renderer
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 10000);
+    this.camera.position.set(0, 100, 200);
+
+    this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.shadowMap.enabled = true;
+    this.container.appendChild(this.renderer.domElement);
+
+    // Initialize scene manager
+    this.sceneManager = {
+      scene: this.scene,
+      add: function(obj) { this.scene.add(obj); },
+      remove: function(obj) { this.scene.remove(obj); },
+      clear: function() {
+        while(this.scene.children.length > 0){
+          const object = this.scene.children[0];
+          this.scene.remove(object);
+        }
+      }
+    };
+
+    // Handle window resize
+    window.addEventListener('resize', this.handleWindowResize.bind(this), false);
 
     // Initialize managers (will be set by the main game controller)
     if (!this.audioManager) {
@@ -44,6 +76,17 @@ class GameEngine {
 
     this.isInitialized = true;
     console.log('[GameEngine] Initialization complete');
+  }
+
+  /**
+   * Handle window resize
+   */
+  handleWindowResize() {
+    if (this.camera && this.renderer) {
+      this.camera.aspect = window.innerWidth / window.innerHeight;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
   }
 
   /**

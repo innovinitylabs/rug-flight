@@ -2,6 +2,36 @@
  * CombatAirplane - Airplane class for Combat mode
  * Adapted from maverick Airplane class
  */
+
+// Utils utility (moved to top to fix syntax error)
+const utils = {
+  makeTetrahedron: function(a, b, c, d) {
+    return [
+      a[0], a[1], a[2],
+      b[0], b[1], b[2],
+      c[0], c[1], c[2],
+      a[0], a[1], a[2],
+      c[0], c[1], c[2],
+      d[0], d[1], d[2],
+      a[0], a[1], a[2],
+      d[0], d[1], d[2],
+      b[0], b[1], b[2],
+      d[0], d[1], d[2],
+      c[0], c[1], c[2],
+      b[0], b[1], b[2]
+    ];
+  },
+
+  normalize: function(v, vmin, vmax, tmin, tmax) {
+    const nv = Math.max(Math.min(v, vmax), vmin);
+    const dv = vmax - vmin;
+    const pc = (nv - vmin) / dv;
+    const dt = tmax - tmin;
+    const tv = tmin + (pc * dt);
+    return tv;
+  }
+};
+
 class CombatAirplane {
   constructor() {
     this.mesh = createAirplaneMesh();
@@ -235,35 +265,6 @@ const Colors = {
   pink: 0xF5986E,
   yellow: 0xf4ce93,
   blue: 0x68c3c0
-};
-
-// Utils utility (simplified version)
-const utils = {
-  makeTetrahedron: function(a, b, c, d) {
-    return [
-      a[0], a[1], a[2],
-      b[0], b[1], b[2],
-      c[0], c[1], c[2],
-      a[0], a[1], a[2],
-      c[0], c[1], c[2],
-      d[0], d[1], d[2],
-      a[0], a[1], a[2],
-      d[0], d[1], d[2],
-      b[0], b[1], b[2],
-      d[0], d[1], d[2],
-      c[0], c[1], c[2],
-      b[0], b[1], b[2]
-    ];
-  },
-
-  normalize: function(v, vmin, vmax, tmin, tmax) {
-    const nv = Math.max(Math.min(v, vmax), vmin);
-    const dv = vmax - vmin;
-    const pc = (nv - vmin) / dv;
-    const dt = tmax - tmin;
-    const tv = tmin + (pc * dt);
-    return tv;
-  }
 };
 
 // Export for use in other modules
