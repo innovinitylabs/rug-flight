@@ -77,7 +77,7 @@ class GameEngine {
     }
 
     this.isInitialized = true;
-    console.log('[GameEngine] Initialization complete');
+    console.log('[GameEngine] Initialization complete - sceneManager:', !!this.sceneManager, 'camera:', !!this.sceneManager.camera);
   }
 
   /**

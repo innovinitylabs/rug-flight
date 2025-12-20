@@ -107,6 +107,9 @@ class ClassicGame {
    */
   async init() {
     console.log('[ClassicGame] Initializing...');
+    console.log('[ClassicGame] gameEngine:', !!this.gameEngine);
+    console.log('[ClassicGame] sceneManager:', !!this.gameEngine?.sceneManager);
+    console.log('[ClassicGame] camera:', !!this.gameEngine?.sceneManager?.camera);
 
     // Set screen dimensions
     this.HEIGHT = window.innerHeight;
@@ -656,6 +659,10 @@ class ClassicGame {
 
     if (this.game.energy < 1) {
       this.game.status = "gameover";
+
+      // Save high score and statistics
+      this.saveGameResults();
+
       if (this.audioManager) {
         this.audioManager.stop('ocean');
         this.audioManager.play('airplane-crash', {volume: 1.0});
@@ -744,6 +751,37 @@ class ClassicGame {
     var dt = tmax - tmin;
     var tv = tmin + (pc * dt);
     return tv;
+  }
+
+  /**
+   * Save game results (high score, statistics)
+   */
+  saveGameResults() {
+    if (!this.game) return;
+
+    // Calculate final score (distance * level)
+    const finalScore = Math.floor(this.game.distance * this.game.level);
+
+    // Save high score
+    if (window.getGameController) {
+      const controller = window.getGameController();
+      if (controller.saveHighScore) {
+        controller.saveHighScore(finalScore, this.game.level);
+      }
+
+      // Update statistics
+      if (controller.updateStats) {
+        controller.updateStats({
+          gamesPlayed: 1,
+          totalScore: finalScore,
+          totalDistance: Math.floor(this.game.distance),
+          coinsCollected: this.game.coinsCollected || 0,
+          timePlayed: Math.floor((Date.now() - this.gameStartTime) / 1000) || 0
+        });
+      }
+    }
+
+    console.log(`[ClassicGame] Game ended - Score: ${finalScore}, Distance: ${Math.floor(this.game.distance)}, Level: ${this.game.level}`);
   }
 
   /**
