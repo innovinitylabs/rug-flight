@@ -191,21 +191,6 @@
 				</div>
 			</div>
 
-			<!-- Mode Switcher UI -->
-			<div class="mode-switcher" id="modeSwitcher" style="display: none;">
-				<button class="mode-switch-button" data-switch-mode="classic" id="switchToClassic">
-					🎖️ Classic Mode
-				</button>
-				<button class="mode-switch-button" data-switch-mode="combat" id="switchToCombat">
-					⚔️ Combat Mode
-				</button>
-				<button class="mode-switch-close" id="closeModeSwitcher">×</button>
-			</div>
-
-			<!-- Mode Switch Toggle Button -->
-			<button class="mode-switch-toggle" id="modeSwitchToggle" style="display: none;">
-				🔄 Switch Mode
-			</button>
 
 			<!-- Test Panel (hidden by default, activated by pressing T key) -->
 			<div class="test-panel" id="testPanel" style="display: none;">
@@ -223,6 +208,22 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- Mode Switcher UI (moved outside containers for global access) -->
+		<div class="mode-switcher" id="modeSwitcher" style="display: none;">
+			<button class="mode-switch-button" data-switch-mode="classic" id="switchToClassic">
+				🎖️ Classic Mode
+			</button>
+			<button class="mode-switch-button" data-switch-mode="combat" id="switchToCombat">
+				⚔️ Combat Mode
+			</button>
+			<button class="mode-switch-close" id="closeModeSwitcher">×</button>
+		</div>
+
+		<!-- Mode Switch Toggle Button (moved outside containers for global access) -->
+		<button class="mode-switch-toggle" id="modeSwitchToggle" style="display: none;">
+			🔄 Switch Mode
+		</button>
 
 		<!-- Game Controller Initialization -->
 		<script>
@@ -407,6 +408,16 @@
 			const modeSwitchToggle = document.getElementById('modeSwitchToggle');
 			const closeButton = document.getElementById('closeModeSwitcher');
 			const switchButtons = document.querySelectorAll('.mode-switch-button');
+
+			// Check if all required elements exist
+			if (!modeSwitcher || !modeSwitchToggle || !closeButton) {
+				console.error('Mode switcher elements not found:', {
+					modeSwitcher: !!modeSwitcher,
+					modeSwitchToggle: !!modeSwitchToggle,
+					closeButton: !!closeButton
+				});
+				throw new Error('Element not found');
+			}
 
 			// Toggle mode switcher visibility
 			modeSwitchToggle.addEventListener('click', function() {
