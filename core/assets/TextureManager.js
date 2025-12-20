@@ -286,6 +286,103 @@ class TextureManager {
   }
 
   /**
+   * Get texture memory usage statistics
+   */
+  getMemoryStats() {
+    return {
+      cachedTextures: this.textures.size,
+      hasCurrentTexture: !!this.currentNFTTexture,
+      hasPlaceholderTexture: !!this.placeholderTexture,
+      textureSources: Array.from(this.textures.keys()).map(key => ({
+        source: key.substring(0, 50) + (key.length > 50 ? '...' : ''),
+        type: this.getSourceType(key)
+      }))
+    };
+  }
+
+  /**
+   * Force garbage collection hint (for debugging)
+   */
+  forceGC() {
+    if (window.gc && typeof window.gc === 'function') {
+      window.gc();
+      console.log('[TextureManager] Forced garbage collection');
+    }
+  }
+
+  /**
+   * Optimize texture settings for performance
+   */
+  optimizeForPerformance() {
+    this.textures.forEach((texture) => {
+      if (texture) {
+        // Reduce texture quality for better performance
+        texture.generateMipmaps = false;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.anisotropy = Math.min(texture.anisotropy || 1, 2);
+        texture.needsUpdate = true;
+      }
+    });
+
+    console.log('[TextureManager] All textures optimized for performance');
+  }
+
+  /**
+   * Optimize texture settings for quality
+   */
+  optimizeForQuality() {
+    if (!this.renderer) return;
+
+    const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
+
+    this.textures.forEach((texture) => {
+      if (texture) {
+        // Maximize texture quality
+        texture.generateMipmaps = true;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.anisotropy = maxAnisotropy;
+        texture.needsUpdate = true;
+      }
+    });
+
+    console.log('[TextureManager] All textures optimized for quality');
+  }
+
+  /**
+   * Clean up unused textures (older than specified time)
+   */
+  cleanupUnusedTextures(maxAge = 300000) { // 5 minutes default
+    const now = Date.now();
+    const toRemove = [];
+
+    this.textures.forEach((texture, source) => {
+      if (texture.userData && texture.userData.lastUsed) {
+        if (now - texture.userData.lastUsed > maxAge) {
+          toRemove.push(source);
+        }
+      } else {
+        // Mark as used now if not marked
+        texture.userData = texture.userData || {};
+        texture.userData.lastUsed = now;
+      }
+    });
+
+    toRemove.forEach(source => {
+      const texture = this.textures.get(source);
+      if (texture && texture.dispose) {
+        texture.dispose();
+      }
+      this.textures.delete(source);
+    });
+
+    if (toRemove.length > 0) {
+      console.log(`[TextureManager] Cleaned up ${toRemove.length} unused textures`);
+    }
+  }
+
+  /**
    * Preload common textures
    */
   async preloadCommonTextures() {

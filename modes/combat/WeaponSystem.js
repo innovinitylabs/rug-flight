@@ -41,23 +41,38 @@ class WeaponSystem {
   shoot() {
     if (!this.weapon) return;
 
-    // Rate limiting is handled by the weapon itself
-    const projectile = this.weapon.shoot(this.combatGame.airplane.mesh.position, this.combatGame.airplane.mesh.rotation);
-
-    if (projectile) {
-      // Add to projectiles array
-      this.combatGame.projectiles.push(projectile);
-
-      // Add to scene
-      this.combatGame.sceneManager.scene.add(projectile.mesh);
-
-      // Play sound
-      if (this.audioManager) {
-        this.audioManager.play('shot-soft', {volume: 0.5});
-      }
-
-      console.log('[WeaponSystem] Shot fired');
+    // Use object pool if available, otherwise create new projectile
+    let projectile;
+    if (this.combatGame.projectilePool) {
+      projectile = this.combatGame.projectilePool.get();
+      // Initialize projectile properties
+      projectile.damage = this.weapon.damage();
+      projectile.mesh.position.copy(this.combatGame.airplane.mesh.position);
+      projectile.alive = true;
+      projectile.distanceTraveled = 0;
+    } else {
+      // Fallback to direct creation
+      projectile = new CombatProjectile(this.weapon.damage());
+      projectile.mesh.position.copy(this.combatGame.airplane.mesh.position);
     }
+
+    // Set direction based on airplane rotation
+    const direction = new THREE.Vector3(10, 0, 0);
+    direction.applyEuler(this.combatGame.airplane.mesh.rotation);
+    projectile.setDirection(direction);
+
+    // Add to projectiles array
+    this.combatGame.projectiles.push(projectile);
+
+    // Add to scene
+    this.combatGame.sceneManager.scene.add(projectile.mesh);
+
+    // Play sound
+    if (this.audioManager) {
+      this.audioManager.play('shot-soft', {volume: 0.5});
+    }
+
+    console.log('[WeaponSystem] Shot fired');
   }
 
   /**

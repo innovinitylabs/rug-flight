@@ -15,6 +15,12 @@ class CombatGame {
     this.newTime = new Date().getTime();
     this.oldTime = new Date().getTime();
 
+    // Performance optimization: Object pools
+    this.projectilePool = null;
+    this.enemyPool = null;
+    this.coinPool = null;
+    this.particlePool = null;
+
     // 3D Objects and Systems
     this.sceneManager = null;
     this.airplane = null;
@@ -145,6 +151,9 @@ class CombatGame {
       // Initialize enemy system
       this.enemySystem = new EnemySystem(this, this.audioManager);
 
+      // Initialize object pools for performance
+      this.initializeObjectPools();
+
       // Set up controls
       this.setupControls();
 
@@ -179,6 +188,39 @@ class CombatGame {
 
     this.hud = new CombatHUD(this.uiManager);
     await this.hud.init();
+  }
+
+  /**
+   * Initialize object pools for performance optimization
+   */
+  initializeObjectPools() {
+    console.log('[CombatGame] Initializing object pools');
+
+    // Import pool classes
+    let ProjectilePool, EnemyPool, CoinPool, ParticlePool;
+    if (typeof require !== 'undefined') {
+      const pools = require('../core/ObjectPool.js');
+      ProjectilePool = pools.ProjectilePool;
+      EnemyPool = pools.EnemyPool;
+      CoinPool = pools.CoinPool;
+      ParticlePool = pools.ParticlePool;
+    } else {
+      ProjectilePool = window.ProjectilePool;
+      EnemyPool = window.EnemyPool;
+      CoinPool = window.CoinPool;
+      ParticlePool = window.ParticlePool;
+    }
+
+    if (ProjectilePool && EnemyPool && CoinPool && ParticlePool) {
+      this.projectilePool = new ProjectilePool();
+      this.enemyPool = new EnemyPool();
+      this.coinPool = new CoinPool();
+      this.particlePool = new ParticlePool();
+
+      console.log('[CombatGame] Object pools initialized');
+    } else {
+      console.warn('[CombatGame] Object pools not available, falling back to direct creation');
+    }
   }
 
   /**
@@ -662,8 +704,23 @@ class CombatGame {
       projectile.update(this.deltaTime);
     });
 
-    // Remove dead projectiles
-    this.projectiles = this.projectiles.filter(projectile => !projectile.dead);
+    // Handle dead projectiles - return to pool or remove from scene
+    const aliveProjectiles = [];
+    this.projectiles.forEach(projectile => {
+      if (projectile.alive && !projectile.dead) {
+        aliveProjectiles.push(projectile);
+      } else {
+        // Remove from scene
+        if (projectile.mesh.parent) {
+          projectile.mesh.parent.remove(projectile.mesh);
+        }
+        // Return to pool if available
+        if (this.projectilePool) {
+          this.projectilePool.release(projectile);
+        }
+      }
+    });
+    this.projectiles = aliveProjectiles;
   }
 
   /**
@@ -893,12 +950,17 @@ class CombatGame {
       }
     });
 
-    // Clear enemies
+    // Clear enemies - return to pool
     this.enemies.forEach(enemy => {
       if (enemy.mesh.parent) {
         enemy.mesh.parent.remove(enemy.mesh);
       }
+      // Return to pool if available
+      if (this.enemyPool) {
+        this.enemyPool.release(enemy);
+      }
     });
+    this.enemies = [];
 
     // Clear collectibles
     this.collectibles.forEach(collectible => {
@@ -907,12 +969,17 @@ class CombatGame {
       }
     });
 
-    // Clear projectiles
+    // Clear projectiles - return to pool
     this.projectiles.forEach(projectile => {
       if (projectile.mesh.parent) {
         projectile.mesh.parent.remove(projectile.mesh);
       }
+      // Return to pool if available
+      if (this.projectilePool) {
+        this.projectilePool.release(projectile);
+      }
     });
+    this.projectiles = [];
 
     // Clear clouds
     this.clouds.forEach(cloud => {

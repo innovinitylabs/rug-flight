@@ -39,7 +39,14 @@ class EnemySystem {
    */
   spawnEnemies(count) {
     for (let i = 0; i < count; i++) {
-      const enemy = new CombatEnemy();
+      let enemy;
+
+      // Use object pool if available
+      if (this.combatGame.enemyPool) {
+        enemy = this.combatGame.enemyPool.get();
+      } else {
+        enemy = new CombatEnemy();
+      }
 
       // Position enemy in front of player
       const baseDistance = 800; // Distance in front of player
