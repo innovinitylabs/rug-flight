@@ -358,11 +358,12 @@ class GameEngine {
   }
 
   /**
-   * Update all systems
+   * Update active mode systems
    */
   update(deltaTime) {
-    // Update all registered mode systems (inactive ones will ignore updates)
-    for (const [modeName, modeSystems] of Object.entries(this.modeSystems)) {
+    // Only update systems for the currently active mode
+    if (this.currentMode && this.modeSystems[this.currentMode]) {
+      const modeSystems = this.modeSystems[this.currentMode];
       for (const [systemName, system] of Object.entries(modeSystems)) {
         if (system && typeof system.update === 'function') {
           system.update(deltaTime);

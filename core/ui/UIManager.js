@@ -260,7 +260,8 @@ class UIManager {
    */
   hideModeSelector() {
     if (this.modeSelectorContainer) {
-      this.modeSelectorContainer.style.display = 'none';
+      this.modeSelectorContainer.classList.add('game-hidden');
+      this.modeSelectorContainer.style.display = 'none'; // Fallback
     }
 
     console.log('[UIManager] Mode selector hidden');
@@ -273,7 +274,8 @@ class UIManager {
     this.hideModeSelector();
 
     if (this.gameContainer) {
-      this.gameContainer.style.display = 'block';
+      this.gameContainer.classList.add('game-visible');
+      this.gameContainer.style.display = 'block'; // Fallback
     }
 
     console.log('[UIManager] Game screen shown');

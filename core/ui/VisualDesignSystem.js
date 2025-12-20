@@ -327,6 +327,35 @@ class VisualDesignSystem {
         margin-bottom: ${this.spacing.md};
       }
 
+      /* ===== GAME CONTAINER & CANVAS STYLES ===== */
+
+      .game-holder {
+        position: relative;
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+        background: #000;
+      }
+
+      .game-holder canvas {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+
+      /* Game mode selector should be hidden when game starts */
+      .game-mode-selector.game-hidden {
+        display: none !important;
+      }
+
+      /* Game container should be visible when game starts */
+      .game-holder.game-visible {
+        display: block !important;
+      }
+
       /* ===== TEST PANEL STYLES ===== */
 
       .test-panel {

@@ -330,6 +330,9 @@ class ModeController {
         await modeInstance.init();
       }
 
+      // Set the current mode in GameEngine
+      this.gameEngine.currentMode = mode;
+
       // Activate the mode
       if (typeof modeInstance.activate === 'function') {
         await modeInstance.activate(options);

@@ -503,15 +503,18 @@ class CombatGame {
   update(deltaTime) {
     this.deltaTime = deltaTime;
 
-    if (this.game.status === "playing") {
-      this.updateGame();
-    } else if (this.game.status === "waitingReplay") {
-      // Handle replay waiting state
-    }
+    // Only update if game is initialized
+    if (this.game) {
+      if (this.game.status === "playing") {
+        this.updateGame();
+      } else if (this.game.status === "waitingReplay") {
+        // Handle replay waiting state
+      }
 
-    // Update HUD
-    if (this.hud) {
-      this.hud.update(this.game);
+      // Update HUD
+      if (this.hud) {
+        this.hud.update(this.game);
+      }
     }
 
     // Update scene manager
