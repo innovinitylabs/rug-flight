@@ -109,26 +109,26 @@ class ClassicGame {
 
     try {
       // Background sounds
-      await this.audioManager.load('ocean', null, 'games/top-rug/assets/audio/ocean.mp3');
-      await this.audioManager.load('propeller', null, 'games/top-rug/assets/audio/propeller.mp3');
+      await this.audioManager.load('ocean', null, 'modes/classic/assets/audio/ocean.mp3');
+      await this.audioManager.load('propeller', null, 'modes/classic/assets/audio/propeller.mp3');
 
       // Coin sounds
-      await this.audioManager.load('coin-1', 'coin', 'games/top-rug/assets/audio/coin-1.mp3');
-      await this.audioManager.load('coin-2', 'coin', 'games/top-rug/assets/audio/coin-2.mp3');
-      await this.audioManager.load('coin-3', 'coin', 'games/top-rug/assets/audio/coin-3.mp3');
-      await this.audioManager.load('jar-1', 'coin', 'games/top-rug/assets/audio/jar-1.mp3');
-      await this.audioManager.load('jar-2', 'coin', 'games/top-rug/assets/audio/jar-2.mp3');
-      await this.audioManager.load('jar-3', 'coin', 'games/top-rug/assets/audio/jar-3.mp3');
-      await this.audioManager.load('jar-4', 'coin', 'games/top-rug/assets/audio/jar-4.mp3');
-      await this.audioManager.load('jar-5', 'coin', 'games/top-rug/assets/audio/jar-5.mp3');
-      await this.audioManager.load('jar-6', 'coin', 'games/top-rug/assets/audio/jar-6.mp3');
-      await this.audioManager.load('jar-7', 'coin', 'games/top-rug/assets/audio/jar-7.mp3');
+      await this.audioManager.load('coin-1', 'coin', 'modes/classic/assets/audio/coin-1.mp3');
+      await this.audioManager.load('coin-2', 'coin', 'modes/classic/assets/audio/coin-2.mp3');
+      await this.audioManager.load('coin-3', 'coin', 'modes/classic/assets/audio/coin-3.mp3');
+      await this.audioManager.load('jar-1', 'coin', 'modes/classic/assets/audio/jar-1.mp3');
+      await this.audioManager.load('jar-2', 'coin', 'modes/classic/assets/audio/jar-2.mp3');
+      await this.audioManager.load('jar-3', 'coin', 'modes/classic/assets/audio/jar-3.mp3');
+      await this.audioManager.load('jar-4', 'coin', 'modes/classic/assets/audio/jar-4.mp3');
+      await this.audioManager.load('jar-5', 'coin', 'modes/classic/assets/audio/jar-5.mp3');
+      await this.audioManager.load('jar-6', 'coin', 'modes/classic/assets/audio/jar-6.mp3');
+      await this.audioManager.load('jar-7', 'coin', 'modes/classic/assets/audio/jar-7.mp3');
 
       // Crash sounds
-      await this.audioManager.load('airplane-crash-1', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-1.mp3');
-      await this.audioManager.load('airplane-crash-2', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-2.mp3');
-      await this.audioManager.load('airplane-crash-3', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-3.mp3');
-      await this.audioManager.load('airplane-crash-4', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-4.mp3');
+      await this.audioManager.load('airplane-crash-1', 'airplane-crash', 'modes/classic/assets/audio/airplane-crash-1.mp3');
+      await this.audioManager.load('airplane-crash-2', 'airplane-crash', 'modes/classic/assets/audio/airplane-crash-2.mp3');
+      await this.audioManager.load('airplane-crash-3', 'airplane-crash', 'modes/classic/assets/audio/airplane-crash-3.mp3');
+      await this.audioManager.load('airplane-crash-4', 'airplane-crash', 'modes/classic/assets/audio/airplane-crash-4.mp3');
 
       console.log('[ClassicGame] All sounds loaded');
     } catch (error) {

@@ -265,7 +265,7 @@ class TextureManager {
 - Replay message handling
 
 ### **Step 2.4: Update Classic Assets**
-- Move `games/top-rug/assets/` to `modes/classic/assets/`
+- ✅ Move `games/top-rug/assets/` to `modes/classic/assets/`
 - Update all asset paths in ClassicGame.js
 - Ensure compatibility with unified asset loading
 
