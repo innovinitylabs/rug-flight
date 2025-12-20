@@ -309,7 +309,7 @@ class TextureManager {
 - Score screen management
 
 ### **Step 3.5: Update Combat Assets**
-- Move `games/top-rug-maverick/assets/` to `modes/combat/assets/`
+- ✅ Move `games/top-rug-maverick/assets/` to `modes/combat/assets/`
 - Update asset paths
 - Ensure model loading works with unified system
 
