@@ -205,44 +205,48 @@ class CombatHUD {
   }
 
   /**
-   * Add CSS for combat HUD
+   * Add CSS for combat HUD using unified design system
    */
   static addCSS() {
     const existingStyle = document.getElementById('combat-hud-styles');
     if (existingStyle) return;
 
+    // Get the visual design system
+    const vds = getVisualDesignSystem ? getVisualDesignSystem() :
+               (window.getVisualDesignSystem ? window.getVisualDesignSystem() : null);
+
     const style = document.createElement('style');
     style.id = 'combat-hud-styles';
     style.textContent = `
-      /* Combat HUD Styles */
+      /* Combat HUD Styles - Unified with design system */
       .combat-hud {
         position: absolute;
-        top: 20px;
-        left: 20px;
-        right: 20px;
-        font-family: 'Playfair Display', serif;
-        color: #d1b790;
+        top: ${vds ? vds.getSpacing('xl') : '20px'};
+        left: ${vds ? vds.getSpacing('xl') : '20px'};
+        right: ${vds ? vds.getSpacing('xl') : '20px'};
+        font-family: ${vds ? vds.typography.fontFamily : "'Playfair Display', serif"};
+        color: ${vds ? vds.getColor('text') : '#d1b790'};
         z-index: 100;
       }
 
       .combat-lives {
         display: flex;
-        gap: 5px;
-        margin-bottom: 10px;
+        gap: ${vds ? vds.getSpacing('sm') : '5px'};
+        margin-bottom: ${vds ? vds.getSpacing('md') : '10px'};
       }
 
       .combat-heart {
-        font-size: 24px;
-        transition: all 0.3s ease;
+        font-size: ${vds ? vds.typography.sizes.xxl : '24px'};
+        transition: all ${vds ? vds.animations.normal : '0.3s ease'};
       }
 
       .combat-heart.full {
-        color: #ff4757;
-        text-shadow: 0 0 5px rgba(255, 71, 87, 0.5);
+        color: ${vds ? vds.getColor('error') : '#ff4757'};
+        text-shadow: ${vds ? vds.shadows.glow : '0 0 5px rgba(255, 71, 87, 0.5)'};
       }
 
       .combat-heart.empty {
-        color: #ddd;
+        color: ${vds ? vds.getColor('textMuted') : '#ddd'};
         opacity: 0.5;
       }
 
@@ -250,25 +254,31 @@ class CombatHUD {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 10px;
+        margin-bottom: ${vds ? vds.getSpacing('md') : '10px'};
       }
 
       .combat-score, .combat-ammo, .combat-level {
-        font-size: 18px;
-        font-weight: bold;
+        font-size: ${vds ? vds.typography.sizes.lg : '18px'};
+        font-weight: ${vds ? vds.typography.weights.bold : 'bold'};
+        color: ${vds ? vds.getColor('secondary') : '#d1b790'};
+      }
+
+      .combat-score {
+        color: ${vds ? vds.getColor('score') : '#ffd700'};
       }
 
       .combat-weapon {
-        font-size: 16px;
-        color: #68c3c0;
+        font-size: ${vds ? vds.typography.sizes.md : '16px'};
+        color: ${vds ? vds.getColor('primary') : '#68c3c0'};
         text-transform: uppercase;
         letter-spacing: 1px;
+        font-weight: ${vds ? vds.typography.weights.medium : '500'};
       }
 
       /* Level up animation */
       @keyframes levelUp {
         0% { transform: scale(1); }
-        50% { transform: scale(1.2); color: #ffd700; }
+        50% { transform: scale(1.2); color: ${vds ? vds.getColor('warning') : '#ffd700'}; }
         100% { transform: scale(1); }
       }
 
@@ -279,9 +289,9 @@ class CombatHUD {
       /* Weapon upgrade animation */
       @keyframes weaponUpgrade {
         0% { transform: scale(1); }
-        25% { transform: scale(1.1) rotate(5deg); color: #ff6b6b; }
-        50% { transform: scale(1.2) rotate(-5deg); color: #ffd700; }
-        75% { transform: scale(1.1) rotate(5deg); color: #68c3c0; }
+        25% { transform: scale(1.1) rotate(5deg); color: ${vds ? vds.getColor('error') : '#ff6b6b'}; }
+        50% { transform: scale(1.2) rotate(-5deg); color: ${vds ? vds.getColor('warning') : '#ffd700'}; }
+        75% { transform: scale(1.1) rotate(5deg); color: ${vds ? vds.getColor('primary') : '#68c3c0'}; }
         100% { transform: scale(1); }
       }
 
@@ -290,28 +300,28 @@ class CombatHUD {
       }
 
       /* Responsive design */
-      @media screen and (max-width: 768px) {
+      @media screen and (max-width: ${vds ? vds.breakpoints.mobile : '768px'}) {
         .combat-hud {
-          top: 10px;
-          left: 10px;
-          right: 10px;
+          top: ${vds ? vds.getSpacing('md') : '10px'};
+          left: ${vds ? vds.getSpacing('md') : '10px'};
+          right: ${vds ? vds.getSpacing('md') : '10px'};
         }
 
         .combat-heart {
-          font-size: 20px;
+          font-size: ${vds ? vds.typography.sizes.xl : '20px'};
         }
 
         .combat-score, .combat-ammo, .combat-level {
-          font-size: 14px;
+          font-size: ${vds ? vds.typography.sizes.md : '14px'};
         }
 
         .combat-weapon {
-          font-size: 12px;
+          font-size: ${vds ? vds.typography.sizes.sm : '12px'};
         }
       }
     `;
     document.head.appendChild(style);
-    console.log('[CombatHUD] CSS added');
+    console.log('[CombatHUD] CSS added with unified design system');
   }
 
   /**

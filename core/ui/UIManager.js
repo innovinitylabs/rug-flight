@@ -510,6 +510,13 @@ class UIManager {
   showModeUI(mode) {
     console.log(`[UIManager] Showing UI for mode: ${mode}`);
 
+    // Set visual design system mode
+    const vds = getVisualDesignSystem ? getVisualDesignSystem() :
+               (window.getVisualDesignSystem ? window.getVisualDesignSystem() : null);
+    if (vds) {
+      vds.setMode(mode);
+    }
+
     // Hide all mode-specific elements first
     this.hideAllModeUI();
 

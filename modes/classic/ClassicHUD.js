@@ -187,15 +187,21 @@ class ClassicHUD {
   }
 
   /**
-   * Add CSS animations for energy bar
+   * Add CSS animations for Classic HUD
    */
   static addCSSAnimations() {
     const existingStyle = document.getElementById('classic-hud-styles');
     if (existingStyle) return;
 
+    // Get the visual design system
+    const vds = getVisualDesignSystem ? getVisualDesignSystem() :
+               (window.getVisualDesignSystem ? window.getVisualDesignSystem() : null);
+
     const style = document.createElement('style');
     style.id = 'classic-hud-styles';
     style.textContent = `
+      /* Classic HUD - Legacy styles with unified design system */
+
       /* Energy bar blinking animation */
       @keyframes blinking {
         0% { opacity: 1; }
@@ -206,6 +212,11 @@ class ClassicHUD {
       .energy-bar {
         animation-duration: 150ms;
         animation-iteration-count: infinite;
+        background: ${vds ? vds.getColor('energy') : '#68c3c0'};
+      }
+
+      .energy-bar.low {
+        background: ${vds ? vds.getColor('energyLow') : '#f25346'};
       }
 
       /* Level circle styling */
@@ -214,28 +225,28 @@ class ClassicHUD {
         transition: stroke-dashoffset 0.3s ease;
       }
 
-      /* HUD element positioning */
+      /* HUD element positioning - Classic specific */
       .score__value--dist {
-        font-size: 30px;
-        font-family: 'Playfair Display';
-        font-weight: bold;
-        color: #d1b790;
+        font-size: ${vds ? vds.typography.sizes.xxl : '30px'};
+        font-family: ${vds ? vds.typography.fontFamily : "'Playfair Display', serif"};
+        font-weight: ${vds ? vds.typography.weights.bold : 'bold'};
+        color: ${vds ? vds.getColor('secondary') : '#d1b790'};
       }
 
       .score__value--level {
-        font-size: 26px;
-        font-family: 'Playfair Display';
-        font-weight: bold;
-        color: #d1b790;
+        font-size: ${vds ? vds.typography.sizes.xl : '26px'};
+        font-family: ${vds ? vds.typography.fontFamily : "'Playfair Display', serif"};
+        font-weight: ${vds ? vds.typography.weights.bold : 'bold'};
+        color: ${vds ? vds.getColor('secondary') : '#d1b790'};
       }
 
       .score__value--energy {
         position: relative;
         width: 60px;
         height: 8px;
-        margin-top: 20px;
-        border-radius: 3px;
-        background-color: #d1b790;
+        margin-top: ${vds ? vds.getSpacing('xl') : '20px'};
+        border-radius: ${vds ? vds.borderRadius.sm : '3px'};
+        background-color: ${vds ? vds.getColor('surface') : '#d1b790'};
       }
 
       .energy-bar {
@@ -245,45 +256,46 @@ class ClassicHUD {
         bottom: 0;
         left: 0;
         margin: 2px;
-        border-radius: 3px;
-        transition: all 0.3s ease;
+        border-radius: ${vds ? vds.borderRadius.sm : '3px'};
+        transition: all ${vds ? vds.animations.normal : '0.3s ease'};
       }
 
       /* Replay message styling */
       .message--replay {
-        font-size: 1.25vw;
+        font-size: ${vds ? vds.typography.sizes.lg : '1.25vw'};
         bottom: 40vh;
         display: none;
         text-indent: 0.5em;
         letter-spacing: 0.5em;
-        color: #d1b790;
-        font-weight: bold;
+        color: ${vds ? vds.getColor('secondary') : '#d1b790'};
+        font-weight: ${vds ? vds.typography.weights.bold : 'bold'};
         position: absolute;
         left: 0;
         width: 100%;
         text-align: center;
         text-transform: uppercase;
         pointer-events: none;
+        font-family: ${vds ? vds.typography.fontFamily : "'Playfair Display', serif"};
       }
 
       /* Responsive design */
-      @media screen and (max-width: 768px) {
+      @media screen and (max-width: ${vds ? vds.breakpoints.mobile : '768px'}) {
         .message--replay {
           font-size: 4vw;
           bottom: 30vh;
         }
 
         .score__value--dist {
-          font-size: 24px;
+          font-size: ${vds ? vds.typography.sizes.xl : '24px'};
         }
 
         .score__value--level {
-          font-size: 20px;
+          font-size: ${vds ? vds.typography.sizes.lg : '20px'};
         }
       }
     `;
     document.head.appendChild(style);
-    console.log('[ClassicHUD] CSS animations added');
+    console.log('[ClassicHUD] CSS animations added with unified design system');
   }
 
   /**

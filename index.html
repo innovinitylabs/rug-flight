@@ -17,6 +17,7 @@
 		<script type="text/javascript" src="core/audio/AudioManager.js"></script>
 		<script type="text/javascript" src="core/engine/GameEngine.js"></script>
 		<script type="text/javascript" src="core/ui/UIManager.js"></script>
+		<script type="text/javascript" src="core/ui/VisualDesignSystem.js"></script>
 		<script type="text/javascript" src="core/assets/TextureManager.js"></script>
 		<script type="text/javascript" src="core/StorageManager.js"></script>
 		<script type="text/javascript" src="core/ModeController.js"></script>
@@ -208,6 +209,10 @@
 			console.log('Initializing unified Top Rug game...');
 
 			try {
+				// Initialize visual design system
+				const vds = getVisualDesignSystem();
+				vds.applyStyles();
+
 				// Get mode selector buttons
 				const modeButtons = document.querySelectorAll('.mode-button');
 
@@ -223,6 +228,10 @@
 						console.log(`Starting game in ${mode} mode...`);
 						try {
 							await initGame(mode);
+
+							// Set visual design system mode
+							const vds = getVisualDesignSystem();
+							vds.setMode(mode);
 						} catch (error) {
 							console.error('Failed to start game:', error);
 							alert('Failed to start game. Check console for details.');
