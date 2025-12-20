@@ -14,6 +14,7 @@ class ModeController {
     this.currentMode = null;
     this.previousMode = null;
     this.availableModes = ['classic', 'combat'];
+    this.modeStates = {}; // Store saved state for each mode
 
     // Transition state
     this.isTransitioning = false;
