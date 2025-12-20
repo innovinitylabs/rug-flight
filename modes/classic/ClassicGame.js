@@ -86,7 +86,7 @@ class ClassicGame {
 
     // Start the game if not already running
     if (!this.isRunning) {
-      this.startGame();
+      this.start();
     }
   }
 
