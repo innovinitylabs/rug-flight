@@ -411,12 +411,12 @@
 
 			// Check if all required elements exist
 			if (!modeSwitcher || !modeSwitchToggle || !closeButton) {
-				console.error('Mode switcher elements not found:', {
+				console.warn('Mode switcher elements not found, skipping setup:', {
 					modeSwitcher: !!modeSwitcher,
 					modeSwitchToggle: !!modeSwitchToggle,
 					closeButton: !!closeButton
 				});
-				throw new Error('Element not found');
+				return; // Skip setup instead of throwing error
 			}
 
 			// Toggle mode switcher visibility
