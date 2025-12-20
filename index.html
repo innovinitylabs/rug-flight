@@ -12,8 +12,16 @@
 		<link rel="stylesheet" type="text/css" href="shared/css/ui.css" />
 		<script type="text/javascript" src="shared/js/TweenMax.min.js"></script>
 		<script type="text/javascript" src="shared/js/three.min.js"></script>
-		<!-- Game mode selector will be loaded first, then game scripts on demand -->
-		<script type="text/javascript" src="shared/js/game-mode-controller.js"></script>
+		<!-- Unified game controller and core systems -->
+		<script type="text/javascript" src="GameController.js"></script>
+		<script type="text/javascript" src="core/audio/AudioManager.js"></script>
+		<script type="text/javascript" src="core/engine/GameEngine.js"></script>
+		<script type="text/javascript" src="core/ui/UIManager.js"></script>
+		<script type="text/javascript" src="core/assets/TextureManager.js"></script>
+		<!-- Game modes -->
+		<script type="text/javascript" src="modes/classic/ClassicGame.js"></script>
+		<script type="text/javascript" src="modes/classic/ClassicHUD.js"></script>
+		<script type="text/javascript" src="modes/classic/BannerSystem.js"></script>
 		<!--[if IE]>
 		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
 		<![endif]-->
@@ -25,13 +33,13 @@
 				<h1><span>Top</span>Rug</h1>
 				<h2>Select Game Mode</h2>
 				<div class="mode-buttons">
-					<button class="mode-button" data-mode="toprug1">
-						<div class="mode-title">Top Rug</div>
+					<button class="mode-button" data-mode="classic">
+						<div class="mode-title">Top Rug Classic</div>
 						<div class="mode-description">Classic flight game with NFT banner support</div>
 					</button>
-					<button class="mode-button" data-mode="toprug2">
-						<div class="mode-title">Top Rug: Maverick</div>
-						<div class="mode-description">Enhanced version with weapons and enemies</div>
+					<button class="mode-button" data-mode="combat" disabled>
+						<div class="mode-title">Top Rug Combat</div>
+						<div class="mode-description">Enhanced version with weapons and enemies (Coming Soon)</div>
 					</button>
 				</div>
 			</div>
@@ -148,5 +156,43 @@
 				Thanks for playing!
 			</div>
 		</div>
+
+		<!-- Game Controller Initialization -->
+		<script>
+			// Initialize game when DOM is ready
+			document.addEventListener('DOMContentLoaded', async function() {
+				console.log('Initializing unified Top Rug game...');
+
+				try {
+					// Get mode selector buttons
+					const modeButtons = document.querySelectorAll('.mode-button');
+
+					// Set up mode selection handlers
+					modeButtons.forEach(button => {
+						button.addEventListener('click', async function() {
+							const mode = this.getAttribute('data-mode');
+							if (this.disabled) {
+								console.log(`Mode ${mode} is not yet available`);
+								return;
+							}
+
+							console.log(`Starting game in ${mode} mode...`);
+							try {
+								await initGame(mode);
+							} catch (error) {
+								console.error('Failed to start game:', error);
+								alert('Failed to start game. Check console for details.');
+							}
+						});
+					});
+
+					console.log('Game initialization complete. Click a mode to start!');
+
+				} catch (error) {
+					console.error('Game initialization failed:', error);
+					alert('Game initialization failed. Check console for details.');
+				}
+			});
+		</script>
 	</body>
 </html>
