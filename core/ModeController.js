@@ -199,20 +199,36 @@ class ModeController {
    * Prepare audio for transition
    */
   async prepareAudioTransition() {
-    // Fade out current audio
-    if (this.audioManager.propellerGain) {
-      // Smooth fade out
+    console.log('[ModeController] Preparing audio transition');
+
+    // Store current audio state for potential restoration
+    this.audioStateBeforeTransition = this.audioManager.getAudioState();
+
+    // Smoothly fade out all current audio
+    if (this.audioManager.fadeAudio && this.audioManager.propellerGain) {
       const currentVolume = this.audioManager.propellerGain.gain.value;
-      this.fadeAudio(this.audioManager.propellerGain, currentVolume, 0, this.transitionDuration);
+      this.audioManager.fadeAudio(this.audioManager.propellerGain, currentVolume, 0, this.transitionDuration * 0.8);
     }
+
+    // Stop ocean and other ambient sounds
+    if (this.audioManager.isPlaying && this.audioManager.isPlaying('ocean')) {
+      this.audioManager.stop('ocean');
+    }
+
+    console.log('[ModeController] Audio transition prepared');
   }
 
   /**
    * Complete audio transition
    */
   async completeAudioTransition() {
+    console.log('[ModeController] Completing audio transition');
+
     // The new mode will handle its own audio startup
     // Audio will fade in naturally when the new mode starts
+
+    // Clean up transition state
+    this.audioStateBeforeTransition = null;
   }
 
   /**

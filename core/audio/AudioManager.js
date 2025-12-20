@@ -213,6 +213,125 @@ class AudioManager {
     });
   }
 
+  // ===== AUDIO TRANSITION METHODS =====
+
+  /**
+   * Crossfade between two audio sources
+   */
+  crossfade(fromSource, toSource, duration = 1000, fromVolume = 1, toVolume = 1) {
+    if (!fromSource || !toSource) return;
+
+    const startTime = performance.now();
+    const fade = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Fade out fromSource, fade in toSource
+      const fromVol = fromVolume * (1 - progress);
+      const toVol = toVolume * progress;
+
+      if (fromSource.gain) fromSource.gain.value = fromVol;
+      if (toSource.gain) toSource.gain.value = toVol;
+
+      if (progress < 1) {
+        requestAnimationFrame(fade);
+      }
+    };
+
+    requestAnimationFrame(fade);
+  }
+
+  /**
+   * Check if a sound is currently playing
+   */
+  isPlaying(soundId) {
+    // Check Three.js audio sources
+    if (this.listener && this.listener.children) {
+      for (let child of this.listener.children) {
+        if (child.userData && child.userData.soundId === soundId && child.isPlaying) {
+          return child.isPlaying;
+        }
+      }
+    }
+
+    // Check HTML5 audio
+    if (this.playingSounds[soundId]) {
+      return !this.playingSounds[soundId].ended;
+    }
+
+    // Check persistent propeller
+    if (soundId === 'propeller' && this.propellerSource) {
+      return true; // Persistent propeller is always "playing"
+    }
+
+    return false;
+  }
+
+  /**
+   * Get current audio state for transitions
+   */
+  getAudioState() {
+    return {
+      propellerPlaying: !!this.propellerSource,
+      propellerVolume: this.propellerGain ? this.propellerGain.gain.value : 0,
+      activeSounds: Object.keys(this.playingSounds),
+      threeJSAudioCount: this.listener ? this.listener.children.length : 0
+    };
+  }
+
+  /**
+   * Fade audio volume over time
+   */
+  fadeAudio(gainNode, startVolume, endVolume, duration) {
+    if (!gainNode) return;
+
+    const startTime = performance.now();
+    const fade = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const currentVolume = startVolume + (endVolume - startVolume) * progress;
+
+      gainNode.gain.value = currentVolume;
+
+      if (progress < 1) {
+        requestAnimationFrame(fade);
+      }
+    };
+
+    requestAnimationFrame(fade);
+  }
+
+  /**
+   * Smoothly stop all audio
+   */
+  stopAll(fadeDuration = 500) {
+    console.log('[AudioManager] Stopping all audio');
+
+    // Fade out propeller
+    if (this.propellerGain) {
+      this.fadeAudio(this.propellerGain, this.propellerGain.gain.value, 0, fadeDuration);
+    }
+
+    // Stop all Three.js audio
+    if (this.listener && this.listener.children) {
+      this.listener.children.forEach(audio => {
+        if (audio.stop) {
+          audio.stop();
+        }
+      });
+    }
+
+    // Stop HTML5 audio
+    Object.values(this.playingSounds).forEach(audio => {
+      if (!audio.ended) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    });
+
+    this.playingSounds = {};
+  }
+
   play(soundIdOrCategory, options) {
     options = options || {};
 
