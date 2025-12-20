@@ -159,7 +159,7 @@ function createAirplaneMesh() {
     utils.makeTetrahedron(backUR, backLR, frontUR, frontLR)).concat(    // side
     utils.makeTetrahedron(backUL, backLL, frontUL, frontLL)).concat(    // top
     utils.makeTetrahedron(frontUL, backUL, frontUR, backUR)).concat(    // top
-    utils.makeTetrahedron(frontLL, backLL, frontLR, backLR))            // bottom
+    utils.makeTetrahedron(frontLL, backLL, frontLR, backLR)             // bottom
   );
 
   const geomCabin = new THREE.BufferGeometry();

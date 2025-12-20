@@ -24,15 +24,19 @@ class GameEngine {
    * Initialize the game engine
    */
   async init(containerId = 'gameHolder') {
+    console.log('[GameEngine] init() called with containerId:', containerId);
+
     if (this.isInitialized) {
       console.warn('[GameEngine] Already initialized');
       return;
     }
 
-    console.log('[GameEngine] Initializing...');
+    console.log('[GameEngine] Starting initialization...');
 
     // Get the container
+    console.log('[GameEngine] Looking for container:', containerId);
     this.container = document.getElementById(containerId);
+    console.log('[GameEngine] Container found:', !!this.container);
     if (!this.container) {
       throw new Error(`Game container not found: ${containerId}`);
     }
@@ -48,6 +52,7 @@ class GameEngine {
     this.container.appendChild(this.renderer.domElement);
 
     // Initialize scene manager
+    console.log('[GameEngine] Creating sceneManager...');
     this.sceneManager = {
       scene: this.scene,
       camera: this.camera,
@@ -61,6 +66,7 @@ class GameEngine {
         }
       }
     };
+    console.log('[GameEngine] sceneManager created:', !!this.sceneManager, 'camera:', !!this.sceneManager.camera);
 
     // Handle window resize
     window.addEventListener('resize', this.handleWindowResize.bind(this), false);

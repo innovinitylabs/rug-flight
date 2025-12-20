@@ -120,7 +120,11 @@ class ClassicGame {
 
     // Initialize audio
     if (this.audioManager) {
+      console.log('[ClassicGame] About to init audio...');
+      console.log('[ClassicGame] sceneManager:', this.gameEngine.sceneManager);
+      console.log('[ClassicGame] camera:', this.gameEngine.sceneManager?.camera);
       await this.audioManager.init(this.gameEngine.sceneManager.camera);
+      console.log('[ClassicGame] Audio initialized successfully');
     }
 
     // Load sounds
