@@ -327,6 +327,134 @@ class VisualDesignSystem {
         margin-bottom: ${this.spacing.md};
       }
 
+      /* ===== TEST PANEL STYLES ===== */
+
+      .test-panel {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: ${this.colors.surface};
+        border: 2px solid ${this.colors.primary};
+        border-radius: ${this.borderRadius.lg};
+        padding: ${this.spacing.xl};
+        z-index: 10000;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: ${this.shadows.lg};
+      }
+
+      .test-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: ${this.spacing.lg};
+        border-bottom: 1px solid ${this.colors.primary};
+        padding-bottom: ${this.spacing.md};
+      }
+
+      .test-header h3 {
+        margin: 0;
+        color: ${this.colors.secondary};
+        font-family: ${this.typography.fontFamily};
+      }
+
+      .test-close {
+        background: none;
+        border: none;
+        color: ${this.colors.text};
+        font-size: ${this.typography.sizes.xl};
+        cursor: pointer;
+        padding: ${this.spacing.xs};
+        border-radius: ${this.borderRadius.sm};
+        transition: all ${this.animations.fast} ${this.animations.ease};
+      }
+
+      .test-close:hover {
+        background: ${this.colors.error};
+        color: white;
+      }
+
+      .test-controls {
+        display: flex;
+        gap: ${this.spacing.md};
+        margin-bottom: ${this.spacing.lg};
+        flex-wrap: wrap;
+      }
+
+      .test-button {
+        background: ${this.colors.primary};
+        color: white;
+        border: none;
+        border-radius: ${this.borderRadius.md};
+        padding: ${this.spacing.sm} ${this.spacing.md};
+        font-family: ${this.typography.fontFamily};
+        font-size: ${this.typography.sizes.md};
+        font-weight: ${this.typography.weights.medium};
+        cursor: pointer;
+        transition: all ${this.animations.fast} ${this.animations.ease};
+        box-shadow: ${this.shadows.sm};
+      }
+
+      .test-button:hover {
+        background: ${this.colors.secondary};
+        color: black;
+        transform: translateY(-1px);
+        box-shadow: ${this.shadows.md};
+      }
+
+      .test-button:active {
+        transform: translateY(0);
+        box-shadow: ${this.shadows.sm};
+      }
+
+      .test-results {
+        font-family: ${this.typography.fontFamily};
+        font-size: ${this.typography.sizes.sm};
+        line-height: 1.5;
+      }
+
+      .test-status {
+        color: ${this.colors.text};
+        margin-bottom: ${this.spacing.md};
+      }
+
+      .test-item {
+        margin-bottom: ${this.spacing.sm};
+        padding: ${this.spacing.sm};
+        border-radius: ${this.borderRadius.sm};
+        border-left: 4px solid ${this.colors.textMuted};
+      }
+
+      .test-item.passed {
+        border-left-color: ${this.colors.success};
+        background: rgba(104, 195, 192, 0.1);
+      }
+
+      .test-item.failed {
+        border-left-color: ${this.colors.error};
+        background: rgba(242, 83, 70, 0.1);
+      }
+
+      .test-item.running {
+        border-left-color: ${this.colors.warning};
+        background: rgba(244, 206, 147, 0.1);
+      }
+
+      .test-summary {
+        margin-top: ${this.spacing.lg};
+        padding: ${this.spacing.md};
+        background: ${this.colors.surface};
+        border-radius: ${this.borderRadius.md};
+        border: 1px solid ${this.colors.primary};
+      }
+
+      .test-summary h4 {
+        margin: 0 0 ${this.spacing.sm} 0;
+        color: ${this.colors.secondary};
+      }
+
       /* ===== RESPONSIVE DESIGN ===== */
 
       @media screen and (max-width: ${this.breakpoints.mobile}) {

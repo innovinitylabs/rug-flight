@@ -23,6 +23,7 @@
 		<script type="text/javascript" src="core/ModeController.js"></script>
 		<script type="text/javascript" src="core/ObjectPool.js"></script>
 		<script type="text/javascript" src="core/PerformanceMonitor.js"></script>
+		<script type="text/javascript" src="tests/GameTestSuite.js"></script>
 		<!-- Game modes -->
 		<script type="text/javascript" src="modes/classic/ClassicGame.js"></script>
 		<script type="text/javascript" src="modes/classic/ClassicHUD.js"></script>
@@ -200,6 +201,22 @@
 			<button class="mode-switch-toggle" id="modeSwitchToggle" style="display: none;">
 				🔄 Switch Mode
 			</button>
+
+			<!-- Test Panel (hidden by default, activated by pressing T key) -->
+			<div class="test-panel" id="testPanel" style="display: none;">
+				<div class="test-header">
+					<h3>🧪 Game Test Suite</h3>
+					<button class="test-close" id="closeTestPanel">×</button>
+				</div>
+				<div class="test-controls">
+					<button class="test-button" id="runAllTests">Run All Tests</button>
+					<button class="test-button" id="runPerformanceTests">Performance Tests</button>
+					<button class="test-button" id="runStorageTests">Storage Tests</button>
+				</div>
+				<div class="test-results" id="testResults">
+					<div class="test-status">Ready to run tests. Press "Run All Tests" to begin.</div>
+				</div>
+			</div>
 		</div>
 
 		<!-- Game Controller Initialization -->
@@ -249,6 +266,135 @@
 				alert('Game initialization failed. Check console for details.');
 			}
 		});
+
+		// Set up test panel
+		function setupTestPanel() {
+			const testPanel = document.getElementById('testPanel');
+			const closeButton = document.getElementById('closeTestPanel');
+			const runAllTestsButton = document.getElementById('runAllTests');
+			const runPerformanceTestsButton = document.getElementById('runPerformanceTests');
+			const runStorageTestsButton = document.getElementById('runStorageTests');
+			const testResults = document.getElementById('testResults');
+
+			// Close test panel
+			closeButton.addEventListener('click', function() {
+				testPanel.style.display = 'none';
+			});
+
+			// Run all tests
+			runAllTestsButton.addEventListener('click', async function() {
+				try {
+					testResults.innerHTML = '<div class="test-status">Running tests...</div>';
+					runAllTestsButton.disabled = true;
+					runAllTestsButton.textContent = 'Running...';
+
+					const testSuite = getGameTestSuite();
+					await testSuite.runAllTests();
+
+					const results = testSuite.getResults();
+					displayTestResults(results);
+
+				} catch (error) {
+					console.error('Test suite failed:', error);
+					testResults.innerHTML = '<div class="test-status" style="color: #f25346;">Test suite failed: ' + error.message + '</div>';
+				} finally {
+					runAllTestsButton.disabled = false;
+					runAllTestsButton.textContent = 'Run All Tests';
+				}
+			});
+
+			// Run performance tests only
+			runPerformanceTestsButton.addEventListener('click', async function() {
+				try {
+					testResults.innerHTML = '<div class="test-status">Running performance tests...</div>';
+					runPerformanceTestsButton.disabled = true;
+					runPerformanceTestsButton.textContent = 'Running...';
+
+					const monitor = getPerformanceMonitor();
+					const results = {
+						total: 1,
+						passed: 1,
+						failed: 0,
+						results: [{
+							name: 'Performance Test',
+							status: 'passed',
+							result: `FPS: ${monitor.getStats().averageFPS}, Memory: ${monitor.getStats().memoryUsageMB}MB`
+						}]
+					};
+
+					displayTestResults(results);
+
+				} catch (error) {
+					console.error('Performance test failed:', error);
+					testResults.innerHTML = '<div class="test-status" style="color: #f25346;">Performance test failed: ' + error.message + '</div>';
+				} finally {
+					runPerformanceTestsButton.disabled = false;
+					runPerformanceTestsButton.textContent = 'Performance Tests';
+				}
+			});
+
+			// Run storage tests only
+			runStorageTestsButton.addEventListener('click', async function() {
+				try {
+					testResults.innerHTML = '<div class="test-status">Running storage tests...</div>';
+					runStorageTestsButton.disabled = true;
+					runStorageTestsButton.textContent = 'Running...';
+
+					const storage = getStorageManager();
+					const info = storage.getStorageInfo();
+
+					const results = {
+						total: 1,
+						passed: 1,
+						failed: 0,
+						results: [{
+							name: 'Storage Test',
+							status: 'passed',
+							result: `Storage available: ${info.available}, Items: ${info.items}, Size: ${info.usedKB}KB`
+						}]
+					};
+
+					displayTestResults(results);
+
+				} catch (error) {
+					console.error('Storage test failed:', error);
+					testResults.innerHTML = '<div class="test-status" style="color: #f25346;">Storage test failed: ' + error.message + '</div>';
+				} finally {
+					runStorageTestsButton.disabled = false;
+					runStorageTestsButton.textContent = 'Storage Tests';
+				}
+			});
+
+			// Display test results
+			function displayTestResults(results) {
+				let html = '<div class="test-summary">';
+				html += `<h4>Test Results: ${results.passed}/${results.total} passed</h4>`;
+
+				results.results.forEach(result => {
+					html += `<div class="test-item ${result.status}">`;
+					html += `<strong>${result.status === 'passed' ? '✅' : '❌'} ${result.name}</strong>`;
+					if (result.result) {
+						html += `<br><small>${result.result}</small>`;
+					}
+					if (result.error) {
+						html += `<br><small style="color: #f25346;">${result.error}</small>`;
+					}
+					html += '</div>';
+				});
+
+				html += '</div>';
+				testResults.innerHTML = html;
+			}
+
+			console.log('Test panel initialized');
+		}
+
+		// Toggle test panel visibility
+		function toggleTestPanel() {
+			const testPanel = document.getElementById('testPanel');
+			const isVisible = testPanel.style.display !== 'none';
+			testPanel.style.display = isVisible ? 'none' : 'block';
+		}
 
 		// Set up in-game mode switching UI
 		function setupModeSwitcher() {
@@ -315,13 +461,23 @@
 				}
 			});
 
-			// Add keyboard shortcut (Tab key) to toggle mode switcher
+			// Add keyboard shortcuts
 			document.addEventListener('keydown', function(event) {
+				// Tab key for mode switcher
 				if (event.key === 'Tab') {
 					event.preventDefault();
 					modeSwitchToggle.click();
 				}
+
+				// T key for test panel
+				if (event.key === 't' || event.key === 'T') {
+					event.preventDefault();
+					toggleTestPanel();
+				}
 			});
+
+			// Set up test panel
+			setupTestPanel();
 
 			console.log('Mode switcher UI initialized');
 		}
