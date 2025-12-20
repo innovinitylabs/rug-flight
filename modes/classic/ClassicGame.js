@@ -3,10 +3,11 @@
  * Based on Top Rug's core gameplay with banner physics
  */
 class ClassicGame {
-  constructor(gameEngine, audioManager, textureManager) {
+  constructor(gameEngine, audioManager, textureManager, uiManager) {
     this.gameEngine = gameEngine;
     this.audioManager = audioManager;
     this.textureManager = textureManager;
+    this.uiManager = uiManager;
 
     // Game state
     this.game = null;
@@ -28,12 +29,8 @@ class ClassicGame {
     this.particlesHolder = null;
     this.bannerSystem = null;
 
-    // UI elements (will be set by HUD system)
-    this.fieldDistance = null;
-    this.energyBar = null;
-    this.replayMessage = null;
-    this.fieldLevel = null;
-    this.levelCircle = null;
+    // HUD system
+    this.hud = null;
 
     // Mouse/ touch handling
     this.mousePos = { x: 0, y: 0 };
@@ -54,6 +51,9 @@ class ClassicGame {
     // Set screen dimensions
     this.HEIGHT = window.innerHeight;
     this.WIDTH = window.innerWidth;
+
+    // Initialize HUD
+    await this.initHUD();
 
     // Initialize audio
     if (this.audioManager) {
@@ -78,6 +78,27 @@ class ClassicGame {
     this.setupControls();
 
     console.log('[ClassicGame] Initialization complete');
+  }
+
+  /**
+   * Initialize the HUD system
+   */
+  async initHUD() {
+    // Import ClassicHUD dynamically
+    let ClassicHUD;
+    if (typeof require !== 'undefined') {
+      ClassicHUD = require('./ClassicHUD.js');
+    } else {
+      ClassicHUD = window.ClassicHUD;
+    }
+
+    if (!ClassicHUD) {
+      console.error('[ClassicGame] ClassicHUD not available');
+      return;
+    }
+
+    this.hud = new ClassicHUD(this.uiManager);
+    await this.hud.init();
   }
 
   /**
@@ -180,9 +201,9 @@ class ClassicGame {
       status: "playing",
     };
 
-    // Update UI
-    if (this.fieldLevel) {
-      this.fieldLevel.innerHTML = Math.floor(this.game.level);
+    // Update HUD
+    if (this.hud) {
+      this.hud.updateLevel(this.game.level);
     }
 
     // Make banner and ropes visible again when game resets
@@ -256,8 +277,8 @@ class ClassicGame {
           Math.floor(this.game.distance) > this.game.levelLastUpdate) {
         this.game.levelLastUpdate = Math.floor(this.game.distance);
         this.game.level++;
-        if (this.fieldLevel) {
-          this.fieldLevel.innerHTML = Math.floor(this.game.level);
+        if (this.hud) {
+          this.hud.updateLevel(this.game.level);
         }
 
         this.game.targetBaseSpeed = this.game.initSpeed + this.game.incrementSpeedByLevel * this.game.level;
@@ -265,8 +286,12 @@ class ClassicGame {
 
       this.updatePlane();
       this.updateBanner();
-      this.updateDistance();
-      this.updateEnergy();
+
+      // Update HUD
+      if (this.hud) {
+        this.hud.updateDistance(this.game.distance, this.game.distanceForLevelUpdate);
+        this.hud.updateEnergy(this.game.energy, this.game.energy < 30);
+      }
 
       this.game.baseSpeed += (this.game.targetBaseSpeed - this.game.baseSpeed) * deltaTime * 0.02;
       this.game.speed = this.game.baseSpeed * this.game.planeSpeed;
@@ -291,7 +316,7 @@ class ClassicGame {
       if (this.airplane && this.airplane.mesh && this.airplane.mesh.position.y < -200) {
         // Hide airplane when it falls below screen
         this.airplane.mesh.visible = false;
-        this.showReplay();
+        if (this.hud) this.hud.showReplay();
         this.game.status = "waitingReplay";
       }
     } else if (this.game && this.game.status === "waitingReplay") {
@@ -354,14 +379,14 @@ class ClassicGame {
   handleMouseUp() {
     if (this.game && this.game.status === "waitingReplay") {
       this.resetGame();
-      this.hideReplay();
+      if (this.hud) this.hud.hideReplay();
     }
   }
 
   handleTouchEnd() {
     if (this.game && this.game.status === "waitingReplay") {
       this.resetGame();
-      this.hideReplay();
+      if (this.hud) this.hud.hideReplay();
     }
   }
 
@@ -414,17 +439,12 @@ class ClassicGame {
   }
 
   /**
-   * Update UI elements
+   * Update UI elements via HUD
    */
   updateUI() {
-    if (!this.game) return;
-
-    if (this.fieldLevel) {
-      this.fieldLevel.innerHTML = Math.floor(this.game.level);
+    if (this.hud && this.game) {
+      this.hud.update(this.game);
     }
-
-    this.updateDistance();
-    this.updateEnergy();
   }
 
   /**
@@ -566,34 +586,13 @@ class ClassicGame {
   }
 
   /**
-   * Update distance display
-   */
-  updateDistance() {
-    if (this.fieldDistance && this.game) {
-      this.fieldDistance.innerHTML = Math.floor(this.game.distance);
-      var d = 502 * (1 - (this.game.distance % this.game.distanceForLevelUpdate) / this.game.distanceForLevelUpdate);
-      if (this.levelCircle) {
-        this.levelCircle.setAttribute("stroke-dashoffset", d);
-      }
-    }
-  }
-
-  /**
-   * Update energy display
+   * Update energy (called by HUD system)
    */
   updateEnergy() {
-    if (!this.game || !this.energyBar) return;
+    if (!this.game) return;
 
     this.game.energy -= this.game.speed * this.deltaTime * this.game.ratioSpeedEnergy;
     this.game.energy = Math.max(0, this.game.energy);
-    this.energyBar.style.right = (100 - this.game.energy) + "%";
-    this.energyBar.style.backgroundColor = (this.game.energy < 50) ? "#f25346" : "#68c3c0";
-
-    if (this.game.energy < 30) {
-      this.energyBar.style.animationName = "blinking";
-    } else {
-      this.energyBar.style.animationName = "none";
-    }
 
     if (this.game.energy < 1) {
       this.game.status = "gameover";
@@ -674,23 +673,6 @@ class ClassicGame {
     }
   }
 
-  /**
-   * Show replay message
-   */
-  showReplay() {
-    if (this.replayMessage) {
-      this.replayMessage.style.display = "block";
-    }
-  }
-
-  /**
-   * Hide replay message
-   */
-  hideReplay() {
-    if (this.replayMessage) {
-      this.replayMessage.style.display = "none";
-    }
-  }
 
   /**
    * Normalize value function
@@ -709,6 +691,12 @@ class ClassicGame {
    */
   dispose() {
     console.log('[ClassicGame] Disposing resources');
+
+    // Dispose HUD
+    if (this.hud) {
+      this.hud.dispose();
+      this.hud = null;
+    }
 
     // Dispose banner system
     if (this.bannerSystem) {
