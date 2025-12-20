@@ -26,9 +26,7 @@ class ClassicGame {
     this.coinsHolder = null;
     this.ennemiesHolder = null;
     this.particlesHolder = null;
-    this.banner = null;
-    this.ropeLeft = null;
-    this.ropeRight = null;
+    this.bannerSystem = null;
 
     // UI elements (will be set by HUD system)
     this.fieldDistance = null;
@@ -69,7 +67,7 @@ class ClassicGame {
     this.createScene();
     this.createLights();
     this.createPlane();
-    this.createBanner();
+    await this.createBannerSystem();
     this.createSea();
     this.createSky();
     this.createCoins();
@@ -187,9 +185,10 @@ class ClassicGame {
       this.fieldLevel.innerHTML = Math.floor(this.game.level);
     }
 
-    // Make ropes visible again when game resets
-    if (this.ropeLeft) this.ropeLeft.visible = true;
-    if (this.ropeRight) this.ropeRight.visible = true;
+    // Make banner and ropes visible again when game resets
+    if (this.bannerSystem) {
+      this.bannerSystem.setVisible(true);
+    }
 
     // Make airplane visible again when game resets
     if (this.airplane && this.airplane.mesh) {
@@ -265,6 +264,7 @@ class ClassicGame {
       }
 
       this.updatePlane();
+      this.updateBanner();
       this.updateDistance();
       this.updateEnergy();
 
@@ -281,8 +281,9 @@ class ClassicGame {
       }
 
       // Hide ropes when game ends
-      if (this.ropeLeft) this.ropeLeft.visible = false;
-      if (this.ropeRight) this.ropeRight.visible = false;
+      if (this.bannerSystem) {
+        this.bannerSystem.setRopesVisible(false);
+      }
 
       // Update banner animation during gameover
       this.updatePlane();
@@ -295,8 +296,9 @@ class ClassicGame {
       }
     } else if (this.game && this.game.status === "waitingReplay") {
       // Keep ropes hidden during replay wait
-      if (this.ropeLeft) this.ropeLeft.visible = false;
-      if (this.ropeRight) this.ropeRight.visible = false;
+      if (this.bannerSystem) {
+        this.bannerSystem.setRopesVisible(false);
+      }
 
       // Keep airplane hidden during replay wait
       if (this.airplane && this.airplane.mesh) {
@@ -483,80 +485,24 @@ class ClassicGame {
   }
 
   /**
-   * Create the banner
+   * Create the banner system
    */
-  async createBanner() {
-    // Load placeholder texture first
-    let bannerTexture;
-    if (this.textureManager) {
-      try {
-        bannerTexture = await this.textureManager.loadPlaceholderTexture();
-      } catch (error) {
-        console.warn('[ClassicGame] Failed to load placeholder texture:', error);
-        // Create a basic material without texture
-        bannerTexture = null;
-      }
+  async createBannerSystem() {
+    // Import BannerSystem dynamically to avoid circular dependencies
+    let BannerSystem;
+    if (typeof require !== 'undefined') {
+      BannerSystem = require('./BannerSystem.js');
+    } else {
+      BannerSystem = window.BannerSystem;
     }
 
-    // Create banner geometry
-    var geomBanner = new THREE.PlaneGeometry(50, 30, 10, 6);
-
-    // Create material
-    var matBanner = new THREE.MeshLambertMaterial({
-      map: bannerTexture,
-      emissiveMap: bannerTexture,
-      emissive: new THREE.Color(0x999999),
-      transparent: false,
-      side: THREE.DoubleSide,
-      color: 0xffffff
-    });
-
-    if (!bannerTexture) {
-      // Fallback to colored material
-      matBanner.color.setHex(0xff0000);
+    if (!BannerSystem) {
+      console.error('[ClassicGame] BannerSystem not available');
+      return;
     }
 
-    this.banner = new THREE.Mesh(geomBanner, matBanner);
-    this.banner.castShadow = true;
-    this.banner.receiveShadow = true;
-    this.banner.position.set(0, this.game.planeDefaultHeight, -80);
-    this.gameEngine.sceneManager.scene.add(this.banner);
-
-    // Create ropes connecting plane to banner
-    this.createRopes();
-  }
-
-  /**
-   * Create ropes connecting plane to banner
-   */
-  createRopes() {
-    if (!this.airplane || !this.banner) return;
-
-    var ropeMaterial = new THREE.LineBasicMaterial({color: Colors.brownDark, linewidth: 4});
-
-    // Left rope
-    var ropeLeftGeometry = new THREE.BufferGeometry();
-    var ropeLeftPositions = new Float32Array([
-      0, 0, 0,
-      0, 0, -20,
-      0, 0, -40,
-      0, 0, -60
-    ]);
-    ropeLeftGeometry.setAttribute('position', new THREE.BufferAttribute(ropeLeftPositions, 3));
-    this.ropeLeft = new THREE.Line(ropeLeftGeometry, ropeMaterial);
-    this.gameEngine.sceneManager.scene.add(this.ropeLeft);
-
-    // Right rope
-    var ropeRightGeometry = new THREE.BufferGeometry();
-    var ropeRightPositions = new Float32Array([
-      0, 0, 0,
-      0, 0, -20,
-      0, 0, -40,
-      0, 0, -60
-    ]);
-    ropeRightGeometry.setAttribute('position', new THREE.BufferAttribute(ropeRightPositions, 3));
-    this.ropeRight = new THREE.Line(ropeRightGeometry, ropeMaterial);
-    this.gameEngine.sceneManager.scene.add(this.ropeRight);
+    this.bannerSystem = new BannerSystem(this.gameEngine, this.textureManager, this.airplane);
+    await this.bannerSystem.init();
   }
 
   /**
@@ -716,155 +662,15 @@ class ClassicGame {
       this.airplane.pilot.updateHairs();
     }
 
-    // Update banner position and ropes
-    this.updateBanner();
+    // Banner is updated separately via BannerSystem
   }
 
   /**
-   * Update banner physics and ropes
+   * Update banner via BannerSystem
    */
   updateBanner() {
-    if (!this.banner || !this.airplane || !this.game) return;
-
-    // When game is over or waiting for replay, animate banner to center screen
-    if (this.game.status === "gameover" || this.game.status === "waitingReplay") {
-      // Target position: center of screen, above replay message, closer to camera
-      var bannerTargetX = 0; // Center horizontally
-      var bannerTargetY = 150; // Above center, above replay message
-      var bannerTargetZ = 100; // Closer to camera
-
-      // Smoothly animate banner to target position
-      var animationSpeed = 0.05;
-      this.banner.position.x += (bannerTargetX - this.banner.position.x) * this.deltaTime * animationSpeed;
-      this.banner.position.y += (bannerTargetY - this.banner.position.y) * this.deltaTime * animationSpeed;
-      this.banner.position.z += (bannerTargetZ - this.banner.position.z) * this.deltaTime * animationSpeed;
-
-      // Rotate banner to face camera
-      var targetRotationY = Math.PI;
-      var rotationSpeed = 0.05;
-      this.banner.rotation.y += (targetRotationY - this.banner.rotation.y) * this.deltaTime * rotationSpeed;
-      this.banner.rotation.x += (0 - this.banner.rotation.x) * this.deltaTime * rotationSpeed;
-      this.banner.rotation.z += (0 - this.banner.rotation.z) * this.deltaTime * rotationSpeed;
-    } else {
-      // Normal gameplay: banner follows plane
-      // Calculate attachment point at the tail of the plane
-      var tailLocalPos = new THREE.Vector3(-10, 5, 0); // Tail position in plane's local space
-
-      // Transform tail position to world space
-      var worldTailPos = new THREE.Vector3();
-      worldTailPos.copy(tailLocalPos);
-      worldTailPos.applyMatrix4(this.airplane.mesh.matrixWorld);
-
-      // Banner offset behind the tail
-      var bannerOffset = 55;
-      var backwardDir = new THREE.Vector3(-1, 0, 0);
-      backwardDir.applyQuaternion(this.airplane.mesh.quaternion);
-
-      var bannerTargetPos = worldTailPos.clone().add(backwardDir.clone().multiplyScalar(bannerOffset));
-
-      // Smooth movement
-      var followSpeed = 0.6;
-      this.banner.position.lerp(bannerTargetPos, followSpeed * this.deltaTime * 60);
-
-      // Banner rotation to follow plane
-      var targetYaw = this.airplane.mesh.rotation.y + Math.PI;
-      var yawDiff = targetYaw - this.banner.rotation.y;
-      while (yawDiff > Math.PI) yawDiff -= 2 * Math.PI;
-      while (yawDiff < -Math.PI) yawDiff += 2 * Math.PI;
-      this.banner.rotation.y += yawDiff * 0.15;
-
-      // Simple tilt based on movement
-      var verticalVelocity = this.game.planeCollisionSpeedY || 0;
-      var rollTilt = verticalVelocity * 0.008 * -1;
-      var maxRoll = Math.PI / 4;
-      rollTilt = Math.max(-maxRoll, Math.min(maxRoll, rollTilt));
-      this.banner.rotation.z += (rollTilt - this.banner.rotation.z) * 0.15;
-
-      // Update ropes
-      this.updateRopes(worldTailPos, this.banner);
-    }
-
-    // Banner fluttering animation
-    this.updateBannerFlutter();
-  }
-
-  /**
-   * Update banner ropes
-   */
-  updateRopes(worldTailPos, banner) {
-    if (!this.ropeLeft || !this.ropeRight || !banner) return;
-
-    // Calculate banner corner positions in world space
-    var topLeftLocal = new THREE.Vector3(-22, 13, 0);
-    var topRightLocal = new THREE.Vector3(22, 13, 0);
-
-    var topLeftWorld = new THREE.Vector3();
-    var topRightWorld = new THREE.Vector3();
-    topLeftWorld.copy(topLeftLocal);
-    topRightWorld.copy(topRightLocal);
-    topLeftWorld.applyMatrix4(banner.matrixWorld);
-    topRightWorld.applyMatrix4(banner.matrixWorld);
-
-    // Update left rope
-    var segments = 4;
-    var leftPositions = this.ropeLeft.geometry.attributes.position.array;
-    for (var i = 0; i < segments; i++) {
-      var t = i / (segments - 1);
-      var point = new THREE.Vector3().lerpVectors(worldTailPos, topLeftWorld, t);
-      if (i > 0 && i < segments - 1) {
-        point.y -= Math.sin(t * Math.PI) * 2;
-      }
-      leftPositions[i * 3] = point.x;
-      leftPositions[i * 3 + 1] = point.y;
-      leftPositions[i * 3 + 2] = point.z;
-    }
-    this.ropeLeft.geometry.attributes.position.needsUpdate = true;
-
-    // Update right rope
-    var rightPositions = this.ropeRight.geometry.attributes.position.array;
-    for (var i = 0; i < segments; i++) {
-      var t = i / (segments - 1);
-      var point = new THREE.Vector3().lerpVectors(worldTailPos, topRightWorld, t);
-      if (i > 0 && i < segments - 1) {
-        point.y -= Math.sin(t * Math.PI) * 2;
-      }
-      rightPositions[i * 3] = point.x;
-      rightPositions[i * 3 + 1] = point.y;
-      rightPositions[i * 3 + 2] = point.z;
-    }
-    this.ropeRight.geometry.attributes.position.needsUpdate = true;
-  }
-
-  /**
-   * Update banner fluttering animation
-   */
-  updateBannerFlutter() {
-    if (!this.banner) return;
-
-    var time = Date.now() * 0.001;
-    var flutterIntensity = this.game.status === "playing" ? (2 + this.game.planeSpeed * 0.5) : 2.5;
-
-    var geometry = this.banner.geometry;
-    if (geometry.attributes && geometry.attributes.position) {
-      var positions = geometry.attributes.position.array;
-      for (var i = 0; i < positions.length; i += 3) {
-        var x = positions[i];
-        var y = positions[i + 1];
-
-        var waveAmplitude = this.game.status === "playing" ?
-          Math.max(0, (x + 22) / 47) * flutterIntensity : flutterIntensity;
-
-        var mainWaveSpeed = 11.0;
-        var waveY = Math.sin(time * mainWaveSpeed - x * 0.2) * waveAmplitude;
-        var waveX = Math.cos(time * 7.0 + y * 0.15) * flutterIntensity * 0.2;
-        var waveZ = Math.sin(time * 3.2 + y * 0.1) * flutterIntensity * 0.1;
-
-        positions[i] = x + waveX;
-        positions[i + 1] = y + waveY;
-        positions[i + 2] = positions[i + 2] + waveZ;
-      }
-      geometry.attributes.position.needsUpdate = true;
-      geometry.computeVertexNormals();
+    if (this.bannerSystem) {
+      this.bannerSystem.update(this.deltaTime, this.game ? this.game.status : 'playing');
     }
   }
 
@@ -903,6 +709,12 @@ class ClassicGame {
    */
   dispose() {
     console.log('[ClassicGame] Disposing resources');
+
+    // Dispose banner system
+    if (this.bannerSystem) {
+      this.bannerSystem.dispose();
+      this.bannerSystem = null;
+    }
 
     // Clear object pools
     this.ennemiesPool = [];
