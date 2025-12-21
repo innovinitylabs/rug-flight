@@ -21,7 +21,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.type = 'text/css';
-      link.href = 'games/top-rug-unified/css/styles.css';
+      link.href = 'games/top-rug/css/styles.css';
       document.head.appendChild(link);
 
       // Load fonts
@@ -72,6 +72,18 @@
 
       // Show mode selection screen
       modeScreen.classList.add('visible');
+
+      // Force visibility with inline styles to override CSS conflicts
+      modeScreen.style.display = 'flex';
+      modeScreen.style.position = 'fixed';
+      modeScreen.style.top = '0';
+      modeScreen.style.left = '0';
+      modeScreen.style.width = '100%';
+      modeScreen.style.height = '100%';
+      modeScreen.style.zIndex = '9999';
+      modeScreen.style.pointerEvents = 'auto';
+      modeScreen.style.background = 'rgba(0,0,0,0.6)';
+
       console.log('[Game Controller] Mode selection screen ready');
     },
 
@@ -83,6 +95,8 @@
       var modeScreen = document.getElementById('mode-selection-screen');
       if (modeScreen) {
         modeScreen.classList.remove('visible');
+        modeScreen.style.display = 'none';
+        modeScreen.style.pointerEvents = 'none';
       }
 
       // Load appropriate CSS for the selected mode
@@ -102,31 +116,42 @@
         return;
       }
 
-      // Load the appropriate game script
-      var script = document.createElement('script');
-      script.src = gameScriptPath;
-      script.onload = function() {
-        console.log('[Game Controller] Game loaded for mode:', mode);
+      // Load the MovementModel first, then the game script
+      var movementScript = document.createElement('script');
+      movementScript.src = 'core/MovementModel.js';
+      movementScript.onload = function() {
+        console.log('[Game Controller] MovementModel loaded');
 
-        // Show intro screen
-        var introScreen = document.getElementById('intro-screen');
-        if (introScreen) {
-          introScreen.classList.add('visible');
-        }
+        // Now load the game script
+        var script = document.createElement('script');
+        script.src = gameScriptPath;
+        script.onload = function() {
+          console.log('[Game Controller] Game loaded for mode:', mode);
 
-        // Initialize the game (different namespaces for different modes)
-        if (mode === 'endless' && typeof window.Aviator1Game !== 'undefined') {
-          window.Aviator1Game.init();
-        } else if (mode === 'combat' && typeof window.Aviator2Game !== 'undefined') {
-          window.Aviator2Game.init();
-        } else {
-          console.error('[Game Controller] Game namespace not found for mode:', mode);
-        }
+          // Show intro screen
+          var introScreen = document.getElementById('intro-screen');
+          if (introScreen) {
+            introScreen.classList.add('visible');
+          }
+
+          // Initialize the game (different namespaces for different modes)
+          if (mode === 'endless' && typeof window.Aviator1Game !== 'undefined') {
+            window.Aviator1Game.init();
+          } else if (mode === 'combat' && typeof window.Aviator2Game !== 'undefined') {
+            window.Aviator2Game.init();
+          } else {
+            console.error('[Game Controller] Game namespace not found for mode:', mode);
+          }
+        };
+        script.onerror = function() {
+          console.error('[Game Controller] Failed to load game script for mode:', mode, 'path:', gameScriptPath);
+        };
+        document.head.appendChild(script);
       };
-      script.onerror = function() {
-        console.error('[Game Controller] Failed to load game script for mode:', mode, 'path:', gameScriptPath);
+      movementScript.onerror = function() {
+        console.error('[Game Controller] Failed to load MovementModel script');
       };
-      document.head.appendChild(script);
+      document.head.appendChild(movementScript);
     },
 
     loadModeCSS: function(mode) {
@@ -187,6 +212,20 @@
         if (combatUI) combatUI.style.display = 'flex';
         if (combatWorld) combatWorld.style.display = 'block';
         if (combatReplay) combatReplay.style.display = 'block';
+      }
+
+      // Enforce world layering with z-index and pointer-events
+      if (unifiedWorld) {
+        unifiedWorld.style.zIndex = '0';
+        unifiedWorld.style.pointerEvents = 'none';
+      }
+      if (endlessWorld) {
+        endlessWorld.style.zIndex = mode === 'endless' ? '10' : '0';
+        endlessWorld.style.pointerEvents = mode === 'endless' ? 'auto' : 'none';
+      }
+      if (combatWorld) {
+        combatWorld.style.zIndex = mode === 'combat' ? '10' : '0';
+        combatWorld.style.pointerEvents = mode === 'combat' ? 'auto' : 'none';
       }
     },
 
