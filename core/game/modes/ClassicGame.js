@@ -58,7 +58,7 @@
     async createBannerSystem() {
       // Import BannerSystem dynamically
       if (typeof window.BannerSystem !== 'undefined') {
-        this.bannerSystem = new window.BannerSystem(this.engine.scene, this.engine.textureManager);
+        this.bannerSystem = new window.BannerSystem(this.engine, this.engine.textureManager, this.engine.airplane);
         await this.bannerSystem.init();
         console.log('[ClassicGame] Banner system initialized');
       } else {

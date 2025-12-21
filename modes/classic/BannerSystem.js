@@ -81,7 +81,7 @@ class BannerSystem {
       this.banner.position.set(0, 100, -80); // Default position
     }
 
-    this.gameEngine.sceneManager.scene.add(this.banner);
+    this.gameEngine.scene.add(this.banner);
 
     // Store original vertices for fluttering animation
     this.originalVertices = [];
@@ -120,7 +120,7 @@ class BannerSystem {
     ]);
     ropeLeftGeometry.setAttribute('position', new THREE.BufferAttribute(ropeLeftPositions, 3));
     this.ropeLeft = new THREE.Line(ropeLeftGeometry, ropeMaterial);
-    this.gameEngine.sceneManager.scene.add(this.ropeLeft);
+    this.gameEngine.scene.add(this.ropeLeft);
 
     // Right rope
     var ropeRightGeometry = new THREE.BufferGeometry();
@@ -132,7 +132,7 @@ class BannerSystem {
     ]);
     ropeRightGeometry.setAttribute('position', new THREE.BufferAttribute(ropeRightPositions, 3));
     this.ropeRight = new THREE.Line(ropeRightGeometry, ropeMaterial);
-    this.gameEngine.sceneManager.scene.add(this.ropeRight);
+    this.gameEngine.scene.add(this.ropeRight);
 
     console.log('[BannerSystem] Ropes created and added to scene');
   }
@@ -506,14 +506,14 @@ class BannerSystem {
     console.log('[BannerSystem] Disposing resources');
 
     // Remove from scene
-    if (this.banner && this.gameEngine.sceneManager.scene) {
-      this.gameEngine.sceneManager.scene.remove(this.banner);
+    if (this.banner && this.gameEngine.scene) {
+      this.gameEngine.scene.remove(this.banner);
     }
-    if (this.ropeLeft && this.gameEngine.sceneManager.scene) {
-      this.gameEngine.sceneManager.scene.remove(this.ropeLeft);
+    if (this.ropeLeft && this.gameEngine.scene) {
+      this.gameEngine.scene.remove(this.ropeLeft);
     }
-    if (this.ropeRight && this.gameEngine.sceneManager.scene) {
-      this.gameEngine.sceneManager.scene.remove(this.ropeRight);
+    if (this.ropeRight && this.gameEngine.scene) {
+      this.gameEngine.scene.remove(this.ropeRight);
     }
 
     // Dispose geometries and materials
