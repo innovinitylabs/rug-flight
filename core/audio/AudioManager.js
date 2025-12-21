@@ -697,8 +697,10 @@ class AudioManager {
 }
 
 // Export for use in other modules
+console.log('[AudioManager] Exporting to global scope');
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = AudioManager;
 } else if (typeof window !== 'undefined') {
   window.AudioManager = AudioManager;
+  console.log('[AudioManager] Successfully exported to window.AudioManager');
 }

@@ -400,8 +400,10 @@ class GameEngine {
 }
 
 // Export for use in other modules
+console.log('[GameEngine] Exporting to global scope');
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = GameEngine;
 } else if (typeof window !== 'undefined') {
   window.GameEngine = GameEngine;
+  console.log('[GameEngine] Successfully exported to window.GameEngine');
 }

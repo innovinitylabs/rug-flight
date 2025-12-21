@@ -601,15 +601,24 @@ if (typeof module !== 'undefined' && module.exports) {
   window.getGameController = getGameController;
   window.initGame = initGame;
 
-  // Auto-initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeGame);
-  } else {
+  // Auto-initialize when window is fully loaded (all scripts loaded)
+  if (document.readyState === 'complete') {
     initializeGame();
+  } else {
+    window.addEventListener('load', initializeGame);
   }
 
   async function initializeGame() {
     console.log('[GameController] DOM ready, initializing unified game...');
+    console.log('[GameController] Checking global objects...');
+    console.log('window.AudioManager:', typeof window.AudioManager);
+    console.log('window.GameEngine:', typeof window.GameEngine);
+    console.log('window.UIManager:', typeof window.UIManager);
+    console.log('window.TextureManager:', typeof window.TextureManager);
+    console.log('window.StorageManager:', typeof window.StorageManager);
+    console.log('window.ModeController:', typeof window.ModeController);
+    console.log('window.ClassicGame:', typeof window.ClassicGame);
+    console.log('window.CombatGame:', typeof window.CombatGame);
 
     try {
       const controller = getGameController();
