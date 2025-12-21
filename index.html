@@ -1,11 +1,8 @@
 <html>
 	<head>
-	<meta charset="UTF-8" />
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-	<meta http-equiv="Pragma" content="no-cache">
-	<meta http-equiv="Expires" content="0">
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>Top Rug | NFT Flight Game</title>
 		<meta name="description" content="Fly through the skies with your NFT banner! Top Rug - collect coins, avoid obstacles, and showcase your NFTs." />
 		<meta name="keywords" content="three.js, webgl, tutorial, game, 3d, animation, airplane, web development, javascript" />
@@ -15,35 +12,8 @@
 		<link rel="stylesheet" type="text/css" href="shared/css/ui.css" />
 		<script type="text/javascript" src="shared/js/TweenMax.min.js"></script>
 		<script type="text/javascript" src="shared/js/three.min.js"></script>
-
-		<!-- Core Dependencies (loaded first) -->
-		<script type="text/javascript" src="core/audio/AudioManager.js?v=20241221"></script>
-		<script type="text/javascript" src="core/engine/GameEngine.js?v=20241221"></script>
-		<script type="text/javascript" src="core/ui/UIManager.js?v=20241221"></script>
-		<script type="text/javascript" src="core/ui/VisualDesignSystem.js?v=20241221"></script>
-		<script type="text/javascript" src="core/assets/TextureManager.js?v=20241221"></script>
-		<script type="text/javascript" src="core/StorageManager.js?v=20241221"></script>
-		<script type="text/javascript" src="core/ModeController.js?v=20241221"></script>
-		<script type="text/javascript" src="core/ObjectPool.js?v=20241221"></script>
-		<script type="text/javascript" src="core/PerformanceMonitor.js?v=20241221"></script>
-
-		<!-- Game Mode Dependencies -->
-		<script type="text/javascript" src="modes/classic/Airplane.js?v=20241221"></script>
-		<script type="text/javascript" src="modes/combat/CombatAirplane.js?v=20241221"></script>
-		<script type="text/javascript" src="modes/combat/CombatProjectile.js?v=20241221"></script>
-		<script type="text/javascript" src="modes/combat/CombatEnemy.js?v=20241221"></script>
-		<script type="text/javascript" src="modes/combat/CombatCoin.js?v=20241221"></script>
-
-		<!-- Game Modes -->
-		<script type="text/javascript" src="modes/classic/BannerSystem.js?v=20241221"></script>
-		<script type="text/javascript" src="modes/classic/ClassicGame.js?v=20241221"></script>
-		<script type="text/javascript" src="modes/combat/CombatGame.js?v=20241221"></script>
-
-		<!-- Main Game Controller (loaded last, after all dependencies) -->
-		<script type="text/javascript" src="GameController.js?v=20241221"></script>
-
-		<!-- Tests (optional) -->
-		<script type="text/javascript" src="tests/GameTestSuite.js?v=20241221"></script>
+		<!-- Game mode selector will be loaded first, then game scripts on demand -->
+		<script type="text/javascript" src="shared/js/game-mode-controller.js"></script>
 		<!--[if IE]>
 		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
 		<![endif]-->
@@ -55,81 +25,128 @@
 				<h1><span>Top</span>Rug</h1>
 				<h2>Select Game Mode</h2>
 				<div class="mode-buttons">
-					<button class="mode-button" data-mode="classic">
-						<div class="mode-title">Top Rug Classic</div>
+					<button class="mode-button" data-mode="toprug1">
+						<div class="mode-title">Top Rug</div>
 						<div class="mode-description">Classic flight game with NFT banner support</div>
 					</button>
-					<button class="mode-button" data-mode="combat">
-						<div class="mode-title">Top Rug Combat</div>
+					<button class="mode-button" data-mode="toprug2">
+						<div class="mode-title">Top Rug: Maverick</div>
 						<div class="mode-description">Enhanced version with weapons and enemies</div>
 					</button>
 				</div>
 			</div>
 		</div>
 
-		<!-- Unified Game Container -->
-		<div class="game-holder unified-game" id="gameHolder">
-			<!-- Game canvas will be inserted here by GameEngine -->
-
-			<!-- HUD Elements for Classic Mode -->
+		<!-- Top Rug Game Container -->
+		<div class="game-holder game-holder--toprug1" id="gameHolderTopRug1" style="display: none;">
 			<div class="header">
 				<h1><span>Top</span>Rug</h1>
 				<h2>Classic Edition</h2>
-				<div class="score" id="score">
-					<div class="score__content" id="level">
+				<div class="score" id="score-toprug1">
+					<div class="score__content" id="level-toprug1">
 						<div class="score__label">level</div>
-						<div class="score__value score__value--level" id="levelValue">1</div>
-						<svg class="level-circle" id="levelCircle" viewbox="0 0 200 200">
-							<circle id="levelCircleBgr" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
-							<circle id="levelCircleStroke" r="80" cx="100" cy="100" fill="none" stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
+						<div class="score__value score__value--level" id="levelValue-toprug1">1</div>
+						<svg class="level-circle" id="levelCircle-toprug1" viewbox="0 0 200 200">
+							<circle id="levelCircleBgr-toprug1" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
+							<circle id="levelCircleStroke-toprug1" r="80" cx="100" cy="100" fill="none" #f25346 stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
 						</svg>
 					</div>
-					<div class="score__content" id="dist">
+					<div class="score__content" id="dist-toprug1">
 						<div class="score__label">distance</div>
-						<div class="score__value score__value--dist" id="distValue">000</div>
+						<div class="score__value score__value--dist" id="distValue-toprug1">000</div>
 					</div>
-					<div class="score__content" id="energy">
+					<div class="score__content" id="energy-toprug1">
 						<div class="score__label">energy</div>
-						<div class="score__value score__value--energy" id="energyValue">
-							<div class="energy-bar" id="energyBar"></div>
+						<div class="score__value score__value--energy" id="energyValue-toprug1">
+							<div class="energy-bar" id="energyBar-toprug1"></div>
 						</div>
 					</div>
 				</div>
 			</div>
+			<div class="world" id="world-toprug1"></div>
+			<div class="message message--replay" id="replayMessage-toprug1">Click to Replay</div>
+			<div class="message message--instructions" id="instructions-toprug1">Grab the blue pills<span>avoid the red ones</span></div>
+		</div>
 
-			<!-- HUD Elements for Combat Mode -->
-			<div class="header header--combat" style="display: none;">
-				<h1><span>Top</span>Rug</h1>
-				<h2>Combat Edition</h2>
-				<div class="score" id="score-combat">
-					<div class="score__content" id="level-combat">
+		<!-- Top Rug: Maverick Game Container -->
+		<div class="game-holder game-holder--toprug2" id="gameHolderTopRug2" style="display: none;">
+			<div class="header">
+				<div class="header__title-wrap">
+					<h1 class="header__title">
+						<span class="header__title-pre">Top Rug:</span>
+						<span class="header__title-main">Maverick</span>
+					</h1>
+					<h2 class="header__tagline">Enhanced flight combat with weapons and enemies</h2>
+				</div>
+				<div class="score" id="score-toprug2">
+					<div class="score__content" id="level-toprug2">
 						<div class="score__label">level</div>
-						<div class="score__value score__value--level" id="levelValue-combat">1</div>
-						<svg class="level-circle" id="levelCircle-combat" viewbox="0 0 200 200">
-							<circle id="levelCircleBgr-combat" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
-							<circle id="levelCircleStroke-combat" r="80" cx="100" cy="100" fill="none" stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
+						<div class="score__value score__value--level" id="levelValue-toprug2">1</div>
+						<svg class="level-circle" id="levelCircle-toprug2" viewbox="0 0 200 200">
+							<circle id="levelCircleBgr-toprug2" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
+							<circle id="levelCircleStroke-toprug2" r="80" cx="100" cy="100" fill="none" #f25346 stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
 						</svg>
 					</div>
-					<div class="score__content" id="dist-combat">
+					<div class="score__content score__content--fixed" id="dist-toprug2">
 						<div class="score__label">distance</div>
-						<div class="score__value score__value--dist" id="distValue-combat">0</div>
+						<div class="score__value score__value--dist" id="distValue-toprug2">0</div>
 					</div>
-					<div class="score__content" id="coins">
+					<div class="score__content score__content--fixed" id="coins-toprug2">
 						<div class="score__label">coins</div>
-						<div class="score__value score__value--dist" id="coinsValue">0</div>
+						<div class="score__value score__value--dist" id="coinsValue-toprug2">0</div>
 					</div>
-					<div class="score__content" id="lifes">
+					<div class="score__content score__content--fixed" id="lifes-toprug2">
 						<div class="score__label">life</div>
-						<img class="heart" src="modes/combat/assets/images/hearts.png" id="heart-1"/>
-						<img class="heart" src="modes/combat/assets/images/hearts.png" id="heart-2"/>
-						<img class="heart" src="modes/combat/assets/images/hearts.png" id="heart-3"/>
+						<div class="score__value score__value--lifes">
+							<img class="heart" src="games/top-rug-maverick/assets/images/heart.png"/>
+							<img class="heart" src="games/top-rug-maverick/assets/images/heart.png"/>
+							<img class="heart" src="games/top-rug-maverick/assets/images/heart.png"/>
+						</div>
 					</div>
 				</div>
 			</div>
-
-			<!-- Shared UI Elements -->
-			<div class="message message--replay" id="replayMessage">Click to Replay</div>
-			<div class="message message--instructions" id="instructions">Use mouse to fly<span>collect coins, avoid obstacles</span></div>
+			<div class="world" id="world-toprug2">
+				<canvas id="threejs-canvas"></canvas>
+			</div>
+			<div class="message--replay" id="replayMessage-toprug2">
+				Click to Replay
+			</div>
+			<div id="error">
+				<p><b>Error</b></p>
+				<p id="error-message"></p>
+			</div>
+			<div id="new-level">
+				<p>Level</p>
+				<p>1</p>
+			</div>
+			<div id="intro-screen" class="visible">
+				<button type="button">Start</button>
+			</div>
+			<div id="score-screen">
+				<div>
+					<p class="headline">Map complete</p>
+					<div class="lines">
+						<div>
+							<span>Coins</span>
+							<span><span id="score-coins-collected">129</span> / <span id="score-coins-total">136</span></span>
+						</div>
+						<div>
+							<span>Enemies killed</span>
+							<span><span id="score-enemies-killed">3</span> / <span id="score-enemies-total">20</span></span>
+						</div>
+						<div>
+							<span>Shots fired</span>
+							<span><span id="score-shots-fired">9820</span></span>
+						</div>
+						<div>
+							<span>Damage taken</span>
+							<span><span id="score-lifes-lost">1</span></span>
+						</div>
+					</div>
+				</div>
+				<br/>
+				Thanks for playing!
+			</div>
 		</div>
 	</body>
 </html>

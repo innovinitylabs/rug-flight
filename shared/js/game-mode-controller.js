@@ -100,7 +100,7 @@
         document.head.appendChild(css);
 
         var script = document.createElement('script');
-        script.src = 'games/top-rug/js/game.js?v=7';
+        script.src = 'games/top-rug/js/game.js?v=20241222';
         script.onload = function() {
           console.log('Top Rug game loaded');
           // Initialize the game
@@ -178,7 +178,7 @@
         this.loadScriptsSequentially(scriptsToLoad, function() {
           // Now load the Aviator2 game script
           var script = document.createElement('script');
-          script.src = 'games/top-rug-maverick/js/game.js';
+          script.src = 'games/top-rug-maverick/js/game.js?v=20241222';
           script.onload = function() {
             console.log('Top Rug Maverick game loaded');
             // Initialize the game
