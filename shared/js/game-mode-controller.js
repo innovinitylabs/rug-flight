@@ -116,7 +116,13 @@
         return;
       }
 
-      // Load the MovementModel first, then the game script
+      // Load utils first, then MovementModel, then the game script
+      var utilsScript = document.createElement('script');
+      utilsScript.src = 'shared/js/utils.js';
+      utilsScript.onload = function() {
+        console.log('[Game Controller] utils loaded');
+
+        // Now load MovementModel
       var movementScript = document.createElement('script');
       movementScript.src = 'core/MovementModel.js';
       movementScript.onload = function() {
@@ -137,6 +143,8 @@
           // Initialize the game (different namespaces for different modes)
           if (mode === 'endless' && typeof window.Aviator1Game !== 'undefined') {
             window.Aviator1Game.init();
+
+            // System initialization now handled by mode.init()
           } else if (mode === 'combat' && typeof window.Aviator2Game !== 'undefined') {
             window.Aviator2Game.init();
           } else {
@@ -152,6 +160,11 @@
         console.error('[Game Controller] Failed to load MovementModel script');
       };
       document.head.appendChild(movementScript);
+      };
+      utilsScript.onerror = function() {
+        console.error('[Game Controller] Failed to load utils script');
+      };
+      document.head.appendChild(utilsScript);
     },
 
     loadModeCSS: function(mode) {

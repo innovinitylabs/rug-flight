@@ -1,4 +1,8 @@
+window.TopRugEngine = window.TopRugEngine || {};
+
 // AUDIO MANAGER - Using Three.js Audio API exactly like Aviator2
+console.log('[TopRugEngine] namespace initialized:', window.TopRugEngine);
+
 var AudioManager = function() {
   this.sounds = {}; // HTML5 Audio for one-shot sounds
   this.categories = {};
@@ -583,7 +587,8 @@ AudioManager.prototype.stop = function(soundId) {
   }
 };
 
-var audioManager = new AudioManager();
+// audioManager will be initialized in Aviator1Game.init()
+var audioManager;
 
 //COLORS
 var Colors = {
@@ -617,7 +622,459 @@ var particlesHolder = null;
 // ---- Banner texture cache for async loading ----
 let bannerTextureCache = null;
 
+// ---- World container for scene ownership ----
+const World = {
+  scene: null,
+  camera: null,
+  objects: new Set(),
+
+  init(sceneRef, cameraRef) {
+    this.scene = sceneRef;
+    this.camera = cameraRef;
+    this.objects.clear();
+  },
+
+  add(obj) {
+    if (this.scene && obj) {
+      this.scene.add(obj);
+      this.objects.add(obj);
+    }
+  },
+
+  remove(obj) {
+    if (this.scene && obj) {
+      this.scene.remove(obj);
+      this.objects.delete(obj);
+    }
+  },
+
+  clear() {
+    if (this.scene) {
+      for (const obj of this.objects) {
+        this.scene.remove(obj);
+      }
+    }
+    this.objects.clear();
+  }
+};
+
+// ---- UI now mode-owned ----
+
+// ---- Game mode configuration ----
+const GAME_MODE = 'endless';
+
+// ===== PARTICLES HOLDER (ENDLESS MODE - MINIMAL) =====
+function ParticlesHolder() {
+  this.mesh = new THREE.Object3D();
+  this.particles = [];
+}
+
+ParticlesHolder.prototype.spawnParticles = function(pos, count, color, scale) {
+  for (let i = 0; i < count; i++) {
+    const geom = new THREE.TetrahedronGeometry(3, 0);
+    const mat = new THREE.MeshPhongMaterial({
+      color: color || 0xffffff,
+      flatShading: true
+    });
+
+    const particle = new THREE.Mesh(geom, mat);
+    particle.scale.set(scale || 1, scale || 1, scale || 1);
+    particle.position.copy(pos);
+
+    // Add some randomness to position
+    particle.position.x += (-1 + Math.random() * 2) * 10;
+    particle.position.y += (-1 + Math.random() * 2) * 10;
+    particle.position.z += (-1 + Math.random() * 2) * 10;
+
+    this.mesh.add(particle);
+    this.particles.push({
+      mesh: particle,
+      life: 1,
+      velocity: new THREE.Vector3(
+        (-1 + Math.random() * 2) * 0.1,
+        (-1 + Math.random() * 2) * 0.1,
+        (-1 + Math.random() * 2) * 0.1
+      )
+    });
+  }
+};
+
+ParticlesHolder.prototype.update = function(deltaTime) {
+  for (let i = this.particles.length - 1; i >= 0; i--) {
+    const p = this.particles[i];
+    p.life -= deltaTime * 0.005;
+
+    // Move particle
+    p.mesh.position.add(p.velocity.clone().multiplyScalar(deltaTime * 60));
+
+    // Fade out
+    p.mesh.scale.multiplyScalar(0.96);
+
+    if (p.life <= 0) {
+      this.mesh.remove(p.mesh);
+      this.particles.splice(i, 1);
+    }
+  }
+};
+
+// ---- Mode Contract Layer ----
+const EndlessMode = {
+  id: 'endless',
+
+  systems: {
+    energy: true,
+    coins: false,
+    enemies: false,
+    collectibles: false,
+    lives: false
+  },
+
+  ui: {
+    levelValue: null,
+    distanceValue: null,
+    energyBar: null,
+    levelCircleStroke: null,
+    replayMessage: null
+  },
+
+  // Mode state
+  state: 'playing', // 'playing', 'gameover', 'waitingReplay'
+
+  init(game) {
+    // Reset mode state
+    this.state = 'playing';
+
+    // Bind mode-specific DOM elements
+    this.ui.levelValue = document.getElementById('levelValue-toprug1');
+    this.ui.distanceValue = document.getElementById('distValue-toprug1');
+    this.ui.energyBar = document.getElementById('energyBar-toprug1');
+    this.ui.levelCircleStroke = document.getElementById('levelCircleStroke-toprug1');
+    this.ui.replayMessage = document.getElementById('replayMessage-toprug1');
+
+    if (this.ui.energyBar) {
+      this.ui.energyBar.style.width = '100%';
+      console.log('[Endless HUD] Energy bar bound');
+    } else {
+      console.warn('[Endless HUD] Energy bar NOT found');
+    }
+
+    if (!this.ui.levelValue || !this.ui.distanceValue || !this.ui.levelCircleStroke) {
+      console.warn('[Endless HUD] Missing HUD elements', {
+        levelValue: !!this.ui.levelValue,
+        distanceValue: !!this.ui.distanceValue,
+        levelCircleStroke: !!this.ui.levelCircleStroke
+      });
+    }
+
+    // Initialize enabled systems
+    if (this.systems.energy) {
+      game.energy = 100;
+    }
+
+    if (this.systems.coins) {
+      coinsHolder = new CoinsHolder(20);
+      World.add(coinsHolder.mesh);
+      console.log('[Endless Systems] coinsHolder created and added to World');
+    }
+
+    if (this.systems.collectibles) {
+      collectiblesHolder = new CollectiblesHolder();
+      World.add(collectiblesHolder.mesh);
+      console.log('[Endless Systems] collectiblesHolder created and added to World');
+    }
+
+    if (this.systems.enemies) {
+      ennemiesHolder = new EnnemiesHolder();
+      World.add(ennemiesHolder.mesh);
+      console.log('[Endless Systems] ennemiesHolder created and added to World');
+    }
+
+    // Systems that are disabled should be explicitly null
+    if (!this.systems.coins) coinsHolder = null;
+    if (!this.systems.collectibles) collectiblesHolder = null;
+    if (!this.systems.enemies) ennemiesHolder = null;
+
+    // Particles system is always available for effects
+    particlesHolder = new ParticlesHolder();
+    World.add(particlesHolder.mesh);
+  },
+
+  onTick(deltaTime, game) {
+    if (this.state === 'playing') {
+      this.updatePlaying(game, deltaTime);
+    } else if (this.state === 'gameover') {
+      this.updateGameOver(game, deltaTime);
+    } else if (this.state === 'waitingReplay') {
+      this.updateWaitingReplay(game, deltaTime);
+    }
+
+    // Visual updates (moved from main loop)
+    this.updateVisuals(deltaTime, game);
+  },
+
+  updateVisuals(deltaTime, game) {
+    // Airplane propeller animation
+    airplane.propeller.rotation.x += .2 + game.planeSpeed * deltaTime * .005;
+
+    // Sea rotation
+    sea.mesh.rotation.z += game.speed * deltaTime;
+    if (sea.mesh.rotation.z > 2 * Math.PI) sea.mesh.rotation.z -= 2 * Math.PI;
+
+    // Ambient light intensity smoothing
+    ambientLight.intensity += (.5 - ambientLight.intensity) * deltaTime * 0.005;
+
+    // Update particles
+    if (particlesHolder) {
+      particlesHolder.update(deltaTime);
+    }
+
+    // Coin rotation (if coin system is enabled)
+    if (this.systems.coins && typeof coinsHolder !== 'undefined' && coinsHolder) {
+      coinsHolder.rotateCoins();
+    }
+
+    // Enemy rotation (if enemy system is enabled)
+    if (this.systems.enemies && typeof ennemiesHolder !== 'undefined' && ennemiesHolder) {
+      ennemiesHolder.rotateEnnemies();
+    }
+
+    // Sky and sea movement
+    sky.moveClouds();
+    sea.moveWaves();
+  },
+
+  updatePlaying(game, deltaTime) {
+    // Core speed progression (moved from main loop)
+    if (Math.floor(game.distance)%game.distanceForSpeedUpdate == 0 && Math.floor(game.distance) > game.speedLastUpdate){
+      game.speedLastUpdate = Math.floor(game.distance);
+      game.targetBaseSpeed += game.incrementSpeedByTime*deltaTime;
+    }
+
+    // Core physics updates (moved from main loop)
+    game.baseSpeed += (game.targetBaseSpeed - game.baseSpeed) * deltaTime * 0.02;
+    game.speed = game.baseSpeed * game.planeSpeed;
+
+    // Update distance
+    game.distance += game.speed * deltaTime * game.ratioSpeedDistance;
+
+    // Update distance UI
+    if (this.ui.distanceValue) {
+      this.ui.distanceValue.innerHTML = Math.floor(game.distance);
+    }
+    if (this.ui.levelCircleStroke) {
+      var d = 502 * (1 - (game.distance % game.distanceForLevelUpdate) / game.distanceForLevelUpdate);
+      this.ui.levelCircleStroke.setAttribute("stroke-dashoffset", d);
+    }
+
+    // Level progression
+    if (Math.floor(game.distance) % game.distanceForLevelUpdate == 0 && Math.floor(game.distance) > game.levelLastUpdate) {
+      game.levelLastUpdate = Math.floor(game.distance);
+      game.level++;
+      game.targetBaseSpeed = game.initSpeed + game.incrementSpeedByLevel * game.level;
+    }
+
+    // Core airplane movement (moved from updatePlane)
+    const movementResult = airplane.movement.update(mousePos, deltaTime, game, airplane);
+    airplane.mesh.position.x = movementResult.x;
+    airplane.mesh.position.y = movementResult.y;
+    airplane.mesh.rotation.x = movementResult.rotX;
+    airplane.mesh.rotation.z = movementResult.rotZ;
+
+    // Camera updates
+    var targetCameraZ = normalize(game.planeSpeed, game.planeMinSpeed, game.planeMaxSpeed, game.cameraNearPos, game.cameraFarPos);
+    camera.fov = normalize(mousePos.x,-1,1,40, 80);
+    camera.updateProjectionMatrix();
+    camera.position.y += (airplane.mesh.position.y - camera.position.y)*deltaTime*game.cameraSensivity;
+
+    // Collision damping
+    game.planeCollisionSpeedX += (0-game.planeCollisionSpeedX)*deltaTime * 0.03;
+    game.planeCollisionDisplacementX += (0-game.planeCollisionDisplacementX)*deltaTime *0.01;
+    game.planeCollisionSpeedY += (0-game.planeCollisionSpeedY)*deltaTime * 0.03;
+    game.planeCollisionDisplacementY += (0-game.planeCollisionDisplacementY)*deltaTime *0.01;
+
+    // Pilot hair animation
+    airplane.pilot.updateHairs();
+
+    // Banner positioning during gameplay
+    this.updateBanner(game, deltaTime, false);
+
+    // Coin spawning (if system enabled)
+    if (this.systems.coins && coinsHolder && typeof coinsHolder.spawnCoins === 'function') {
+      if (Math.floor(game.distance) % game.distanceForCoinsSpawn == 0 && Math.floor(game.distance) > game.coinLastSpawn) {
+        game.coinLastSpawn = Math.floor(game.distance);
+        coinsHolder.spawnCoins();
+      }
+    }
+
+    // Enemy spawning (if system enabled)
+    if (this.systems.enemies && ennemiesHolder && typeof ennemiesHolder.spawnEnnemies === 'function') {
+      if (Math.floor(game.distance) % game.distanceForEnnemiesSpawn == 0 && Math.floor(game.distance) > game.ennemyLastSpawn) {
+        game.ennemyLastSpawn = Math.floor(game.distance);
+        ennemiesHolder.spawnEnnemies();
+      }
+    }
+
+    // Collectibles spawning (if system enabled)
+    if (this.systems.collectibles && collectiblesHolder) {
+      collectiblesHolder.spawnCollectibles();
+    }
+
+    // Passive energy drain and end condition check
+    if (this.systems.energy && game.energy !== undefined) {
+      game.energy -= deltaTime * 0.015;
+      game.energy = Math.max(0, game.energy);
+
+      // Update energy bar UI
+      if (this.ui.energyBar) {
+        this.ui.energyBar.style.width = game.energy + '%';
+      }
+
+      // Check for game end
+      if (game.energy <= 0) {
+        this.state = 'gameover';
+        this.onGameOver(game);
+      }
+    }
+  },
+
+  updateGameOver(game, deltaTime) {
+    // Gameover animation
+    game.speed *= .99;
+    airplane.mesh.rotation.z += (-Math.PI/2 - airplane.mesh.rotation.z)*.0002*deltaTime;
+    airplane.mesh.rotation.x += 0.0003*deltaTime;
+    game.planeFallSpeed *= 1.05;
+    airplane.mesh.position.y -= game.planeFallSpeed*deltaTime;
+
+    // Hide ropes when game ends
+    if (ropeLeft) ropeLeft.visible = false;
+    if (ropeRight) ropeRight.visible = false;
+
+    // Banner positioning during gameover
+    this.updateBanner(game, deltaTime, true);
+
+    if (airplane.mesh.position.y <-200){
+      // Hide airplane when it falls below screen
+      airplane.mesh.visible = false;
+      this.state = "waitingReplay";
+    }
+  },
+
+  updateWaitingReplay(game, deltaTime) {
+    // Keep ropes hidden during replay wait
+    if (ropeLeft) ropeLeft.visible = false;
+    if (ropeRight) ropeRight.visible = false;
+
+    // Keep airplane hidden during replay wait
+    if (airplane && airplane.mesh) {
+      airplane.mesh.visible = false;
+    }
+
+    // Banner positioning during waiting replay
+    this.updateBanner(game, deltaTime, true);
+  },
+
+  updateBanner(game, deltaTime, isGameOver) {
+    // Update banner position to follow the plane (only if banner exists)
+    if (!banner || !airplane) return;
+
+    if (isGameOver) {
+      // When game is over or waiting for replay, animate banner to center screen above replay message
+      var bannerTargetX = 0; // Center horizontally
+      var bannerTargetY = 150; // Above center, above replay message
+      var bannerTargetZ = 100; // Closer to camera (normally camera is at z=200, plane at z=0)
+
+      // Smoothly animate banner to target position (slow smooth animation)
+      var animationSpeed = 0.05; // Animation speed - adjust for faster/slower movement
+      banner.position.x += (bannerTargetX - banner.position.x) * deltaTime * animationSpeed;
+      banner.position.y += (bannerTargetY - banner.position.y) * deltaTime * animationSpeed;
+      banner.position.z += (bannerTargetZ - banner.position.z) * deltaTime * animationSpeed;
+
+      // Rotate banner to face camera
+      var targetRotationY = Math.PI; // Face backward toward camera (180 degrees from forward)
+      var rotationSpeed = 0.05; // Rotation speed
+      banner.rotation.y += (targetRotationY - banner.rotation.y) * deltaTime * rotationSpeed;
+      banner.rotation.x += (0 - banner.rotation.x) * deltaTime * rotationSpeed; // Level out
+      banner.rotation.z += (0 - banner.rotation.z) * deltaTime * rotationSpeed; // Level out
+    } else {
+      // Normal gameplay: banner follows plane
+      // Calculate attachment point at the tail of the plane
+      var tailLocalPos = new THREE.Vector3(-10, 5, 0);
+
+      // Transform to world space
+      tailLocalPos.applyMatrix4(airplane.mesh.matrixWorld);
+
+      // Position banner at tail with offset
+      banner.position.copy(tailLocalPos);
+      banner.position.z += 10; // Offset behind plane
+
+      // Rotate banner to face opposite direction of plane movement (advertising backward)
+      banner.rotation.y = airplane.mesh.rotation.y + Math.PI;
+      banner.rotation.x = airplane.mesh.rotation.x;
+      banner.rotation.z = airplane.mesh.rotation.z;
+    }
+  },
+
+  onGameOver(game) {
+    // Show replay UI
+    showReplay();
+  },
+
+  destroy() {
+    // Reset mode state
+    this.state = 'idle';
+
+    // Unbind UI elements
+    this.unbindUI();
+
+    // Clean up scene objects
+    this.removeSceneObjects();
+  },
+
+  unbindUI() {
+    // Clear UI references
+    this.ui = {
+      levelValue: null,
+      distanceValue: null,
+      energyBar: null,
+      levelCircleStroke: null,
+      replayMessage: null
+    };
+  },
+
+  removeSceneObjects() {
+    // Remove mode-specific objects from World
+    if (this.systems.coins && coinsHolder) {
+      World.remove(coinsHolder.mesh);
+      coinsHolder = null;
+    }
+
+    if (this.systems.collectibles && collectiblesHolder) {
+      World.remove(collectiblesHolder.mesh);
+      collectiblesHolder = null;
+    }
+
+    if (this.systems.enemies && ennemiesHolder) {
+      World.remove(ennemiesHolder.mesh);
+      ennemiesHolder = null;
+    }
+
+    // Particles are always available, but clean up if needed
+    if (particlesHolder) {
+      World.remove(particlesHolder.mesh);
+      particlesHolder = null;
+    }
+  }
+};
+
+// Current active mode
+let currentMode = null;
+
 function resetGame(){
+  if (!airplane) {
+    console.warn('[resetGame] airplane not initialized yet, aborting reset');
+    return;
+  }
+
   game = {speed:0,
           initSpeed:.00035,
           baseSpeed:.00035,
@@ -676,10 +1133,12 @@ function resetGame(){
           ennemyLastSpawn:0,
           distanceForEnnemiesSpawn:50,
 
+          collectibleDistanceTolerance:15,
+          collectiblesSpeed:.6,
+
           status : "playing",
          };
-  fieldLevel.innerHTML = Math.floor(game.level);
-  
+
   // Make ropes visible again when game resets
   if (ropeLeft) ropeLeft.visible = true;
   if (ropeRight) ropeRight.visible = true;
@@ -707,7 +1166,6 @@ function resetGame(){
   } else {
     console.log('[PROPELLER] resetGame: User not interacted yet');
   }
-}
 
 //THREEJS RELATED VARIABLES
 
@@ -735,6 +1193,7 @@ function createScene() {
   WIDTH = window.innerWidth;
 
   scene = new THREE.Scene();
+  World.init(scene, camera); // Initialize World container
   aspectRatio = WIDTH / HEIGHT;
   fieldOfView = 50;
   nearPlane = .1;
@@ -767,94 +1226,8 @@ function createScene() {
   renderer.domElement.style.height = '100%';
   renderer.domElement.style.display = 'block';
 
-  // Texture loader for banner
-  textureLoader = new THREE.TextureLoader();
-
-  // Set crossOrigin to handle CORS issues (though file:// will still have WebGL tainted canvas restrictions)
-  textureLoader.crossOrigin = 'anonymous';
-
-  // Determine correct path based on protocol (file:// vs http://)
-  var texturePath = 'shared/assets/icons/onchainrugs.png';
-  if (window.location.protocol === 'file:') {
-    // For file:// protocol, use absolute path from current directory
-    texturePath = './shared/assets/icons/onchainrugs.png';
-    console.log('Using file:// protocol, texture path:', texturePath);
-    console.warn('Note: file:// protocol has WebGL security restrictions. Use a local server for best results.');
-  }
-
-  bannerTexture = textureLoader.load(
-    texturePath,
-    function(texture) {
-      // Texture loaded successfully
-      console.log('Banner texture loaded successfully');
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.flipY = false;
-      texture.format = THREE.RGBAFormat;
-      
-      // High-definition texture settings for sharp, crisp rendering
-      texture.minFilter = THREE.LinearMipmapLinearFilter; // Best quality mipmap filtering
-      texture.magFilter = THREE.LinearFilter; // Best quality when texture is magnified
-      texture.generateMipmaps = true; // Generate mipmaps for better quality
-      // Maximum anisotropy for sharp textures at angles (16 is maximum, fallback to 8 for older GPUs)
-      var maxAnisotropy = 16;
-      if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-        maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-      } else if (renderer.getMaxAnisotropy) {
-        maxAnisotropy = renderer.getMaxAnisotropy();
-      }
-      texture.anisotropy = maxAnisotropy;
-      
-      // Rotate texture 180 degrees - check if center exists (older Three.js versions)
-      if (texture.center) {
-        texture.center.set(0.5, 0.5); // Set rotation center to middle of texture
-        texture.rotation = Math.PI; // Rotate 180 degrees
-      } else {
-        // Alternative: use offset and repeat to flip texture 180 degrees
-        texture.offset.set(1, 1);
-        texture.repeat.set(-1, -1);
-        console.log('Using offset/repeat method for 180 degree rotation');
-      }
-      texture.needsUpdate = true;
-
-      // Cache texture for later application
-      bannerTextureCache = texture;
-      console.log('Banner texture cached successfully, image size:', texture.image.width, 'x', texture.image.height);
-    },
-    function(xhr) {
-      // Progress callback
-      console.log('Loading texture progress:', (xhr.loaded / xhr.total * 100) + '%');
-    },
-    function(error) {
-      // Error callback - provide more details
-      console.error('Error loading banner texture:', error);
-      console.error('Texture path attempted:', texturePath);
-      console.error('Current window location:', window.location.href);
-      console.error('Protocol:', window.location.protocol);
-      
-      // Try alternative loading method for file://
-      if (window.location.protocol === 'file:') {
-        console.error('File:// protocol detected. WebGL security restrictions prevent loading textures from file://');
-        console.error('This is a browser security feature - WebGL considers file:// images as "tainted"');
-        console.error('SOLUTION: Use a local server: python3 -m http.server 8080');
-        console.error('Then access via: http://localhost:8080');
-      }
-
-      // Fallback: use a colored material if texture fails to load
-      if (banner && banner.material) {
-        banner.material.color.setHex(0xff0000); // Red fallback to indicate error
-        banner.material.needsUpdate = true;
-        console.warn('Using red fallback color due to texture load failure');
-      }
-    }
-  );
-
-  // Set initial texture properties
-  if (bannerTexture) {
-    bannerTexture.wrapS = THREE.ClampToEdgeWrapping;
-    bannerTexture.wrapT = THREE.ClampToEdgeWrapping;
-    bannerTexture.flipY = false;
-  }
+  // Texture is now pre-loaded in loadTextures() phase
+  bannerTexture = bannerTextureCache;
 
   window.addEventListener('resize', handleWindowResize, false);
 
@@ -897,7 +1270,7 @@ function handleTouchMove(event) {
 
 function handleMouseUp(event){
   if (game.status == "waitingReplay"){
-    resetGame();
+    window.TopRugEngine.resetGame();
     hideReplay();
   }
 }
@@ -905,7 +1278,7 @@ function handleMouseUp(event){
 
 function handleTouchEnd(event){
   if (game.status == "waitingReplay"){
-    resetGame();
+    window.TopRugEngine.resetGame();
     hideReplay();
   }
 }
@@ -940,7 +1313,6 @@ function createLights() {
   scene.add(ambientLight);
 
 }
-
 
 var Pilot = function(){
   this.mesh = new THREE.Object3D();
@@ -1413,27 +1785,35 @@ EnnemiesHolder.prototype.rotateEnnemies = function(){
     ennemy.mesh.rotation.z += Math.random()*.1;
     ennemy.mesh.rotation.y += Math.random()*.1;
 
-    // Only check collisions during gameplay - skip after game ends
-    if (game.status == "playing" && airplane && airplane.mesh) {
+    // Only check collisions during gameplay and if enemy system is enabled - skip after game ends
+    if (game.status == "playing" && airplane && airplane.mesh && currentMode && currentMode.systems && currentMode.systems.enemies) {
     //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
     var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
     var d = diffPos.length();
     if (d<game.ennemyDistanceTolerance){
-      if (typeof particlesHolder !== 'undefined' && particlesHolder) {
-        particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
-      }
+      if (currentMode.systems.lives) {
+        // Combat mode: enemies cause damage and crash
+        if (typeof particlesHolder !== 'undefined' && particlesHolder) {
+          particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
+        }
 
-      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
-      this.mesh.remove(ennemy.mesh);
-      game.planeCollisionSpeedX = 100 * diffPos.x / d;
-      game.planeCollisionSpeedY = 100 * diffPos.y / d;
-      ambientLight.intensity = 2;
+        ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
+        this.mesh.remove(ennemy.mesh);
+        game.planeCollisionSpeedX = 100 * diffPos.x / d;
+        game.planeCollisionSpeedY = 100 * diffPos.y / d;
+        ambientLight.intensity = 2;
 
-      removeEnergy();
+        removeEnergy();
         // Play collision sound
         audioManager.play('airplane-crash', {volume: 0.8});
         i--;
+      } else {
+        // Survival mode: just remove the enemy without damage
+        ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
+        this.mesh.remove(ennemy.mesh);
+        i--;
       }
+    }
     }
     
     // Remove enemies that have passed behind (regardless of game status)
@@ -1576,6 +1956,84 @@ CoinsHolder.prototype.rotateCoins = function(){
   }
 }
 
+Collectible = function(){
+  this.angle = 0;
+  this.distance = 0;
+  this.mesh = new THREE.Object3D();
+  var geom = new THREE.OctahedronGeometry(5, 0);
+  var mat = new THREE.MeshPhongMaterial({
+    color: 0x00ff88,
+    transparent: true,
+    opacity: 0.8,
+    flatShading: true
+  });
+  var crystal = new THREE.Mesh(geom, mat);
+  crystal.castShadow = true;
+  this.mesh.add(crystal);
+}
+
+CollectiblesHolder = function(){
+  this.mesh = new THREE.Object3D();
+  this.collectiblesInUse = [];
+  this.collectiblesPool = [];
+  for (var i=0; i<10; i++){
+    var collectible = new Collectible();
+    this.collectiblesPool.push(collectible);
+  }
+}
+
+CollectiblesHolder.prototype.spawnCollectibles = function(){
+  var nCollectibles = 1 + Math.floor(Math.random()*5);
+  var d = game.seaRadius + game.planeDefaultHeight + utils.randomFromRange(-1,1) * (game.planeAmpHeight-20);
+  for (var i=0; i<nCollectibles; i++){
+    if (this.collectiblesPool.length){
+      var collectible = this.collectiblesPool.pop();
+      this.collectiblesInUse.push(collectible);
+      this.mesh.add(collectible.mesh);
+      collectible.angle = -(i*0.1);
+      collectible.distance = d + Math.cos(i*0.5)*10;
+      collectible.mesh.position.y = -game.seaRadius + Math.sin(collectible.angle)*collectible.distance;
+      collectible.mesh.position.x = Math.cos(collectible.angle)*collectible.distance;
+    }
+  }
+
+  // Handle collectible collisions
+  for (var i=0; i<this.collectiblesInUse.length; i++){
+    var collectible = this.collectiblesInUse[i];
+    collectible.angle += game.speed*deltaTime*game.collectiblesSpeed;
+    if (collectible.angle > Math.PI*2) collectible.angle -= Math.PI*2;
+    collectible.mesh.position.y = -game.seaRadius + Math.sin(collectible.angle)*collectible.distance;
+    collectible.mesh.position.x = Math.cos(collectible.angle)*collectible.distance;
+    collectible.mesh.rotation.z += Math.random()*.1;
+    collectible.mesh.rotation.y += Math.random()*.1;
+
+    // Collision detection
+    var diffPos = airplane.mesh.position.clone().sub(collectible.mesh.position.clone());
+    var d = diffPos.length();
+    if (d < game.collectibleDistanceTolerance){
+      // Restore energy
+      game.energy = Math.min(100, game.energy + 25);
+
+      // Return to pool
+      this.collectiblesPool.unshift(this.collectiblesInUse.splice(i,1)[0]);
+      this.mesh.remove(collectible.mesh);
+
+      // Particles effect
+      if (typeof particlesHolder !== 'undefined' && particlesHolder) {
+        particlesHolder.spawnParticles(collectible.mesh.position.clone(), 8, 0x00ff88, 1);
+      }
+
+      // Sound effect
+      audioManager.play('coin', {volume: 0.7});
+
+      i--;
+    } else if (collectible.angle > Math.PI){
+      this.collectiblesPool.unshift(this.collectiblesInUse.splice(i,1)[0]);
+      this.mesh.remove(collectible.mesh);
+      i--;
+    }
+  }
+}
 
 // 3D Models
 var sea;
@@ -1585,8 +2043,10 @@ function createPlane(){
   airplane = new AirPlane();
   airplane.mesh.scale.set(.25,.25,.25);
   airplane.mesh.position.y = game.planeDefaultHeight;
-  scene.add(airplane.mesh);
+  World.add(airplane.mesh);
 }
+
+window.TopRugEngine.createPlane = createPlane;
 
 function createBanner(){
   // NFT Banner - Create a larger banner to show the texture clearly
@@ -1608,56 +2068,17 @@ function createBanner(){
   matBanner.map = bannerTexture;
   matBanner.emissiveMap = bannerTexture; // Set emissive map for self-illumination
   
-  // If texture is already loaded, ensure it's properly set with rotation and high-definition settings
-  if (bannerTexture && bannerTexture.image && bannerTexture.image.complete) {
-    // Apply rotation - check if center exists
-    if (bannerTexture.center) {
-      bannerTexture.center.set(0.5, 0.5);
-      bannerTexture.rotation = Math.PI; // 180 degree rotation
-    } else {
-      bannerTexture.offset.set(1, 1);
-      bannerTexture.repeat.set(-1, -1);
-    }
-    // Apply high-definition texture settings
-    bannerTexture.minFilter = THREE.LinearMipmapLinearFilter;
-    bannerTexture.magFilter = THREE.LinearFilter;
-    bannerTexture.generateMipmaps = true;
-    var maxAnisotropy = 16;
-    if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-      maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-    } else if (renderer.getMaxAnisotropy) {
-      maxAnisotropy = renderer.getMaxAnisotropy();
-    }
-    bannerTexture.anisotropy = maxAnisotropy;
-    bannerTexture.needsUpdate = true;
-    matBanner.needsUpdate = true;
-    console.log('Banner texture already loaded when creating banner');
-  } else {
-    console.log('Banner texture not yet loaded, will update when loaded. Texture object:', bannerTexture);
-  }
+  // Texture is pre-configured in loadTextures() phase
+  console.log('Banner texture applied (pre-configured)');
 
   banner = new THREE.Mesh(geomBanner, matBanner);
 
-  // Apply cached texture if available
+  // Apply pre-configured cached texture
   if (bannerTextureCache && banner.material) {
     banner.material.map = bannerTextureCache;
     banner.material.emissiveMap = bannerTextureCache;
-
-    // Apply texture wrapping and repeat
-    if (banner.material.map) {
-      banner.material.map.wrapS = THREE.RepeatWrapping;
-      banner.material.map.wrapT = THREE.RepeatWrapping;
-      banner.material.map.needsUpdate = true;
-    }
-    if (banner.material.emissiveMap) {
-      banner.material.emissiveMap.wrapS = THREE.RepeatWrapping;
-      banner.material.emissiveMap.wrapT = THREE.RepeatWrapping;
-      banner.material.emissiveMap.needsUpdate = true;
-    }
-
-    banner.material.emissive.setHex(0x999999);
+    banner.material.emissive.setHex(0x888888);
     banner.material.needsUpdate = true;
-    banner.material.color.setHex(0xffffff);
 
     console.log('Banner texture applied successfully');
   }
@@ -1681,7 +2102,7 @@ function createBanner(){
 
   // Position behind the plane initially
   banner.position.set(0, game.planeDefaultHeight, -80);
-  scene.add(banner);
+  World.add(banner);
 
   // Ensure banner is visible
   banner.visible = true;
@@ -1700,7 +2121,7 @@ function createBanner(){
   ]);
   ropeLeftGeometry.setAttribute('position', new THREE.BufferAttribute(ropeLeftPositions, 3));
   ropeLeft = new THREE.Line(ropeLeftGeometry, ropeMaterial);
-  scene.add(ropeLeft);
+  World.add(ropeLeft);
 
   // Right rope (top-right corner from plane's perspective) - using BufferGeometry
   var ropeRightGeometry = new THREE.BufferGeometry();
@@ -1712,20 +2133,26 @@ function createBanner(){
   ]);
   ropeRightGeometry.setAttribute('position', new THREE.BufferAttribute(ropeRightPositions, 3));
   ropeRight = new THREE.Line(ropeRightGeometry, ropeMaterial);
-  scene.add(ropeRight);
+  World.add(ropeRight);
 }
 
 function createSea(){
   sea = new Sea();
   sea.mesh.position.y = -game.seaRadius;
-  scene.add(sea.mesh);
+  World.add(sea.mesh);
 }
+
+window.TopRugEngine.createSea = createSea;
 
 function createSky(){
   sky = new Sky();
   sky.mesh.position.y = -game.seaRadius;
-  scene.add(sky.mesh);
+  World.add(sky.mesh);
 }
+
+window.TopRugEngine.createSky = createSky;
+
+// TopRugEngine exports verified
 
 function createCoins(){
 
@@ -1753,140 +2180,21 @@ function createParticles(){
   scene.add(particlesHolder.mesh)
 }
 
-function loop(){
+function loop() {
+  deltaTime = new Date().getTime() - oldTime;
+  oldTime = new Date().getTime();
 
-  newTime = new Date().getTime();
-  deltaTime = newTime-oldTime;
-  oldTime = newTime;
-
-  if (game.status=="playing"){
-
-    // Add energy coins every 100m;
-    if (coinsHolder && typeof coinsHolder.spawnCoins === 'function') {
-      if (Math.floor(game.distance)%game.distanceForCoinsSpawn == 0 && Math.floor(game.distance) > game.coinLastSpawn){
-        game.coinLastSpawn = Math.floor(game.distance);
-        coinsHolder.spawnCoins();
-      }
-    }
-
-    if (Math.floor(game.distance)%game.distanceForSpeedUpdate == 0 && Math.floor(game.distance) > game.speedLastUpdate){
-      game.speedLastUpdate = Math.floor(game.distance);
-      game.targetBaseSpeed += game.incrementSpeedByTime*deltaTime;
-    }
-
-
-    if (ennemiesHolder && typeof ennemiesHolder.spawnEnnemies === 'function') {
-      if (Math.floor(game.distance)%game.distanceForEnnemiesSpawn == 0 && Math.floor(game.distance) > game.ennemyLastSpawn){
-        game.ennemyLastSpawn = Math.floor(game.distance);
-        ennemiesHolder.spawnEnnemies();
-      }
-    }
-
-    if (Math.floor(game.distance)%game.distanceForLevelUpdate == 0 && Math.floor(game.distance) > game.levelLastUpdate){
-      game.levelLastUpdate = Math.floor(game.distance);
-      game.level++;
-      fieldLevel.innerHTML = Math.floor(game.level);
-
-      game.targetBaseSpeed = game.initSpeed + game.incrementSpeedByLevel*game.level
-    }
-
-
-    updatePlane();
-    updateDistance();
-    updateEnergy();
-    game.baseSpeed += (game.targetBaseSpeed - game.baseSpeed) * deltaTime * 0.02;
-    game.speed = game.baseSpeed * game.planeSpeed;
-
-  }else if(game.status=="gameover"){
-    game.speed *= .99;
-    airplane.mesh.rotation.z += (-Math.PI/2 - airplane.mesh.rotation.z)*.0002*deltaTime;
-    airplane.mesh.rotation.x += 0.0003*deltaTime;
-    game.planeFallSpeed *= 1.05;
-    airplane.mesh.position.y -= game.planeFallSpeed*deltaTime;
-
-    // Hide ropes when game ends
-    if (ropeLeft) ropeLeft.visible = false;
-    if (ropeRight) ropeRight.visible = false;
-
-    // Update banner animation during gameover (it will animate to center)
-    updatePlane();
-
-    if (airplane.mesh.position.y <-200){
-      // Hide airplane when it falls below screen
-      airplane.mesh.visible = false;
-      showReplay();
-      game.status = "waitingReplay";
-
-    }
-  }else if (game.status=="waitingReplay"){
-    // Keep ropes hidden during replay wait
-    if (ropeLeft) ropeLeft.visible = false;
-    if (ropeRight) ropeRight.visible = false;
-    
-    // Keep airplane hidden during replay wait
-    if (airplane && airplane.mesh) {
-      airplane.mesh.visible = false;
-    }
-    
-    // Update banner animation during waiting replay (it will stay centered)
-    updatePlane();
+  if (currentMode) {
+    currentMode.onTick(deltaTime, game);
   }
-
-
-  airplane.propeller.rotation.x +=.2 + game.planeSpeed * deltaTime*.005;
-  sea.mesh.rotation.z += game.speed*deltaTime;//*game.seaRotationSpeed;
-
-  if ( sea.mesh.rotation.z > 2*Math.PI)  sea.mesh.rotation.z -= 2*Math.PI;
-
-  ambientLight.intensity += (.5 - ambientLight.intensity)*deltaTime*0.005;
-
-  if (typeof coinsHolder !== 'undefined' && coinsHolder) {
-    coinsHolder.rotateCoins();
-  }
-  if (typeof ennemiesHolder !== 'undefined' && ennemiesHolder) {
-    ennemiesHolder.rotateEnnemies();
-  }
-
-  sky.moveClouds();
-  sea.moveWaves();
 
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }
 
-function updateDistance(){
-  if (!levelCircleStroke) return;
+// updateDistance removed - logic moved to EndlessMode.update
 
-  game.distance += game.speed*deltaTime*game.ratioSpeedDistance;
-  fieldDistance.innerHTML = Math.floor(game.distance);
-  var d = 502*(1-(game.distance%game.distanceForLevelUpdate)/game.distanceForLevelUpdate);
-  levelCircleStroke.setAttribute("stroke-dashoffset", d);
-
-}
-
-var blinkEnergy=false;
-
-function updateEnergy(){
-  game.energy -= game.speed*deltaTime*game.ratioSpeedEnergy;
-  game.energy = Math.max(0, game.energy);
-  energyBar.style.right = (100-game.energy)+"%";
-  energyBar.style.backgroundColor = (game.energy<50)? "#f25346" : "#68c3c0";
-
-
-  if (game.energy<30){
-    energyBar.style.animationName = "blinking";
-  }else{
-    energyBar.style.animationName = "none";
-  }
-
-  if (game.energy <1){
-    game.status = "gameover";
-    // Stop background sounds (but not propeller - it idles)
-    audioManager.stop('ocean');
-    // Play crash sound when game over
-    audioManager.play('airplane-crash', {volume: 1.0});
-  }
-}
+// updateEnergy removed - logic moved to EndlessMode.update
 
 function addEnergy(){
   game.energy += game.coinValue;
@@ -1900,7 +2208,7 @@ function removeEnergy(){
 
 
 
-function updatePlane(){
+// function updatePlane(){ // REMOVED - logic moved to EndlessMode.update methods
 
   const movementResult = airplane.movement.update(mousePos, deltaTime, game, airplane);
   airplane.mesh.position.x = movementResult.x;
@@ -2362,12 +2670,19 @@ function updatePlane(){
   }
 }
 
-function showReplay(){
-  replayMessage.style.display="block";
+function showReplay() {
+  const replay = getReplayElement();
+  if (!replay) {
+    console.warn('[Replay] No replay element found');
+    return;
+  }
+  replay.style.display = 'block';
 }
 
-function hideReplay(){
-  replayMessage.style.display="none";
+function hideReplay() {
+  const replay = getReplayElement();
+  if (!replay) return;
+  replay.style.display = 'none';
 }
 
 function normalize(v,vmin,vmax,tmin, tmax){
@@ -2379,68 +2694,16 @@ function normalize(v,vmin,vmax,tmin, tmax){
   return tv;
 }
 
-var fieldDistance, energyBar, replayMessage, fieldLevel, levelCircle;
+// Global UI variables removed - now mode-owned
 
-function init(event){
-
-  // UI
-  console.log('[Top Rug] Initializing UI elements...');
-
-  fieldDistance = document.getElementById("distValue-toprug1");
-  energyBar = document.getElementById("energyBar-toprug1");
-  replayMessage = document.getElementById("replayMessage-toprug1");
-  fieldLevel = document.getElementById("levelValue-toprug1");
-  levelCircle = document.getElementById("levelCircleStroke-toprug1");
-
-  console.log('[Top Rug] UI elements found:', {
-    fieldDistance: !!fieldDistance,
-    energyBar: !!energyBar,
-    replayMessage: !!replayMessage,
-    fieldLevel: !!fieldLevel,
-    levelCircle: !!levelCircle
-  });
+// function init(event){ // REMOVED - legacy function
 
 
-  resetGame();
-  createScene();
+function initUI() {
+  // Initialize game object first
+  game = {};
 
-  createLights();
-  createPlane();
-  createBanner();
-  createSea();
-  createSky();
-  createCoins();
-  createEnnemies();
-  createParticles();
-
-  // Load audio files
-  audioManager.load('ocean', null, 'games/top-rug/assets/audio/ocean.mp3');
-  audioManager.load('propeller', null, 'games/top-rug/assets/audio/propeller.mp3');
-
-  audioManager.load('coin-1', 'coin', 'games/top-rug/assets/audio/coin-1.mp3');
-  audioManager.load('coin-2', 'coin', 'games/top-rug/assets/audio/coin-2.mp3');
-  audioManager.load('coin-3', 'coin', 'games/top-rug/assets/audio/coin-3.mp3');
-  audioManager.load('jar-1', 'coin', 'games/top-rug/assets/audio/jar-1.mp3');
-  audioManager.load('jar-2', 'coin', 'games/top-rug/assets/audio/jar-2.mp3');
-  audioManager.load('jar-3', 'coin', 'games/top-rug/assets/audio/jar-3.mp3');
-  audioManager.load('jar-4', 'coin', 'games/top-rug/assets/audio/jar-4.mp3');
-  audioManager.load('jar-5', 'coin', 'games/top-rug/assets/audio/jar-5.mp3');
-  audioManager.load('jar-6', 'coin', 'games/top-rug/assets/audio/jar-6.mp3');
-  audioManager.load('jar-7', 'coin', 'games/top-rug/assets/audio/jar-7.mp3');
-
-  audioManager.load('airplane-crash-1', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-1.mp3');
-  audioManager.load('airplane-crash-2', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-2.mp3');
-  audioManager.load('airplane-crash-3', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-3.mp3');
-  audioManager.load('airplane-crash-4', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-4.mp3');
-
-  // Background sounds will start after user interaction (handled in audioManager.init)
-
-    document.addEventListener('mousemove', handleMouseMove, false);
-    document.addEventListener('touchmove', handleTouchMove, false);
-    document.addEventListener('mouseup', handleMouseUp, false);
-    document.addEventListener('touchend', handleTouchEnd, false);
-
-    loop();
+  // Mode initialization happens separately after scene creation
 }
 
 // ======================================================
@@ -2477,60 +2740,192 @@ function bindEndlessHUD() {
 }
 
 // ======================================================
+// Mode-Aware UI Helpers
+// ======================================================
+function getReplayElement() {
+  // Use mode-owned UI when available
+  if (currentMode && currentMode.ui && currentMode.ui.replayMessage) {
+    return currentMode.ui.replayMessage;
+  }
+
+  // Fallback to direct DOM access for combat mode (when implemented)
+  // For now, return null if no mode-owned UI
+  return null;
+}
+
+// System initialization now handled by mode.init()
+
+// ======================================================
 // Endless Game Entry Point (for GameController)
 // ======================================================
 window.Aviator1Game = {
-  init: function () {
-    console.log('[Aviator1Game] Booting Endless Mode');
+  state: {
+    domReady: false,
+    assetsReady: false,
+    sceneReady: false,
+    running: false,
+  },
 
-    // Prevent double init
-    if (window.__aviator1_started) return;
-    window.__aviator1_started = true;
+  init() {
+    console.log('[Aviator1Game] init');
 
-    // Bind container explicitly
-    container = document.getElementById('world-toprug1');
-    if (!container) {
-      console.error('[Aviator1Game] world-toprug1 not found');
-      return;
+    this.bindDOM();
+    this.loadAssets();
+  },
+
+  bindDOM() {
+    console.log('[Aviator1Game] bindDOM');
+
+    // Initialize audio manager
+    audioManager = new AudioManager();
+
+    // UI queries only
+    initUI();
+
+    this.state.domReady = true;
+    this.tryBoot();
+  },
+
+  loadAssets() {
+    console.log('[Aviator1Game] loadAssets');
+
+    // Audio, textures, models - Use promises
+    Promise.all([
+      this.loadAudio(),
+      this.loadTextures(),
+    ]).then(() => {
+      this.state.assetsReady = true;
+      this.tryBoot();
+    });
+  },
+
+  loadAudio() {
+    return Promise.all([
+      audioManager.load('propeller', null, 'games/top-rug/assets/audio/propeller.mp3'),
+      audioManager.load('ocean', null, 'games/top-rug/assets/audio/ocean.mp3'),
+      audioManager.load('airplane-crash', null, 'games/top-rug/assets/audio/airplane-crash-1.mp3'),
+      audioManager.load('coin', null, 'games/top-rug/assets/audio/coin.mp3'),
+    ]);
+  },
+
+  loadTextures() {
+    return new Promise((resolve, reject) => {
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.crossOrigin = 'anonymous';
+
+      const texturePath = 'shared/assets/icons/onchainrugs.png';
+      if (window.location.protocol === 'file:') {
+        texturePath = './shared/assets/icons/onchainrugs.png';
+      }
+
+      textureLoader.load(
+        texturePath,
+        function(texture) {
+          // Configure texture properties
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.RepeatWrapping;
+          texture.flipY = false;
+          texture.format = THREE.RGBAFormat;
+
+          // High-definition texture settings
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          texture.generateMipmaps = true;
+
+          // Maximum anisotropy for sharp textures at angles
+          var maxAnisotropy = 16;
+          if (renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
+            maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+          } else if (renderer && renderer.getMaxAnisotropy) {
+            maxAnisotropy = renderer.getMaxAnisotropy();
+          }
+          texture.anisotropy = maxAnisotropy;
+
+          // Rotate texture 180 degrees
+          if (texture.center) {
+            texture.center.set(0.5, 0.5);
+            texture.rotation = Math.PI;
+          } else {
+            texture.offset.set(1, 1);
+            texture.repeat.set(-1, -1);
+          }
+          texture.needsUpdate = true;
+
+          // Cache texture for later use
+          bannerTextureCache = texture;
+          console.log('Banner texture loaded and configured successfully');
+          resolve();
+        },
+        function(xhr) {
+          console.log('Loading texture progress:', (xhr.loaded / xhr.total * 100) + '%');
+        },
+        function(error) {
+          console.error('Error loading banner texture:', error);
+          reject(error);
+        }
+      );
+    });
+  },
+
+  createScene() {
+    console.log('[Aviator1Game] createScene');
+
+    window.TopRugEngine.createScene();
+    window.TopRugEngine.createLights();
+
+    this.state.sceneReady = true;
+    this.tryBoot();
+  },
+
+  startLoop() {
+    console.log('[Aviator1Game] startLoop');
+
+    // Set the current mode explicitly
+    currentMode = EndlessMode;
+    currentMode.init(game);
+
+    window.TopRugEngine.resetGame();
+
+    this.state.running = true;
+    loop();
+  },
+
+  tryBoot() {
+    if (
+      this.state.domReady &&
+      this.state.assetsReady &&
+      !this.state.sceneReady
+    ) {
+      this.createScene();
     }
 
-    container.innerHTML = '';
-    container.style.display = 'block';
-    container.style.width = '100%';
-    container.style.height = '100vh';
-
-    // Bind HUD elements first
-    bindEndlessHUD();
-
-    // Load audio for Endless mode
-    audioManager.load('propeller', 'engine', 'games/top-rug/assets/audio/propeller.mp3');
-    audioManager.load('ocean', 'ambient', 'games/top-rug/assets/audio/ocean.mp3');
-
-    // Ensure optional systems are null for Endless mode
-    ennemiesHolder = null;
-
-    // Initialize game state FIRST
-    resetGame();
-    game.status = 'playing';
-
-    // Build world in correct order
-    createScene();
-    createLights();
-    createPlane();
-    createBanner();
-    createSea();
-    createSky();
-
-    // Bind mouse events for input
-    bindMouseEvents();
-
-    // Force first render
-    renderer.render(scene, camera);
-
-    // Start animation loop
-    requestAnimationFrame(loop);
-
-    console.log('[Aviator1Game] Endless Mode started');
+    if (
+      this.state.domReady &&
+      this.state.assetsReady &&
+      this.state.sceneReady &&
+      !this.state.running
+    ) {
+      this.startLoop();
+    }
   }
+};
+
+// System initialization now handled by mode.init()
+
+window.TopRugEngine.createScene = createScene;
+window.TopRugEngine.createLights = createLights;
+window.TopRugEngine.resetGame = resetGame;
+
+console.log('[TopRugEngine] exported functions:', Object.keys(window.TopRugEngine));
+
+// Expose mode setter for future use
+window.Aviator1Game.setMode = function(mode) {
+  // Destroy current mode if it exists
+  if (currentMode && currentMode.destroy) {
+    currentMode.destroy();
+  }
+
+  // Set new mode
+  currentMode = mode;
 };
 
