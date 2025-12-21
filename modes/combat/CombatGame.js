@@ -173,21 +173,23 @@ class CombatGame {
    * Initialize the HUD system
    */
   async initHUD() {
-    // Import CombatHUD dynamically
-    let CombatHUD;
-    if (typeof require !== 'undefined') {
-      CombatHUD = require('./CombatHUD.js');
-    } else {
-      CombatHUD = window.CombatHUD;
+    // Register HUD elements with UIManager
+    if (this.uiManager) {
+      this.uiManager.registerHUDElement('distValue-combat', 'combat');
+      this.uiManager.registerHUDElement('coinsValue', 'combat');
+      this.uiManager.registerHUDElement('levelValue-combat', 'combat');
+      this.uiManager.registerHUDElement('replayMessage', 'combat');
+      this.uiManager.registerHUDElement('levelCircleStroke-combat', 'combat');
     }
 
-    if (!CombatHUD) {
-      console.error('[CombatGame] CombatHUD not available');
-      return;
-    }
+    // Show combat HUD, hide classic HUD
+    const classicHeader = document.querySelector('.header:not(.header--combat)');
+    const combatHeader = document.querySelector('.header--combat');
 
-    this.hud = new CombatHUD(this.uiManager);
-    await this.hud.init();
+    if (classicHeader) classicHeader.style.display = 'none';
+    if (combatHeader) combatHeader.style.display = 'block';
+
+    console.log('[CombatGame] HUD initialized');
   }
 
   /**

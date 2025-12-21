@@ -154,21 +154,23 @@ class ClassicGame {
    * Initialize the HUD system
    */
   async initHUD() {
-    // Import ClassicHUD dynamically
-    let ClassicHUD;
-    if (typeof require !== 'undefined') {
-      ClassicHUD = require('./ClassicHUD.js');
-    } else {
-      ClassicHUD = window.ClassicHUD;
+    // Register HUD elements with UIManager
+    if (this.uiManager) {
+      this.uiManager.registerHUDElement('distValue', 'classic');
+      this.uiManager.registerHUDElement('energyBar', 'classic');
+      this.uiManager.registerHUDElement('levelValue', 'classic');
+      this.uiManager.registerHUDElement('replayMessage', 'classic');
+      this.uiManager.registerHUDElement('levelCircleStroke', 'classic');
     }
 
-    if (!ClassicHUD) {
-      console.error('[ClassicGame] ClassicHUD not available');
-      return;
-    }
+    // Show classic HUD, hide combat HUD
+    const classicHeader = document.querySelector('.header:not(.header--combat)');
+    const combatHeader = document.querySelector('.header--combat');
 
-    this.hud = new ClassicHUD(this.uiManager);
-    await this.hud.init();
+    if (classicHeader) classicHeader.style.display = 'block';
+    if (combatHeader) combatHeader.style.display = 'none';
+
+    console.log('[ClassicGame] HUD initialized');
   }
 
   /**

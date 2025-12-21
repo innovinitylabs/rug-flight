@@ -70,345 +70,66 @@
 		<!-- Unified Game Container -->
 		<div class="game-holder unified-game" id="gameHolder">
 			<!-- Game canvas will be inserted here by GameEngine -->
-		</div>
 
-		<!-- Top Rug Game Container -->
-		<div class="game-holder game-holder--toprug1" id="gameHolderTopRug1" style="display: none;">
+			<!-- HUD Elements for Classic Mode -->
 			<div class="header">
 				<h1><span>Top</span>Rug</h1>
 				<h2>Classic Edition</h2>
-				<div class="score" id="score-toprug1">
-					<div class="score__content" id="level-toprug1">
+				<div class="score" id="score">
+					<div class="score__content" id="level">
 						<div class="score__label">level</div>
-						<div class="score__value score__value--level" id="levelValue-toprug1" data-mode-ui="classic">1</div>
-						<svg class="level-circle" id="levelCircle-toprug1" data-mode-ui="classic" viewbox="0 0 200 200">
-							<circle id="levelCircleBgr-toprug1" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
-							<circle id="levelCircleStroke-toprug1" r="80" cx="100" cy="100" fill="none" #f25346 stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
+						<div class="score__value score__value--level" id="levelValue">1</div>
+						<svg class="level-circle" id="levelCircle" viewbox="0 0 200 200">
+							<circle id="levelCircleBgr" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
+							<circle id="levelCircleStroke" r="80" cx="100" cy="100" fill="none" stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
 						</svg>
 					</div>
-					<div class="score__content" id="dist-toprug1">
+					<div class="score__content" id="dist">
 						<div class="score__label">distance</div>
-						<div class="score__value score__value--dist" id="distValue-toprug1" data-mode-ui="classic">000</div>
+						<div class="score__value score__value--dist" id="distValue">000</div>
 					</div>
-					<div class="score__content" id="energy-toprug1">
+					<div class="score__content" id="energy">
 						<div class="score__label">energy</div>
-						<div class="score__value score__value--energy" id="energyValue-toprug1">
-							<div class="energy-bar" id="energyBar-toprug1" data-mode-ui="classic"></div>
+						<div class="score__value score__value--energy" id="energyValue">
+							<div class="energy-bar" id="energyBar"></div>
 						</div>
 					</div>
 				</div>
 			</div>
-			<div class="world" id="world-toprug1"></div>
-			<div class="message message--replay" id="replayMessage-toprug1" data-mode-ui="classic">Click to Replay</div>
-			<div class="message message--instructions" id="instructions-toprug1" data-mode-ui="classic">Grab the blue pills<span>avoid the red ones</span></div>
-		</div>
 
-		<!-- Top Rug: Maverick Game Container -->
-		<div class="game-holder game-holder--toprug2" id="gameHolderTopRug2" style="display: none;">
-			<div class="header">
-				<div class="header__title-wrap">
-					<h1 class="header__title">
-						<span class="header__title-pre">Top Rug:</span>
-						<span class="header__title-main">Maverick</span>
-					</h1>
-					<h2 class="header__tagline">Enhanced flight combat with weapons and enemies</h2>
-				</div>
-				<div class="score" id="score-toprug2">
-					<div class="score__content" id="level-toprug2">
+			<!-- HUD Elements for Combat Mode -->
+			<div class="header header--combat" style="display: none;">
+				<h1><span>Top</span>Rug</h1>
+				<h2>Combat Edition</h2>
+				<div class="score" id="score-combat">
+					<div class="score__content" id="level-combat">
 						<div class="score__label">level</div>
-						<div class="score__value score__value--level" id="levelValue-toprug2">1</div>
-						<svg class="level-circle" id="levelCircle-toprug2" viewbox="0 0 200 200">
-							<circle id="levelCircleBgr-toprug2" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
-							<circle id="levelCircleStroke-toprug2" r="80" cx="100" cy="100" fill="none" #f25346 stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
+						<div class="score__value score__value--level" id="levelValue-combat">1</div>
+						<svg class="level-circle" id="levelCircle-combat" viewbox="0 0 200 200">
+							<circle id="levelCircleBgr-combat" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
+							<circle id="levelCircleStroke-combat" r="80" cx="100" cy="100" fill="none" stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
 						</svg>
 					</div>
-					<div class="score__content score__content--fixed" id="dist-toprug2">
+					<div class="score__content" id="dist-combat">
 						<div class="score__label">distance</div>
-						<div class="score__value score__value--dist" id="distValue-toprug2">0</div>
+						<div class="score__value score__value--dist" id="distValue-combat">0</div>
 					</div>
-					<div class="score__content score__content--fixed" id="coins-toprug2">
+					<div class="score__content" id="coins">
 						<div class="score__label">coins</div>
-						<div class="score__value score__value--dist" id="coinsValue-toprug2">0</div>
+						<div class="score__value score__value--dist" id="coinsValue">0</div>
 					</div>
-					<div class="score__content score__content--fixed" id="lifes-toprug2">
+					<div class="score__content" id="lifes">
 						<div class="score__label">life</div>
-						<div class="score__value score__value--lifes">
-							<img class="heart" src="modes/combat/assets/images/heart.png"/>
-							<img class="heart" src="modes/combat/assets/images/heart.png"/>
-							<img class="heart" src="modes/combat/assets/images/heart.png"/>
-						</div>
+						<img class="heart" src="shared/assets/images/hearts.png" id="heart-1"/>
+						<img class="heart" src="shared/assets/images/hearts.png" id="heart-2"/>
+						<img class="heart" src="shared/assets/images/hearts.png" id="heart-3"/>
 					</div>
 				</div>
 			</div>
-			<div class="world" id="world-toprug2">
-				<canvas id="threejs-canvas"></canvas>
-			</div>
-			<div class="message--replay" id="replayMessage-toprug2">
-				Click to Replay
-			</div>
-			<div id="error">
-				<p><b>Error</b></p>
-				<p id="error-message"></p>
-			</div>
-			<div id="new-level">
-				<p>Level</p>
-				<p>1</p>
-			</div>
-			<div id="intro-screen" class="visible">
-				<button type="button">Start</button>
-			</div>
-			<div id="score-screen">
-				<div>
-					<p class="headline">Map complete</p>
-					<div class="lines">
-						<div>
-							<span>Coins</span>
-							<span><span id="score-coins-collected">129</span> / <span id="score-coins-total">136</span></span>
-						</div>
-						<div>
-							<span>Enemies killed</span>
-							<span><span id="score-enemies-killed">3</span> / <span id="score-enemies-total">20</span></span>
-						</div>
-						<div>
-							<span>Shots fired</span>
-							<span><span id="score-shots-fired">9820</span></span>
-						</div>
-						<div>
-							<span>Damage taken</span>
-							<span><span id="score-lifes-lost">1</span></span>
-						</div>
-					</div>
-				</div>
-				<br/>
-				Thanks for playing!
-			</div>
 
-			<!-- Combat HUD -->
-			<div class="combat-hud" id="combat-hud" data-mode-ui="combat" style="display: none;">
-				<div class="combat-lives" id="combat-lives" data-mode-ui="combat"></div>
-				<div class="combat-stats" data-mode-ui="combat">
-					<div class="combat-score" id="combat-score" data-mode-ui="combat">0</div>
-					<div class="combat-weapon" id="combat-weapon" data-mode-ui="combat">SIMPLE</div>
-					<div class="combat-ammo" id="combat-ammo" data-mode-ui="combat">100</div>
-					<div class="combat-level" id="combat-level" data-mode-ui="combat">1</div>
-				</div>
-			</div>
-
-
-			<!-- Test Panel (hidden by default, activated by pressing T key) -->
-			<div class="test-panel" id="testPanel" style="display: none;">
-				<div class="test-header">
-					<h3>🧪 Game Test Suite</h3>
-					<button class="test-close" id="closeTestPanel">×</button>
-				</div>
-				<div class="test-controls">
-					<button class="test-button" id="runAllTests">Run All Tests</button>
-					<button class="test-button" id="runPerformanceTests">Performance Tests</button>
-					<button class="test-button" id="runStorageTests">Storage Tests</button>
-				</div>
-				<div class="test-results" id="testResults">
-					<div class="test-status">Ready to run tests. Press "Run All Tests" to begin.</div>
-				</div>
-			</div>
+			<!-- Shared UI Elements -->
+			<div class="message message--replay" id="replayMessage">Click to Replay</div>
+			<div class="message message--instructions" id="instructions">Use mouse to fly<span>collect coins, avoid obstacles</span></div>
 		</div>
-
-		<!-- Mode Switcher UI (moved outside containers for global access) -->
-		<div class="mode-switcher" id="modeSwitcher" style="display: none;">
-			<button class="mode-switch-button" data-switch-mode="classic" id="switchToClassic">
-				🎖️ Classic Mode
-			</button>
-			<button class="mode-switch-button" data-switch-mode="combat" id="switchToCombat">
-				⚔️ Combat Mode
-			</button>
-			<button class="mode-switch-close" id="closeModeSwitcher">×</button>
-		</div>
-
-		<!-- Mode Switch Toggle Button (moved outside containers for global access) -->
-		<button class="mode-switch-toggle" id="modeSwitchToggle" style="display: none;">
-			🔄 Switch Mode
-		</button>
-
-		<!-- Game Controller Initialization -->
-		<script>
-		// Initialize game when DOM is ready
-		document.addEventListener('DOMContentLoaded', async function() {
-			console.log('Initializing unified Top Rug game...');
-
-			try {
-				// Initialize visual design system
-				const vds = getVisualDesignSystem();
-				vds.applyStyles();
-
-				// Get mode selector buttons
-				const modeButtons = document.querySelectorAll('.mode-button');
-
-				// Set up mode selection handlers
-				modeButtons.forEach(button => {
-					button.addEventListener('click', async function() {
-						const mode = this.getAttribute('data-mode');
-						if (this.disabled) {
-							console.log(`Mode ${mode} is not yet available`);
-							return;
-						}
-
-						console.log(`Starting game in ${mode} mode...`);
-						try {
-							await initGame(mode);
-
-							// Set visual design system mode
-							const vds = getVisualDesignSystem();
-							vds.setMode(mode);
-						} catch (error) {
-							console.error('Failed to start game:', error);
-							alert('Failed to start game. Check console for details.');
-						}
-					});
-				});
-
-				// Mode switcher disabled for testing
-
-				console.log('Game initialization complete. Click a mode to start!');
-
-			} catch (error) {
-				console.error('Game initialization failed:', error);
-				alert('Game initialization failed. Check console for details.');
-			}
-		});
-
-		// Set up test panel
-		function setupTestPanel() {
-			const testPanel = document.getElementById('testPanel');
-			const closeButton = document.getElementById('closeTestPanel');
-			const runAllTestsButton = document.getElementById('runAllTests');
-			const runPerformanceTestsButton = document.getElementById('runPerformanceTests');
-			const runStorageTestsButton = document.getElementById('runStorageTests');
-			const testResults = document.getElementById('testResults');
-
-			// Close test panel
-			closeButton.addEventListener('click', function() {
-				testPanel.style.display = 'none';
-			});
-
-			// Run all tests
-			runAllTestsButton.addEventListener('click', async function() {
-				try {
-					testResults.innerHTML = '<div class="test-status">Running tests...</div>';
-					runAllTestsButton.disabled = true;
-					runAllTestsButton.textContent = 'Running...';
-
-					const testSuite = getGameTestSuite();
-					await testSuite.runAllTests();
-
-					const results = testSuite.getResults();
-					displayTestResults(results);
-
-				} catch (error) {
-					console.error('Test suite failed:', error);
-					testResults.innerHTML = '<div class="test-status" style="color: #f25346;">Test suite failed: ' + error.message + '</div>';
-				} finally {
-					runAllTestsButton.disabled = false;
-					runAllTestsButton.textContent = 'Run All Tests';
-				}
-			});
-
-			// Run performance tests only
-			runPerformanceTestsButton.addEventListener('click', async function() {
-				try {
-					testResults.innerHTML = '<div class="test-status">Running performance tests...</div>';
-					runPerformanceTestsButton.disabled = true;
-					runPerformanceTestsButton.textContent = 'Running...';
-
-					const monitor = getPerformanceMonitor();
-					const results = {
-						total: 1,
-						passed: 1,
-						failed: 0,
-						results: [{
-							name: 'Performance Test',
-							status: 'passed',
-							result: `FPS: ${monitor.getStats().averageFPS}, Memory: ${monitor.getStats().memoryUsageMB}MB`
-						}]
-					};
-
-					displayTestResults(results);
-
-				} catch (error) {
-					console.error('Performance test failed:', error);
-					testResults.innerHTML = '<div class="test-status" style="color: #f25346;">Performance test failed: ' + error.message + '</div>';
-				} finally {
-					runPerformanceTestsButton.disabled = false;
-					runPerformanceTestsButton.textContent = 'Performance Tests';
-				}
-			});
-
-			// Run storage tests only
-			runStorageTestsButton.addEventListener('click', async function() {
-				try {
-					testResults.innerHTML = '<div class="test-status">Running storage tests...</div>';
-					runStorageTestsButton.disabled = true;
-					runStorageTestsButton.textContent = 'Running...';
-
-					const storage = getStorageManager();
-					const info = storage.getStorageInfo();
-
-					const results = {
-						total: 1,
-						passed: 1,
-						failed: 0,
-						results: [{
-							name: 'Storage Test',
-							status: 'passed',
-							result: `Storage available: ${info.available}, Items: ${info.items}, Size: ${info.usedKB}KB`
-						}]
-					};
-
-					displayTestResults(results);
-
-				} catch (error) {
-					console.error('Storage test failed:', error);
-					testResults.innerHTML = '<div class="test-status" style="color: #f25346;">Storage test failed: ' + error.message + '</div>';
-				} finally {
-					runStorageTestsButton.disabled = false;
-					runStorageTestsButton.textContent = 'Storage Tests';
-				}
-			});
-
-			// Display test results
-			function displayTestResults(results) {
-				let html = '<div class="test-summary">';
-				html += `<h4>Test Results: ${results.passed}/${results.total} passed</h4>`;
-
-				results.results.forEach(result => {
-					html += `<div class="test-item ${result.status}">`;
-					html += `<strong>${result.status === 'passed' ? '✅' : '❌'} ${result.name}</strong>`;
-					if (result.result) {
-						html += `<br><small>${result.result}</small>`;
-					}
-					if (result.error) {
-						html += `<br><small style="color: #f25346;">${result.error}</small>`;
-					}
-					html += '</div>';
-				});
-
-				html += '</div>';
-				testResults.innerHTML = html;
-			}
-
-			console.log('Test panel initialized');
-		}
-
-		// Toggle test panel visibility
-		function toggleTestPanel() {
-			const testPanel = document.getElementById('testPanel');
-			const isVisible = testPanel.style.display !== 'none';
-			testPanel.style.display = isVisible ? 'none' : 'block';
-		}
-
-		// Mode switcher temporarily disabled
-		// Set up test panel
-		setupTestPanel();
-
-		console.log('Game initialization complete. Click a mode to start!');
-		</script>
 	</body>
 </html>

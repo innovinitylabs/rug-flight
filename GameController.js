@@ -231,6 +231,32 @@ class GameController {
       this.switchMode(targetMode);
     };
 
+    // Button click handlers for mode selection
+    const classicButton = document.querySelector('[data-mode="classic"]');
+    const combatButton = document.querySelector('[data-mode="combat"]');
+
+    if (classicButton) {
+      classicButton.addEventListener('click', () => {
+        console.log('[GameController] Classic mode button clicked');
+        this.selectMode('classic');
+      });
+    }
+
+    if (combatButton) {
+      combatButton.addEventListener('click', () => {
+        console.log('[GameController] Combat mode button clicked');
+        this.selectMode('combat');
+      });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (event) => {
+      if (event.code === 'Tab') {
+        event.preventDefault();
+        this.cycleMode();
+      }
+    });
+
     // Window resize handler
     window.addEventListener('resize', () => {
       this.handleWindowResize();
@@ -275,6 +301,53 @@ class GameController {
       console.error('[GameController] Failed to start game:', error);
       throw error;
     }
+  }
+
+  /**
+   * Select and start a game mode
+   */
+  async selectMode(modeName) {
+    console.log(`[GameController] Selecting mode: ${modeName}`);
+
+    if (!this.isInitialized) {
+      console.error('[GameController] Not initialized yet');
+      return;
+    }
+
+    try {
+      // Hide mode selector
+      const modeSelector = document.getElementById('gameModeSelector');
+      if (modeSelector) {
+        modeSelector.style.display = 'none';
+      }
+
+      // Show game container
+      const gameContainer = document.getElementById('gameHolder');
+      if (gameContainer) {
+        gameContainer.style.display = 'block';
+      }
+
+      // Start the game in the selected mode
+      await this.start(modeName);
+
+      console.log(`[GameController] Successfully started ${modeName} mode`);
+
+    } catch (error) {
+      console.error(`[GameController] Failed to start ${modeName} mode:`, error);
+    }
+  }
+
+  /**
+   * Cycle between available modes
+   */
+  cycleMode() {
+    const modes = ['classic', 'combat'];
+    const currentIndex = modes.indexOf(this.currentMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    const nextMode = modes[nextIndex];
+
+    console.log(`[GameController] Cycling from ${this.currentMode} to ${nextMode}`);
+    this.selectMode(nextMode);
   }
 
   /**
