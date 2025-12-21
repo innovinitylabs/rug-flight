@@ -626,12 +626,32 @@ let bannerTextureCache = null;
 const World = {
   scene: null,
   camera: null,
+  renderer: null,
+  airplane: null,
+  sea: null,
+  sky: null,
+  ambientLight: null,
+  hemisphereLight: null,
+  shadowLight: null,
   objects: new Set(),
 
-  init(sceneRef, cameraRef) {
+  init(sceneRef, cameraRef, rendererRef) {
     this.scene = sceneRef;
     this.camera = cameraRef;
+    this.renderer = rendererRef;
     this.objects.clear();
+  },
+
+  setGameObjects(airplaneRef, seaRef, skyRef) {
+    this.airplane = airplaneRef;
+    this.sea = seaRef;
+    this.sky = skyRef;
+  },
+
+  setLights(ambientRef, hemisphereRef, shadowRef) {
+    this.ambientLight = ambientRef;
+    this.hemisphereLight = hemisphereRef;
+    this.shadowLight = shadowRef;
   },
 
   add(obj) {
@@ -814,14 +834,20 @@ const EndlessMode = {
 
   updateVisuals(deltaTime, game) {
     // Airplane propeller animation
-    airplane.propeller.rotation.x += .2 + game.planeSpeed * deltaTime * .005;
+    if (World.airplane && World.airplane.propeller) {
+      World.airplane.propeller.rotation.x += .2 + game.planeSpeed * deltaTime * .005;
+    }
 
     // Sea rotation
-    sea.mesh.rotation.z += game.speed * deltaTime;
-    if (sea.mesh.rotation.z > 2 * Math.PI) sea.mesh.rotation.z -= 2 * Math.PI;
+    if (World.sea && World.sea.mesh) {
+      World.sea.mesh.rotation.z += game.speed * deltaTime;
+      if (World.sea.mesh.rotation.z > 2 * Math.PI) World.sea.mesh.rotation.z -= 2 * Math.PI;
+    }
 
     // Ambient light intensity smoothing
-    ambientLight.intensity += (.5 - ambientLight.intensity) * deltaTime * 0.005;
+    if (World.ambientLight) {
+      World.ambientLight.intensity += (.5 - World.ambientLight.intensity) * deltaTime * 0.005;
+    }
 
     // Update particles
     if (particlesHolder) {
@@ -839,8 +865,8 @@ const EndlessMode = {
     }
 
     // Sky and sea movement
-    sky.moveClouds();
-    sea.moveWaves();
+    if (World.sky) World.sky.moveClouds();
+    if (World.sea) World.sea.moveWaves();
   },
 
   updatePlaying(game, deltaTime) {
@@ -874,17 +900,23 @@ const EndlessMode = {
     }
 
     // Core airplane movement (moved from updatePlane)
-    const movementResult = airplane.movement.update(mousePos, deltaTime, game, airplane);
-    airplane.mesh.position.x = movementResult.x;
-    airplane.mesh.position.y = movementResult.y;
-    airplane.mesh.rotation.x = movementResult.rotX;
-    airplane.mesh.rotation.z = movementResult.rotZ;
+    if (World.airplane && World.airplane.movement) {
+      const movementResult = World.airplane.movement.update(mousePos, deltaTime, game, World.airplane);
+      World.airplane.mesh.position.x = movementResult.x;
+      World.airplane.mesh.position.y = movementResult.y;
+      World.airplane.mesh.rotation.x = movementResult.rotX;
+      World.airplane.mesh.rotation.z = movementResult.rotZ;
+    }
 
     // Camera updates
-    var targetCameraZ = normalize(game.planeSpeed, game.planeMinSpeed, game.planeMaxSpeed, game.cameraNearPos, game.cameraFarPos);
-    camera.fov = normalize(mousePos.x,-1,1,40, 80);
-    camera.updateProjectionMatrix();
-    camera.position.y += (airplane.mesh.position.y - camera.position.y)*deltaTime*game.cameraSensivity;
+    if (World.camera) {
+      var targetCameraZ = normalize(game.planeSpeed, game.planeMinSpeed, game.planeMaxSpeed, game.cameraNearPos, game.cameraFarPos);
+      World.camera.fov = normalize(mousePos.x,-1,1,40, 80);
+      World.camera.updateProjectionMatrix();
+      if (World.airplane && World.airplane.mesh) {
+        World.camera.position.y += (World.airplane.mesh.position.y - World.camera.position.y)*deltaTime*game.cameraSensivity;
+      }
+    }
 
     // Collision damping
     game.planeCollisionSpeedX += (0-game.planeCollisionSpeedX)*deltaTime * 0.03;
@@ -893,7 +925,9 @@ const EndlessMode = {
     game.planeCollisionDisplacementY += (0-game.planeCollisionDisplacementY)*deltaTime *0.01;
 
     // Pilot hair animation
-    airplane.pilot.updateHairs();
+    if (World.airplane && World.airplane.pilot) {
+      World.airplane.pilot.updateHairs();
+    }
 
     // Banner positioning during gameplay
     this.updateBanner(game, deltaTime, false);
@@ -940,10 +974,12 @@ const EndlessMode = {
   updateGameOver(game, deltaTime) {
     // Gameover animation
     game.speed *= .99;
-    airplane.mesh.rotation.z += (-Math.PI/2 - airplane.mesh.rotation.z)*.0002*deltaTime;
-    airplane.mesh.rotation.x += 0.0003*deltaTime;
-    game.planeFallSpeed *= 1.05;
-    airplane.mesh.position.y -= game.planeFallSpeed*deltaTime;
+    if (World.airplane && World.airplane.mesh) {
+      World.airplane.mesh.rotation.z += (-Math.PI/2 - World.airplane.mesh.rotation.z)*.0002*deltaTime;
+      World.airplane.mesh.rotation.x += 0.0003*deltaTime;
+      game.planeFallSpeed *= 1.05;
+      World.airplane.mesh.position.y -= game.planeFallSpeed*deltaTime;
+    }
 
     // Hide ropes when game ends
     if (ropeLeft) ropeLeft.visible = false;
@@ -952,9 +988,9 @@ const EndlessMode = {
     // Banner positioning during gameover
     this.updateBanner(game, deltaTime, true);
 
-    if (airplane.mesh.position.y <-200){
+    if (World.airplane && World.airplane.mesh && World.airplane.mesh.position.y < -200){
       // Hide airplane when it falls below screen
-      airplane.mesh.visible = false;
+      World.airplane.mesh.visible = false;
       this.state = "waitingReplay";
     }
   },
@@ -965,8 +1001,8 @@ const EndlessMode = {
     if (ropeRight) ropeRight.visible = false;
 
     // Keep airplane hidden during replay wait
-    if (airplane && airplane.mesh) {
-      airplane.mesh.visible = false;
+    if (World.airplane && World.airplane.mesh) {
+      World.airplane.mesh.visible = false;
     }
 
     // Banner positioning during waiting replay
@@ -975,7 +1011,7 @@ const EndlessMode = {
 
   updateBanner(game, deltaTime, isGameOver) {
     // Update banner position to follow the plane (only if banner exists)
-    if (!banner || !airplane) return;
+    if (!banner || !World.airplane) return;
 
     if (isGameOver) {
       // When game is over or waiting for replay, animate banner to center screen above replay message
@@ -1001,16 +1037,18 @@ const EndlessMode = {
       var tailLocalPos = new THREE.Vector3(-10, 5, 0);
 
       // Transform to world space
-      tailLocalPos.applyMatrix4(airplane.mesh.matrixWorld);
+      if (World.airplane && World.airplane.mesh) {
+        tailLocalPos.applyMatrix4(World.airplane.mesh.matrixWorld);
 
-      // Position banner at tail with offset
-      banner.position.copy(tailLocalPos);
-      banner.position.z += 10; // Offset behind plane
+        // Position banner at tail with offset
+        banner.position.copy(tailLocalPos);
+        banner.position.z += 10; // Offset behind plane
 
-      // Rotate banner to face opposite direction of plane movement (advertising backward)
-      banner.rotation.y = airplane.mesh.rotation.y + Math.PI;
-      banner.rotation.x = airplane.mesh.rotation.x;
-      banner.rotation.z = airplane.mesh.rotation.z;
+        // Rotate banner to face opposite direction of plane movement (advertising backward)
+        banner.rotation.y = World.airplane.mesh.rotation.y + Math.PI;
+        banner.rotation.x = World.airplane.mesh.rotation.x;
+        banner.rotation.z = World.airplane.mesh.rotation.z;
+      }
     }
   },
 
@@ -1070,7 +1108,7 @@ const EndlessMode = {
 let currentMode = null;
 
 function resetGame(){
-  if (!airplane) {
+  if (!World.airplane) {
     console.warn('[resetGame] airplane not initialized yet, aborting reset');
     return;
   }
@@ -1193,30 +1231,30 @@ function createScene() {
   WIDTH = window.innerWidth;
 
   scene = new THREE.Scene();
-  World.init(scene, camera); // Initialize World container
-  aspectRatio = WIDTH / HEIGHT;
-  fieldOfView = 50;
-  nearPlane = .1;
-  farPlane = 10000;
   camera = new THREE.PerspectiveCamera(
     fieldOfView,
     aspectRatio,
     nearPlane,
     farPlane
     );
-  scene.fog = new THREE.Fog(0xf7d9aa, 100,950);
-  camera.position.x = 0;
-  camera.position.z = 200;
-  camera.position.y = game.planeDefaultHeight;
-  //camera.lookAt(new THREE.Vector3(0, 400, 0));
-
-  // Initialize audio manager (HTML5 Audio doesn't need camera)
-  audioManager.init(camera);
-
   renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
   renderer.setSize(WIDTH, HEIGHT);
 
-  renderer.shadowMap.enabled = true;
+  World.init(scene, camera, renderer); // Initialize World container
+  aspectRatio = WIDTH / HEIGHT;
+  fieldOfView = 50;
+  nearPlane = .1;
+  farPlane = 10000;
+  scene.fog = new THREE.Fog(0xf7d9aa, 100,950);
+  World.camera.position.x = 0;
+  World.camera.position.z = 200;
+  World.camera.position.y = game.planeDefaultHeight;
+  //camera.lookAt(new THREE.Vector3(0, 400, 0));
+
+  // Initialize audio manager (HTML5 Audio doesn't need camera)
+  audioManager.init(World.camera);
+
+  World.renderer.shadowMap.enabled = true;
 
   container = document.getElementById('world-toprug1');
   renderer.domElement.id = 'threejs-canvas';
@@ -1308,9 +1346,10 @@ function createLights() {
   var ch = new THREE.CameraHelper(shadowLight.shadow.camera);
 
   //scene.add(ch);
-  scene.add(hemisphereLight);
-  scene.add(shadowLight);
-  scene.add(ambientLight);
+  World.add(hemisphereLight);
+  World.add(shadowLight);
+  World.add(ambientLight);
+  World.setLights(ambientLight, hemisphereLight, shadowLight); // Register lights
 
 }
 
@@ -1786,9 +1825,9 @@ EnnemiesHolder.prototype.rotateEnnemies = function(){
     ennemy.mesh.rotation.y += Math.random()*.1;
 
     // Only check collisions during gameplay and if enemy system is enabled - skip after game ends
-    if (game.status == "playing" && airplane && airplane.mesh && currentMode && currentMode.systems && currentMode.systems.enemies) {
+    if (game.status == "playing" && World.airplane && World.airplane.mesh && currentMode && currentMode.systems && currentMode.systems.enemies) {
     //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
-    var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
+    var diffPos = World.airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
     var d = diffPos.length();
     if (d<game.ennemyDistanceTolerance){
       if (currentMode.systems.lives) {
@@ -1936,7 +1975,7 @@ CoinsHolder.prototype.rotateCoins = function(){
     coin.mesh.rotation.y += Math.random()*.1;
 
     //var globalCoinPosition =  coin.mesh.localToWorld(new THREE.Vector3());
-    var diffPos = airplane.mesh.position.clone().sub(coin.mesh.position.clone());
+    var diffPos = World.airplane.mesh.position.clone().sub(coin.mesh.position.clone());
     var d = diffPos.length();
     if (d<game.coinDistanceTolerance){
       this.coinsPool.unshift(this.coinsInUse.splice(i,1)[0]);
@@ -2008,7 +2047,7 @@ CollectiblesHolder.prototype.spawnCollectibles = function(){
     collectible.mesh.rotation.y += Math.random()*.1;
 
     // Collision detection
-    var diffPos = airplane.mesh.position.clone().sub(collectible.mesh.position.clone());
+    var diffPos = World.airplane.mesh.position.clone().sub(collectible.mesh.position.clone());
     var d = diffPos.length();
     if (d < game.collectibleDistanceTolerance){
       // Restore energy
@@ -2044,6 +2083,7 @@ function createPlane(){
   airplane.mesh.scale.set(.25,.25,.25);
   airplane.mesh.position.y = game.planeDefaultHeight;
   World.add(airplane.mesh);
+  World.setGameObjects(airplane, World.sea, World.sky); // Register airplane
 }
 
 window.TopRugEngine.createPlane = createPlane;
@@ -2140,6 +2180,7 @@ function createSea(){
   sea = new Sea();
   sea.mesh.position.y = -game.seaRadius;
   World.add(sea.mesh);
+  World.setGameObjects(World.airplane, sea, World.sky); // Register sea
 }
 
 window.TopRugEngine.createSea = createSea;
@@ -2148,6 +2189,7 @@ function createSky(){
   sky = new Sky();
   sky.mesh.position.y = -game.seaRadius;
   World.add(sky.mesh);
+  World.setGameObjects(World.airplane, World.sea, sky); // Register sky
 }
 
 window.TopRugEngine.createSky = createSky;
@@ -2209,16 +2251,6 @@ function removeEnergy(){
 
 
 // function updatePlane(){ // REMOVED - logic moved to EndlessMode.update methods
-
-  const movementResult = airplane.movement.update(mousePos, deltaTime, game, airplane);
-  airplane.mesh.position.x = movementResult.x;
-  airplane.mesh.position.y = movementResult.y;
-  airplane.mesh.rotation.x = movementResult.rotX;
-  airplane.mesh.rotation.z = movementResult.rotZ;
-  var targetCameraZ = normalize(game.planeSpeed, game.planeMinSpeed, game.planeMaxSpeed, game.cameraNearPos, game.cameraFarPos);
-  camera.fov = normalize(mousePos.x,-1,1,40, 80);
-  camera.updateProjectionMatrix ()
-  camera.position.y += (airplane.mesh.position.y - camera.position.y)*deltaTime*game.cameraSensivity;
 
   game.planeCollisionSpeedX += (0-game.planeCollisionSpeedX)*deltaTime * 0.03;
   game.planeCollisionDisplacementX += (0-game.planeCollisionDisplacementX)*deltaTime *0.01;
@@ -2337,7 +2369,8 @@ function removeEnergy(){
 
       // Cloth-like tilt: banner tilts naturally based on plane's movement direction
       // Calculate plane's current world position for movement direction
-      var currentPlanePos = airplane.mesh.position.clone();
+      if (World.airplane && World.airplane.mesh) {
+        var currentPlanePos = World.airplane.mesh.position.clone();
       var planeMovementDir = new THREE.Vector3();
       
       if (banner.userData.lastPlanePos && banner.userData.lastPlanePos.length() > 0) {
@@ -2459,8 +2492,8 @@ function removeEnergy(){
       if (!safeDeltaTimeForFlutter || safeDeltaTimeForFlutter <= 0 || !isFinite(safeDeltaTimeForFlutter) || safeDeltaTimeForFlutter > 0.1) {
         safeDeltaTimeForFlutter = 0.016; // Default to 60fps if invalid
       }
-      if (banner.userData.lastPlanePos && banner.userData.lastPlanePos.length() > 0 && airplane && airplane.mesh) {
-        var currentPlanePos = airplane.mesh.position.clone();
+      if (banner.userData.lastPlanePos && banner.userData.lastPlanePos.length() > 0 && World.airplane && World.airplane.mesh) {
+        var currentPlanePos = World.airplane.mesh.position.clone();
         var planeMovementDir = new THREE.Vector3();
         planeMovementDir.subVectors(currentPlanePos, banner.userData.lastPlanePos);
         verticalVelocity = Math.abs(planeMovementDir.y / safeDeltaTimeForFlutter); // Vertical movement velocity
