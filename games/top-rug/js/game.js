@@ -1599,7 +1599,7 @@ function createBanner(){
     map: bannerTexture,
     emissiveMap: bannerTexture, // Use texture as emissive map for self-illumination
     emissive: 0x888888, // Balanced emissive for natural colors (was 0xffffff - too bright, 0x666666 - too dim/pink, now ~53% intensity)
-    transparent: false,
+    transparent: true, // Enable transparency for PNG textures
     side: THREE.DoubleSide,
     color: 0xffffff // White base color so texture shows properly without tinting
   });
@@ -1682,6 +1682,10 @@ function createBanner(){
   // Position behind the plane initially
   banner.position.set(0, game.planeDefaultHeight, -80);
   scene.add(banner);
+
+  // Ensure banner is visible
+  banner.visible = true;
+  console.log('[BANNER] Banner mesh added to scene', banner);
 
   // Two ropes connecting plane tail to banner top corners (edges closest to plane)
   var ropeMaterial = new THREE.LineBasicMaterial({color: Colors.brownDark, linewidth: 4});
@@ -2513,6 +2517,7 @@ window.Aviator1Game = {
     createScene();
     createLights();
     createPlane();
+    createBanner();
     createSea();
     createSky();
 
