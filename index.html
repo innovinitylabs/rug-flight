@@ -12,7 +12,12 @@
 		<link rel="stylesheet" type="text/css" href="shared/css/ui.css" />
 		<script type="text/javascript" src="shared/js/TweenMax.min.js"></script>
 		<script type="text/javascript" src="shared/js/three.min.js"></script>
-		<!-- Game mode selector will be loaded first, then game scripts on demand -->
+
+		<!-- Shared utilities loaded first -->
+		<script type="text/javascript" src="shared/js/utils/GameUtils.js"></script>
+		<script type="text/javascript" src="shared/js/utils/AudioManager.js"></script>
+
+		<!-- Game mode controller -->
 		<script type="text/javascript" src="shared/js/game-mode-controller.js"></script>
 		<!--[if IE]>
 		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
