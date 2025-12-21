@@ -600,4 +600,46 @@ if (typeof module !== 'undefined' && module.exports) {
   window.GameController = GameController;
   window.getGameController = getGameController;
   window.initGame = initGame;
+
+  // Auto-initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeGame);
+  } else {
+    initializeGame();
+  }
+
+  async function initializeGame() {
+    console.log('[GameController] DOM ready, initializing unified game...');
+
+    try {
+      const controller = getGameController();
+      await controller.init();
+      console.log('[GameController] Unified game initialization complete. Ready to play!');
+    } catch (error) {
+      console.error('[GameController] Failed to initialize unified game:', error);
+
+      // Show user-friendly error
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(255, 0, 0, 0.9);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        z-index: 10000;
+        max-width: 400px;
+      `;
+      errorDiv.innerHTML = `
+        <h2>🚫 Game Failed to Load</h2>
+        <p>${error.message}</p>
+        <p>Check browser console for details.</p>
+        <button onclick="location.reload()" style="margin-top: 10px; padding: 10px 20px; background: white; color: red; border: none; border-radius: 5px; cursor: pointer;">Retry</button>
+      `;
+      document.body.appendChild(errorDiv);
+    }
+  }
 }

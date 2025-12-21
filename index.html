@@ -15,35 +15,34 @@
 		<link rel="stylesheet" type="text/css" href="shared/css/ui.css" />
 		<script type="text/javascript" src="shared/js/TweenMax.min.js"></script>
 		<script type="text/javascript" src="shared/js/three.min.js"></script>
-		<!-- Unified game controller and core systems -->
-		<script type="text/javascript" src="GameController.js"></script>
-		<script type="text/javascript" src="core/audio/AudioManager.js"></script>
-		<script type="text/javascript" src="core/engine/GameEngine.js?v=20241220"></script>
-		<script type="text/javascript" src="core/ui/UIManager.js?v=20241220"></script>
-		<script type="text/javascript" src="core/ui/VisualDesignSystem.js?v=20241220"></script>
-		<script type="text/javascript" src="core/assets/TextureManager.js?v=20241220"></script>
-		<script type="text/javascript" src="core/StorageManager.js"></script>
-		<script type="text/javascript" src="core/ModeController.js"></script>
-		<script type="text/javascript" src="core/ObjectPool.js"></script>
-		<script type="text/javascript" src="core/PerformanceMonitor.js"></script>
-		<script type="text/javascript" src="tests/GameTestSuite.js"></script>
-		<!-- Game modes -->
-		<script type="text/javascript" src="modes/classic/ClassicGame.js?v=20241220"></script>
-		<script type="text/javascript" src="modes/classic/ClassicHUD.js?v=20241220"></script>
-		<script type="text/javascript" src="modes/classic/BannerSystem.js?v=20241220"></script>
-		<script type="text/javascript" src="modes/combat/CombatGame.js?v=20241220"></script>
-		<script type="text/javascript" src="modes/combat/CombatHUD.js?v=20241220"></script>
-		<script type="text/javascript" src="modes/combat/CombatSceneManager.js?v=20241220"></script>
-		<script type="text/javascript" src="modes/combat/CombatAirplane.js?v=20241220"></script>
-		<script type="text/javascript" src="modes/combat/CombatPilot.js"></script>
-		<script type="text/javascript" src="modes/combat/CombatSea.js"></script>
-		<script type="text/javascript" src="modes/combat/CombatSky.js"></script>
-		<script type="text/javascript" src="modes/combat/CombatCloud.js"></script>
-		<script type="text/javascript" src="modes/combat/CombatCoin.js"></script>
-		<script type="text/javascript" src="modes/combat/CombatEnemy.js"></script>
-		<script type="text/javascript" src="modes/combat/CombatProjectile.js"></script>
-		<script type="text/javascript" src="modes/combat/WeaponSystem.js"></script>
-		<script type="text/javascript" src="modes/combat/EnemySystem.js"></script>
+
+		<!-- Core Dependencies (loaded first) -->
+		<script type="text/javascript" src="core/audio/AudioManager.js?v=20241221"></script>
+		<script type="text/javascript" src="core/engine/GameEngine.js?v=20241221"></script>
+		<script type="text/javascript" src="core/ui/UIManager.js?v=20241221"></script>
+		<script type="text/javascript" src="core/ui/VisualDesignSystem.js?v=20241221"></script>
+		<script type="text/javascript" src="core/assets/TextureManager.js?v=20241221"></script>
+		<script type="text/javascript" src="core/StorageManager.js?v=20241221"></script>
+		<script type="text/javascript" src="core/ModeController.js?v=20241221"></script>
+		<script type="text/javascript" src="core/ObjectPool.js?v=20241221"></script>
+		<script type="text/javascript" src="core/PerformanceMonitor.js?v=20241221"></script>
+
+		<!-- Game Mode Dependencies -->
+		<script type="text/javascript" src="modes/classic/Airplane.js?v=20241221"></script>
+		<script type="text/javascript" src="modes/combat/CombatAirplane.js?v=20241221"></script>
+		<script type="text/javascript" src="modes/combat/CombatProjectile.js?v=20241221"></script>
+		<script type="text/javascript" src="modes/combat/CombatEnemy.js?v=20241221"></script>
+		<script type="text/javascript" src="modes/combat/CombatCoin.js?v=20241221"></script>
+
+		<!-- Game Modes -->
+		<script type="text/javascript" src="modes/classic/ClassicGame.js?v=20241221"></script>
+		<script type="text/javascript" src="modes/combat/CombatGame.js?v=20241221"></script>
+
+		<!-- Main Game Controller (loaded last, after all dependencies) -->
+		<script type="text/javascript" src="GameController.js?v=20241221"></script>
+
+		<!-- Tests (optional) -->
+		<script type="text/javascript" src="tests/GameTestSuite.js?v=20241221"></script>
 		<!--[if IE]>
 		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
 		<![endif]-->
