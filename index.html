@@ -14,11 +14,24 @@
 		<script type="text/javascript" src="shared/js/three.min.js"></script>
 
 		<!-- Shared utilities loaded first -->
-		<script type="text/javascript" src="shared/js/utils/GameUtils.js"></script>
-		<script type="text/javascript" src="shared/js/utils/AudioManager.js"></script>
+		<script type="text/javascript" src="shared/js/utils/GameUtils.js?v=20241222"></script>
+		<script type="text/javascript" src="shared/js/utils/AudioManager.js?v=20241222"></script>
+
+		<!-- Core game engine -->
+		<script type="text/javascript" src="core/engine/BaseGameEngine.js?v=20241222"></script>
+		<script type="text/javascript" src="core/game/BaseGame.js?v=20241222"></script>
+
+		<!-- Game implementations -->
+		<script type="text/javascript" src="modes/classic/Airplane.js?v=20241222"></script>
+		<script type="text/javascript" src="modes/combat/CombatAirplane.js?v=20241222"></script>
+		<script type="text/javascript" src="modes/combat/CombatProjectile.js?v=20241222"></script>
+		<script type="text/javascript" src="modes/combat/CombatEnemy.js?v=20241222"></script>
+		<script type="text/javascript" src="modes/combat/CombatCoin.js?v=20241222"></script>
+		<script type="text/javascript" src="core/game/modes/ClassicGame.js?v=20241222"></script>
+		<script type="text/javascript" src="core/game/modes/CombatGame.js?v=20241222"></script>
 
 		<!-- Game mode controller -->
-		<script type="text/javascript" src="shared/js/game-mode-controller.js"></script>
+		<script type="text/javascript" src="shared/js/game-mode-controller.js?v=20241222"></script>
 		<!--[if IE]>
 		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
 		<![endif]-->
