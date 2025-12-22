@@ -260,7 +260,7 @@ class World {
       if (object.material) {
         if (Array.isArray(object.material)) {
           object.material.forEach(material => material.dispose());
-      } else {
+                } else {
           object.material.dispose();
         }
       }
@@ -447,6 +447,76 @@ class DistanceSystem {
 
   getDelta() {
     return this.lastDelta;
+  }
+}
+
+// DifficultyCurveSystem class - centralizes difficulty progression based on distance
+class DifficultyCurveSystem {
+  constructor() {
+    // Why difficulty is centralized: Ensures consistent progression across all systems
+    // Why systems query difficulty: Separation of concerns - systems focus on behavior, not progression rules
+    // How this enables multiple game modes: Different curves can be swapped for different experiences
+
+    this.currentLevel = 1;
+    this.difficultyScalar = 1.0; // Base difficulty multiplier
+    this.lastDistanceCheckpoint = 0;
+    this.distancePerLevel = 500; // Distance units needed for level increase
+
+    console.log('[DifficultyCurve] Centralized difficulty progression established');
+  }
+
+  // Update difficulty based on current distance traveled
+  update(distance) {
+    // Calculate which level we should be at
+    const targetLevel = Math.floor(distance / this.distancePerLevel) + 1;
+
+    // Update level if we've progressed
+    if (targetLevel > this.currentLevel) {
+      this.currentLevel = targetLevel;
+      console.log(`[DifficultyCurve] LEVEL UP! Reached level ${this.currentLevel} at distance ${distance.toFixed(0)}`);
+
+      // Update checkpoint for smooth progression
+      this.lastDistanceCheckpoint = (this.currentLevel - 1) * this.distancePerLevel;
+    }
+
+    // Calculate smooth difficulty scalar within current level
+    const progressInLevel = distance - this.lastDistanceCheckpoint;
+    const levelProgressRatio = Math.min(progressInLevel / this.distancePerLevel, 1.0);
+
+    // Smooth difficulty increase: base 1.0, increases by 0.1 per level, smoothed within level
+    this.difficultyScalar = 1.0 + ((this.currentLevel - 1) * 0.1) + (levelProgressRatio * 0.1);
+  }
+
+  // Get current difficulty state - read-only interface for other systems
+  getDifficultyState() {
+    return {
+      level: this.currentLevel,
+      difficultyScalar: this.difficultyScalar,
+
+      // Conservative multipliers for gameplay balance
+      spawnRateMultiplier: Math.min(1.0 + (this.difficultyScalar - 1.0) * 0.3, 2.0), // Max 2x spawn rate
+      speedMultiplier: Math.min(1.0 + (this.difficultyScalar - 1.0) * 0.2, 1.8),     // Max 1.8x speed
+      coinDensity: Math.max(1.0 - (this.difficultyScalar - 1.0) * 0.1, 0.5),       // Min 0.5x coin density
+      collisionSeverityMultiplier: 1.0 + (this.difficultyScalar - 1.0) * 0.2        // Gradual increase
+    };
+  }
+
+  // Reset difficulty for new game
+  reset() {
+    this.currentLevel = 1;
+    this.difficultyScalar = 1.0;
+    this.lastDistanceCheckpoint = 0;
+    console.log('[DifficultyCurve] Difficulty reset for new game');
+  }
+
+  // Get current level
+  getCurrentLevel() {
+    return this.currentLevel;
+  }
+
+  // Get difficulty scalar
+  getDifficultyScalar() {
+    return this.difficultyScalar;
   }
 }
 
@@ -1469,7 +1539,7 @@ class AudioPresentationSystem {
   }
 
   playCoinCollectSound(event) {
-    // Play coin collection sound
+      // Play coin collection sound
     // In a real implementation, this would play the audio asset
     try {
       // Placeholder for audio playback
@@ -2087,6 +2157,7 @@ class EndlessMode {
     this.worldAxisSystem = null;
     this.depthLayerSystem = null;
     this.worldLayoutSystem = null;
+    this.difficultyCurveSystem = null;
     this.worldScrollerSystem = null;
     this.laneSystem = null;
     this.laneController = null;
@@ -2125,6 +2196,7 @@ class EndlessMode {
     this.worldAxisSystem = new WorldAxisSystem();
     this.depthLayerSystem = new DepthLayerSystem();
     this.worldLayoutSystem = new WorldLayoutSystem();
+    this.difficultyCurveSystem = new DifficultyCurveSystem();
     this.worldScrollerSystem = new WorldScrollerSystem(
       this.worldAxisSystem,
       this.worldLayoutSystem,
@@ -2241,6 +2313,9 @@ class EndlessMode {
 
     // 4. World axis system updates
     this.worldAxisSystem.update(deltaTime);
+
+    // 4.5. Difficulty curve system updates (centralized difficulty progression)
+    this.difficultyCurveSystem.update(this.distanceSystem.getDistance());
 
     // 5. World scroller system updates (single source of truth for forward motion)
     this.worldScrollerSystem.update(deltaTime);
