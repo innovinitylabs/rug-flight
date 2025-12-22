@@ -1169,6 +1169,113 @@ class SpawnSystem {
   }
 }
 
+// CollisionConsumptionSystem class - processes collision intents into domain events
+class CollisionConsumptionSystem {
+  constructor(entityRegistry) {
+    this.entityRegistry = entityRegistry;
+    this.domainEvents = []; // Domain events for current frame
+
+    console.log('[CollisionConsumption] Intent consumption system established');
+  }
+
+  // Process collision intents and emit domain events
+  process(intents) {
+    console.assert(Array.isArray(intents), '[CollisionConsumption] ERROR: intents must be an array');
+
+    // Clear previous frame's domain events
+    this.domainEvents = [];
+
+    // Process each collision intent
+    for (const intent of intents) {
+      if (intent.type === 'COLLISION') {
+        this.processCollisionIntent(intent);
+      }
+    }
+
+    return this.domainEvents;
+  }
+
+  processCollisionIntent(intent) {
+    const { target, laneIndex } = intent;
+
+    // Handle different entity types
+    if (target.type === 'coin') {
+      this.processCoinCollection(target, laneIndex);
+    }
+    // Future: Add other entity type handlers here
+  }
+
+  processCoinCollection(coinEntity, laneIndex) {
+    const entityId = coinEntity.id;
+
+    // Unregister the coin from the entity registry
+    const unregistered = this.entityRegistry.unregister(coinEntity);
+    if (unregistered) {
+      // Emit domain event for coin collection
+      const domainEvent = {
+        type: 'COIN_COLLECTED',
+        entityId: entityId,
+        laneIndex: laneIndex,
+        timestamp: performance.now()
+      };
+
+      this.domainEvents.push(domainEvent);
+
+      console.log(`[CollisionConsumption] COIN_COLLECTED: Entity ${entityId} in lane ${laneIndex}`);
+    } else {
+      console.warn(`[CollisionConsumption] WARNING: Failed to unregister coin entity ${entityId}`);
+    }
+  }
+
+  // Get domain events for current frame
+  getDomainEvents() {
+    return [...this.domainEvents]; // Return copy
+  }
+
+  // Get domain events filtered by type
+  getDomainEventsByType(eventType) {
+    return this.domainEvents.filter(event => event.type === eventType);
+  }
+
+  // Get coin collection events specifically
+  getCoinCollectedEvents() {
+    return this.getDomainEventsByType('COIN_COLLECTED');
+  }
+
+  // Get statistics for current frame
+  getFrameStats() {
+    const stats = {
+      totalDomainEvents: this.domainEvents.length,
+      eventsByType: {},
+      coinCollections: 0
+    };
+
+    for (const event of this.domainEvents) {
+      // Count by type
+      stats.eventsByType[event.type] = (stats.eventsByType[event.type] || 0) + 1;
+
+      // Specific counters
+      if (event.type === 'COIN_COLLECTED') {
+        stats.coinCollections++;
+      }
+    }
+
+    return stats;
+  }
+
+  // Clear domain events (called at end of frame)
+  clear() {
+    const clearedCount = this.domainEvents.length;
+    this.domainEvents = [];
+
+    if (clearedCount > 0) {
+      console.log(`[CollisionConsumption] Cleared ${clearedCount} domain events for next frame`);
+    }
+
+    return clearedCount;
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -1540,6 +1647,7 @@ class EndlessMode {
     this.entityRegistrySystem = null;
     this.collisionIntentSystem = null;
     this.spawnSystem = null;
+    this.collisionConsumptionSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1592,6 +1700,9 @@ class EndlessMode {
       this.laneSystem,
       50 // Spawn every 50 world units
     );
+
+    // Create collision consumption system - processes intents into domain events
+    this.collisionConsumptionSystem = new CollisionConsumptionSystem(this.entityRegistrySystem);
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -1683,18 +1794,23 @@ class EndlessMode {
     this.spawnSystem.update();
 
     // 9. Collision intent system processes (deterministic collision detection)
-    this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
+    const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
 
-    // 10. Sea system updates (pure renderer - reads Z from scroller)
+    // 10. Collision consumption system processes intents into domain events
+    this.collisionConsumptionSystem.process(collisionIntents);
+
+    // 12. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
-    // 11. Sky system updates (pure renderer - reads Z from scroller)
+    // 13. Sky system updates (pure renderer - reads Z from scroller)
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
-    // 12. Camera system updates (delegated to CameraRig)
+    // 14. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
-    // 13. Clear collision intents for next frame
+    // 15. Clear collision intents and domain events for next frame
+    this.collisionIntentSystem.clear();
+    this.collisionConsumptionSystem.clear();
     this.collisionIntentSystem.clear();
 
     // Update game time
