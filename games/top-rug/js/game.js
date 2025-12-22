@@ -1,5 +1,7 @@
 window.TopRugEngine = window.TopRugEngine || {};
 
+var game = null; // Defensive initialization to prevent undefined access
+
 // AUDIO MANAGER - Using Three.js Audio API exactly like Aviator2
 console.log('[TopRugEngine] namespace initialized:', window.TopRugEngine);
 
@@ -605,7 +607,6 @@ var Colors = {
 ///////////////
 
 // GAME VARIABLES
-var game;
 var deltaTime = 0;
 var newTime = new Date().getTime();
 var oldTime = new Date().getTime();
@@ -1401,6 +1402,8 @@ var Pilot = function(){
 
 Pilot.prototype.updateHairs = function(){
   //*
+  if (!game) return;
+
    var hairs = this.hairsTop.children;
 
    var l = hairs.length;
@@ -1783,6 +1786,8 @@ EnnemiesHolder.prototype.spawnEnnemies = function(){
 }
 
 EnnemiesHolder.prototype.rotateEnnemies = function(){
+  if (!game) return;
+
   for (var i=0; i<this.ennemiesInUse.length; i++){
     var ennemy = this.ennemiesInUse[i];
     ennemy.angle += game.speed*deltaTime*game.ennemiesSpeed;
@@ -1934,6 +1939,8 @@ CoinsHolder.prototype.spawnCoins = function(){
 }
 
 CoinsHolder.prototype.rotateCoins = function(){
+  if (!game) return;
+
   for (var i=0; i<this.coinsInUse.length; i++){
     var coin = this.coinsInUse[i];
     if (coin.exploding) continue;
@@ -1992,6 +1999,8 @@ CollectiblesHolder = function(){
 }
 
 CollectiblesHolder.prototype.spawnCollectibles = function(){
+  if (!game) return;
+
   var nCollectibles = 1 + Math.floor(Math.random()*5);
   var d = game.seaRadius + game.planeDefaultHeight + utils.randomFromRange(-1,1) * (game.planeAmpHeight-20);
   for (var i=0; i<nCollectibles; i++){
@@ -2222,6 +2231,7 @@ function removeEnergy(){
 
 // function updatePlane(){ // REMOVED - logic moved to EndlessMode.update methods
 
+  if (!game) return;
   game.planeCollisionSpeedX += (0-game.planeCollisionSpeedX)*deltaTime * 0.03;
   game.planeCollisionDisplacementX += (0-game.planeCollisionDisplacementX)*deltaTime *0.01;
   game.planeCollisionSpeedY += (0-game.planeCollisionSpeedY)*deltaTime * 0.03;
