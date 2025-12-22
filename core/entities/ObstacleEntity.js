@@ -5,12 +5,13 @@
 // - Only syncs mesh position to current state
 
 class ObstacleEntity {
-  constructor(id, laneIndex, z, mesh = null) {
+  constructor(id, laneIndex, z, mesh = null, laneSystem = null) {
     this.id = id;
     this.type = 'OBSTACLE';
     this.laneIndex = laneIndex;
     this.z = z; // Z position (will be updated by WorldScrollerSystem)
     this.mesh = mesh; // Optional visual representation
+    this.laneSystem = laneSystem; // For proper lane positioning
 
     console.log(`[ObstacleEntity] Created obstacle ${id} at lane ${laneIndex}, Z=${z}`);
   }
@@ -20,8 +21,18 @@ class ObstacleEntity {
     if (this.mesh) {
       // Position is managed externally by WorldScrollerSystem
       this.mesh.position.z = this.z;
-      // X position is determined by lane
-      this.mesh.position.x = this.laneIndex; // Simplified - will be replaced with proper lane positioning
+
+      // X position determined by lane center (if laneSystem available)
+      if (this.laneSystem) {
+        const laneCenterX = this.laneSystem.getLaneCenter(this.laneIndex);
+        this.mesh.position.x = laneCenterX;
+      } else {
+        // Fallback to simple lane index (shouldn't happen in normal operation)
+        this.mesh.position.x = this.laneIndex;
+      }
+
+      // Y position - same height as player collision envelope
+      this.mesh.position.y = 100; // Match player height
     }
   }
 

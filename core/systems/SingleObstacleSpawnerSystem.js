@@ -7,12 +7,14 @@
 // - No collision awareness, no health logic, no randomness
 
 import DebugConfig from '/core/config/DebugConfig.js';
+import ObstacleEntity from '/core/entities/ObstacleEntity.js';
 
 class SingleObstacleSpawnerSystem {
-  constructor(entityRegistrySystem, laneSystem, worldScrollerSystem) {
+  constructor(entityRegistrySystem, laneSystem, worldScrollerSystem, world) {
     this.entityRegistrySystem = entityRegistrySystem;
     this.laneSystem = laneSystem;
     this.worldScrollerSystem = worldScrollerSystem;
+    this.world = world; // THREE.js scene reference
 
     // Deterministic spawn parameters
     this.spawnLane = 1; // Fixed lane index
@@ -28,6 +30,28 @@ class SingleObstacleSpawnerSystem {
     }
   }
 
+  // Create a highly visible debug mesh for obstacles
+  createObstacleMesh() {
+    // Large, bright magenta box - impossible to miss
+    const geometry = new THREE.BoxGeometry(8, 6, 4); // Large size: 8x6x4
+    const material = new THREE.MeshLambertMaterial({
+      color: 0xff00ff, // Bright magenta
+      transparent: false,
+      wireframe: false // Solid fill for maximum visibility
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+
+    // Position at origin initially (will be updated by ObstacleEntity)
+    mesh.position.set(0, 0, 0);
+
+    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      console.log('[SingleObstacleSpawner] Created highly visible obstacle mesh');
+    }
+
+    return mesh;
+  }
+
   // Spawn the single obstacle if not already spawned
   spawnObstacle() {
     if (this.hasSpawned) {
@@ -37,15 +61,21 @@ class SingleObstacleSpawnerSystem {
       return null;
     }
 
-    // Create obstacle entity
+    // Create highly visible debug mesh
+    const obstacleMesh = this.createObstacleMesh();
+
+    // Create obstacle entity with mesh and lane system for positioning
     const obstacleId = `obstacle_single_${Date.now()}`;
-    const obstacle = {
-      id: obstacleId,
-      type: 'OBSTACLE',
-      laneIndex: this.spawnLane,
-      z: this.spawnZ,
-      mesh: null // No visual for now - will be added later if needed
-    };
+    const obstacle = new ObstacleEntity(
+      obstacleId,
+      this.spawnLane,
+      this.spawnZ,
+      obstacleMesh,
+      this.laneSystem
+    );
+
+    // Add mesh to world scene for visibility
+    this.world.add(obstacleMesh);
 
     // Register with entity registry
     this.entityRegistrySystem.register(obstacle);

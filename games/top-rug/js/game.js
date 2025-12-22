@@ -3935,7 +3935,8 @@ class EndlessMode {
     this.singleObstacleSpawnerSystem = new SingleObstacleSpawnerSystem(
       this.entityRegistrySystem,
       this.laneSystem,
-      this.worldScrollerSystem
+      this.worldScrollerSystem,
+      world
     ); // Deterministic single obstacle spawning
 
     // ===== PRESENTATION-ONLY SYSTEMS ===== (no gameplay logic, pure visuals/audio)
