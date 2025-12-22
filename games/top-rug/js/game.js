@@ -3036,6 +3036,9 @@ class EndlessMode {
     this.hasInitialized = false;
     this.hasStarted = false;
 
+    // Logging guards
+    this.lastDistanceLog = null;
+
     // Dependencies
     this.gameState = null;
     this.world = null;
@@ -3317,7 +3320,7 @@ class EndlessMode {
     this.difficultyCurveSystem.update(currentDistance);
 
     // Log distance every ~500 units
-    if (!this.lastDistanceLog || currentDistance - this.lastDistanceLog >= 500) {
+    if (this.lastDistanceLog === null || currentDistance - this.lastDistanceLog >= 500) {
       console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
       this.lastDistanceLog = Math.floor(currentDistance / 500) * 500; // Snap to 500-unit intervals
     }
