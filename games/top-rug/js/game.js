@@ -3119,6 +3119,11 @@ class LaneVisualGuideSystem {
     // Never mutates gameplay logic, only provides visual clarity
     // Helps players see lane boundaries and depth
 
+    // Defensive guard: fail fast if dependencies are missing
+    if (!laneSystem) {
+      throw new Error('LaneVisualGuideSystem requires a valid LaneSystem');
+    }
+
     this.laneSystem = laneSystem;
     this.worldLayoutSystem = worldLayoutSystem;
     this.world = world;
@@ -3643,26 +3648,31 @@ class EndlessMode {
     // Set view profile for endless flight mode
     this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
 
+    // ===== CORE GAMEPLAY SYSTEMS ===== (game logic, state management)
+    this.distanceSystem = new DistanceSystem(); // Tracks forward progress
+    this.worldAxisSystem = new WorldAxisSystem(this.distanceSystem); // Z-axis movement authority
+    this.depthLayerSystem = new DepthLayerSystem(); // Parallax speed multipliers
+    this.worldLayoutSystem = new WorldLayoutSystem(); // Spatial semantics and zones
+    this.difficultyCurveSystem = new DifficultyCurveSystem(); // Progressive difficulty scaling
+    this.worldScrollerSystem = new WorldScrollerSystem(
+      this.worldAxisSystem,
+      this.worldLayoutSystem,
+      this.depthLayerSystem
+    ); // Single source of Z movement
+
+    // ===== LANE AND INPUT SYSTEMS ===== (gameplay logic)
+    this.laneSystem = new LaneSystem(3, 40); // Discrete lane positions
+    this.playerIntentSystem = new PlayerIntentSystem(); // Mouse → semantic intents
+    this.playerActionStateSystem = new PlayerActionStateSystem(); // Cooldowns and state gating
+    this.laneController = new LaneController(this.laneSystem); // Intent → lane target
+
     // ===== VISUAL-ONLY SYSTEMS ===== (presentation layer, no gameplay logic)
     this.seaSystem = new SeaSystem(world); // Animated sea surface
     this.skySystem = new SkySystem(world); // Parallax cloud layer
     this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
 
-    // ===== CORE GAMEPLAY SYSTEMS ===== (game logic, state management)
+    // ===== ENTITY SYSTEMS ===== (gameplay logic)
     this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world); // Player position and lane state
-    this.distanceSystem = new DistanceSystem();
-    this.worldAxisSystem = new WorldAxisSystem(this.distanceSystem);
-    this.depthLayerSystem = new DepthLayerSystem();
-    this.worldLayoutSystem = new WorldLayoutSystem();
-    this.difficultyCurveSystem = new DifficultyCurveSystem();
-    this.worldScrollerSystem = new WorldScrollerSystem(
-      this.worldAxisSystem,
-      this.worldLayoutSystem,
-      this.depthLayerSystem
-    );
-
-    // ===== LANE AND INPUT SYSTEMS ===== (gameplay logic)
-    this.laneSystem = new LaneSystem(3, 40); // Discrete lane positions
     this.playerIntentSystem = new PlayerIntentSystem(); // Mouse → semantic intents
     this.playerActionStateSystem = new PlayerActionStateSystem(); // Cooldowns and state gating
     this.laneController = new LaneController(this.laneSystem); // Intent → lane target
