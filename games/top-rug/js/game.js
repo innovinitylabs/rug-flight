@@ -3785,7 +3785,7 @@ class EndlessMode {
 
     // Game phases - authoritative state owned by EndlessMode only
     this.currentPhase = GAME_PHASES.GRACE;
-    this.phaseStartTime = 0; // When current phase started
+    this.phaseStartTime = 0; // When current phase started (set in start())
     this.hitRecoveryDuration = 1.0; // 1 second recovery after hit
 
     // Health checks
@@ -4004,6 +4004,10 @@ class EndlessMode {
   }
 
   start() {
+    // Initialize game phase timing
+    this.currentPhase = GAME_PHASES.GRACE;
+    this.phaseStartTime = performance.now();
+
     // Safety fallback: ensure window focus for keyboard input
     window.focus();
 
@@ -4115,15 +4119,20 @@ class EndlessMode {
       `Lane: ${obstacle.laneIndex}, Z: ${obstacle.z.toFixed(1)}` :
       'None';
 
+    // Get phase timing
+    const phaseElapsed = this.getPhaseElapsedTime(performance.now()) / 1000;
+    const worldProgress = this.spawnBandSystem.getWorldProgress();
+
     this.debugOverlay.innerHTML = `
       <strong>Player:</strong><br>
       Lane: ${this.playerMovementPipeline.getCurrentLane()} → ${this.playerMovementPipeline.getTargetLane()}<br>
       X: ${playerPos.x.toFixed(1)}<br>
       <strong>World:</strong><br>
       Ground Z: ${groundZ.toFixed(1)}<br>
-      Sky Z: ${skyZ.toFixed(1)}<br>
+      Progress: ${worldProgress.toFixed(0)}<br>
       <strong>Game:</strong><br>
       Phase: ${this.currentPhase}<br>
+      Time: ${phaseElapsed.toFixed(1)}s<br>
       <strong>Obstacle:</strong><br>
       ${obstacleInfo}
     `;
@@ -4258,8 +4267,8 @@ class EndlessMode {
     this.obstacleSpawnSystem.update();
 
     // 8.7. Single obstacle spawner system updates (deterministic single obstacle)
-    // Only spawn during PLAYING and GRACE phases (not during HIT_RECOVERY)
-    if (this.isInPhase(GAME_PHASES.PLAYING) || this.isInPhase(GAME_PHASES.GRACE)) {
+    // Only spawn during PLAYING phase (not during GRACE or HIT_RECOVERY)
+    if (this.isInPhase(GAME_PHASES.PLAYING)) {
       // Check if previously spawned obstacle has been recycled (BEHIND_CLEANUP)
       this.singleObstacleSpawnerSystem.checkObstacleRecycled(this.spawnBandSystem);
 
@@ -4285,8 +4294,10 @@ class EndlessMode {
     // 11. Collision consumption system processes intents into domain events
     const entityCollisionEvents = this.collisionConsumptionSystem.process(collisionIntents);
 
-    // 11.5. Handle single obstacle collisions
-    const singleObstacleCollisionEvents = this.processSingleObstacleCollisions(collisionIntents);
+    // 11.5. Handle single obstacle collisions (only in PLAYING phase)
+    const singleObstacleCollisionEvents = this.isInPhase(GAME_PHASES.PLAYING)
+      ? this.processSingleObstacleCollisions(collisionIntents)
+      : [];
 
     // 12. Merge all collision domain events
     const domainEvents = [...obstacleCollisionEvents, ...entityCollisionEvents, ...singleObstacleCollisionEvents];
@@ -4474,7 +4485,7 @@ class EndlessMode {
       case GAME_PHASES.GRACE:
         // Check if grace period has ended (world progress OR time)
         const worldProgress = this.spawnBandSystem.getWorldProgress();
-        const graceEnded = worldProgress >= 100 || (currentTime - this.phaseStartTime) >= 2000;
+        const graceEnded = worldProgress >= 120 || (currentTime - this.phaseStartTime) >= 2000;
 
         if (graceEnded) {
           this.setPhase(GAME_PHASES.PLAYING, currentTime);
