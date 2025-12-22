@@ -1934,6 +1934,76 @@ class PlayerVisualMovementSystem {
   }
 }
 
+// LaneEntitySpawnSystem class - gameplay system for spawning lane-based entities
+class LaneEntitySpawnSystem {
+  constructor(laneSystem, worldLayoutSystem, difficultyCurveSystem, entityRegistrySystem, world) {
+    // Gameplay system: spawns entities that participate in game logic
+    // Uses difficulty scaling and lane system for placement
+    // Registers entities for collision detection and other systems
+
+    this.laneSystem = laneSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.difficultyCurveSystem = difficultyCurveSystem;
+    this.entityRegistrySystem = entityRegistrySystem;
+    this.world = world;
+
+    // Spawn timing
+    this.baseSpawnInterval = 2000; // Base 2 seconds between spawns
+    this.lastSpawnTime = 0;
+
+    console.log('[LaneEntitySpawn] Lane-based entity spawning system established');
+  }
+
+  update(currentTime) {
+    // Check if it's time to spawn a new entity
+    const difficultyState = this.difficultyCurveSystem.getDifficultyState();
+    const adjustedInterval = this.baseSpawnInterval / difficultyState.spawnRateMultiplier;
+
+    if (currentTime - this.lastSpawnTime >= adjustedInterval) {
+      this.spawnEntity();
+      this.lastSpawnTime = currentTime;
+    }
+  }
+
+  spawnEntity() {
+    // Choose random lane
+    const laneIndex = Math.floor(Math.random() * this.laneSystem.getLaneCount());
+
+    // Get lane center X position
+    const laneCenterX = this.laneSystem.getLaneCenter(laneIndex);
+
+    // Get MID_AIR baseline Y position
+    const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+    const spawnY = midAirZone.baselineY;
+
+    // Spawn ahead of player (positive Z)
+    const spawnDistance = 200; // Units ahead of player
+    const spawnZ = spawnDistance;
+
+    // Create entity data
+    const entityId = this.entityRegistrySystem.generateId();
+    const coinEntity = new CoinEntity(entityId, laneIndex, spawnZ);
+
+    // Set position
+    coinEntity.position = { x: laneCenterX, y: spawnY, z: spawnZ };
+
+    // Create simple visual mesh (placeholder)
+    const geometry = new THREE.SphereGeometry(3, 8, 6);
+    const material = new THREE.MeshLambertMaterial({ color: 0xffd700 }); // Gold color
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(laneCenterX, spawnY, spawnZ);
+    this.world.add(mesh);
+
+    // Store mesh reference for cleanup
+    coinEntity.mesh = mesh;
+
+    // Register entity for collision detection and other systems
+    this.entityRegistrySystem.register(coinEntity);
+
+    console.log(`[LaneEntitySpawn] SPAWNED: Coin ${entityId} in lane ${laneIndex} at (${laneCenterX.toFixed(1)}, ${spawnY.toFixed(1)}, ${spawnZ})`);
+  }
+}
+
 // AudioPresentationSystem class - observer-only audio feedback system
 class AudioPresentationSystem {
   constructor() {
@@ -2685,6 +2755,7 @@ class EndlessMode {
     this.vfxPresentationSystem = null;
     this.debugWorldOverlaySystem = null;
     this.playerVisualMovementSystem = null;
+    this.laneEntitySpawnSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -2776,6 +2847,15 @@ class EndlessMode {
       this.laneSystem,
       this.playerActionStateSystem,
       this.playerProxy
+    );
+
+    // Create lane entity spawn system - gameplay entity spawning
+    this.laneEntitySpawnSystem = new LaneEntitySpawnSystem(
+      this.laneSystem,
+      this.worldLayoutSystem,
+      this.difficultyCurveSystem,
+      this.entityRegistrySystem,
+      world
     );
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
@@ -2922,6 +3002,9 @@ class EndlessMode {
 
     // 8. Spawn system updates (rule-driven world population)
     this.spawnSystem.update();
+
+    // 8.5. Lane entity spawn system updates (difficulty-scaled lane spawning)
+    this.laneEntitySpawnSystem.update(performance.now());
 
     // 9. Collision intent system processes (deterministic collision detection)
     const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
