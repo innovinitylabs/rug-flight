@@ -3252,14 +3252,9 @@ class EndlessMode {
   }
 
   update(deltaTime) {
-    // Critical system assertions - fail fast if core systems missing
-    console.assert(this.distanceSystem, '[EndlessMode] CRITICAL: distanceSystem missing');
-    console.assert(this.worldScrollerSystem, '[EndlessMode] CRITICAL: worldScrollerSystem missing');
-
-    // Health check: warn if update runs while inactive
+    // Silent health check - core systems are validated at init/start time
     if (!this.isActive) {
-      console.warn('[EndlessMode] WARNING: update() called while inactive');
-    return;
+      return;
     }
 
     // Only run when active and not paused
