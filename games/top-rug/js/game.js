@@ -260,7 +260,7 @@ class World {
       if (object.material) {
         if (Array.isArray(object.material)) {
           object.material.forEach(material => material.dispose());
-        } else {
+    } else {
           object.material.dispose();
         }
       }
@@ -368,6 +368,7 @@ class SeaSystem {
     this.material = null;
     this.geometry = null;
     this.scrollPhase = 0;
+    this.worldLayout = null;
   }
 
   init() {
@@ -396,16 +397,24 @@ class SeaSystem {
     console.log('[SeaSystem] Initialized - sea mesh added to world');
   }
 
+  setWorldLayout(worldLayout) {
+    this.worldLayout = worldLayout;
+  }
+
   update(deltaTime, deltaZ = 0) {
     if (!this.mesh) return;
 
     // Move sea backward on Z axis for forward motion illusion
     // Z axis is the ONLY forward axis - no X/Y movement
-    this.mesh.position.z += deltaZ * 100; // Scale for visible motion
+    // deltaZ already includes depth layer multiplier
+    this.mesh.position.z += deltaZ;
 
-    // Prevent excessive Z drift (but don't hard reset)
-    if (Math.abs(this.mesh.position.z) > 5000) {
-      this.mesh.position.z = this.mesh.position.z % 1000;
+    // Use layout rules for Z wrapping (GROUND_PLANE rules)
+    if (this.worldLayout) {
+      const zone = this.worldLayout.getSystemZone('SeaSystem');
+      if (zone && Math.abs(this.mesh.position.z) > zone.zWrapLimit) {
+        this.mesh.position.z = this.mesh.position.z % zone.zWrapReset;
+      }
     }
   }
 
@@ -456,6 +465,86 @@ class DistanceSystem {
   }
 }
 
+// DepthLayerSystem class - manages parallax depth layers
+class DepthLayerSystem {
+  constructor() {
+    this.layers = {
+      SEA: { name: 'SEA', speedMultiplier: 1.0 },
+      CLOUDS: { name: 'CLOUDS', speedMultiplier: 0.5 }
+    };
+    console.log('[DepthLayer] Active layers:', Object.keys(this.layers).join(', '));
+  }
+
+  getLayer(layerName) {
+    return this.layers[layerName];
+  }
+
+  getMultiplier(layerName) {
+    const layer = this.layers[layerName];
+    return layer ? layer.speedMultiplier : 1.0;
+  }
+}
+
+// WorldLayoutSystem class - defines spatial semantics and zones
+class WorldLayoutSystem {
+  constructor() {
+    // Define world axes
+    this.axes = {
+      FORWARD: 'Z',      // Z is forward direction
+      VERTICAL: 'Y',     // Y is up/down
+      LATERAL: 'X'       // X is left/right
+    };
+
+    // Define spatial zones with rules
+    this.zones = {
+      GROUND_PLANE: {
+        name: 'GROUND_PLANE',
+        yRange: [-50, -10],      // Ground level range
+        zWrapLimit: 5000,       // When to wrap Z position
+        zWrapReset: 1000        // Where to reset to
+      },
+      MID_AIR: {
+        name: 'MID_AIR',
+        yBaseline: 100,         // Standard flight height
+        yRange: [40, 160],      // Flight envelope
+        zFixed: 0               // Plane never moves forward in Z
+      },
+      SKY_FAR: {
+        name: 'SKY_FAR',
+        yRange: [30, 80],       // Sky layer height range
+        zWrapLimit: 10000,      // Larger wrap for sky
+        zWrapReset: 2000        // Reset position
+      }
+    };
+
+    // Track system registrations
+    this.registeredSystems = {};
+
+    console.log('[WorldLayout] Active layout - Forward:Z, Vertical:Y, Lateral:X');
+    console.log('[WorldLayout] Zones:', Object.keys(this.zones).join(', '));
+  }
+
+  registerSystem(systemName, zoneName) {
+    if (this.zones[zoneName]) {
+      this.registeredSystems[systemName] = zoneName;
+      console.log(`[WorldLayout] ${systemName} registered as ${zoneName}`);
+    }
+  }
+
+  getZone(zoneName) {
+    return this.zones[zoneName];
+  }
+
+  getSystemZone(systemName) {
+    const zoneName = this.registeredSystems[systemName];
+    return zoneName ? this.zones[zoneName] : null;
+  }
+
+  getAxes() {
+    return { ...this.axes };
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -471,7 +560,7 @@ class WorldAxisSystem {
     this.distanceSystem.update(deltaTime);
   }
 
-  getDeltaZ(deltaTime) {
+  getBaseDeltaZ() {
     // Return negative Z movement to create forward illusion
     return -this.distanceSystem.getDelta();
   }
@@ -489,6 +578,7 @@ class SkySystem {
     this.clouds = [];
     this.animationSpeed = 0.0002; // Very slow movement for parallax
     this.cloudCount = 20; // Number of clouds
+    this.worldLayout = null;
   }
 
   init() {
@@ -500,13 +590,27 @@ class SkySystem {
       this.createCloud();
     }
 
-    // Position the entire group above sea but below camera far plane
-    this.cloudGroup.position.y = 50; // Above sea level
+    // Position the entire group using layout rules (SKY_FAR zone)
+    if (this.worldLayout) {
+      const zone = this.worldLayout.getSystemZone('SkySystem');
+      if (zone) {
+        // Position within SKY_FAR yRange
+        const yCenter = (zone.yRange[0] + zone.yRange[1]) / 2;
+        this.cloudGroup.position.y = yCenter;
+      }
+    } else {
+      // Fallback if no layout
+      this.cloudGroup.position.y = 50;
+    }
 
     // Add group to world
     this.world.add(this.cloudGroup);
 
     console.log(`[SkySystem] Initialized - ${this.cloudCount} clouds added to world`);
+  }
+
+  setWorldLayout(worldLayout) {
+    this.worldLayout = worldLayout;
   }
 
   createCloud() {
@@ -538,6 +642,15 @@ class SkySystem {
     const distance = 200 + Math.random() * 300; // Vary distance from center
     const height = 20 + Math.random() * 40; // Vary height
 
+    // Position cloud using layout rules (SKY_FAR zone)
+    if (this.worldLayout) {
+      const zone = this.worldLayout.getSystemZone('SkySystem');
+      if (zone) {
+        // Use SKY_FAR yRange for height variation
+        height = zone.yRange[0] + Math.random() * (zone.yRange[1] - zone.yRange[0]);
+      }
+    }
+
     cloudGroup.position.set(
       Math.cos(angle) * distance,
       height,
@@ -560,12 +673,15 @@ class SkySystem {
     if (!this.cloudGroup) return;
 
     // Move clouds backward on Z axis for parallax effect
-    // Slower than sea for depth perception
-    this.cloudGroup.position.z += deltaZ * 50; // Slower than sea
+    // deltaZ already includes depth layer multiplier (0.5 for clouds)
+    this.cloudGroup.position.z += deltaZ;
 
-    // Prevent excessive Z drift (but don't hard reset)
-    if (Math.abs(this.cloudGroup.position.z) > 10000) {
-      this.cloudGroup.position.z = this.cloudGroup.position.z % 2000;
+    // Use layout rules for Z wrapping (SKY_FAR rules)
+    if (this.worldLayout) {
+      const zone = this.worldLayout.getSystemZone('SkySystem');
+      if (zone && Math.abs(this.cloudGroup.position.z) > zone.zWrapLimit) {
+        this.cloudGroup.position.z = this.cloudGroup.position.z % zone.zWrapReset;
+      }
     }
   }
 
@@ -663,6 +779,11 @@ class PlaneView {
     this.airplane = null;
     this.propeller = null;
     this.propellerSpeed = 0.2;
+    this.worldLayout = null;
+  }
+
+  setWorldLayout(worldLayout) {
+    this.worldLayout = worldLayout;
   }
 
   createMeshes() {
@@ -697,8 +818,16 @@ class PlaneView {
     this.propeller.position.set(12, 0, 0);
     this.airplane.add(this.propeller);
 
-    // Position airplane
-    this.airplane.position.set(0, 100, 0);
+    // Position airplane using layout rules (MID_AIR zone)
+    let baselineY = 100; // Default fallback
+    if (this.worldLayout) {
+      const zone = this.worldLayout.getSystemZone('PlaneView');
+      if (zone && zone.yBaseline) {
+        baselineY = zone.yBaseline;
+      }
+    }
+
+    this.airplane.position.set(0, baselineY, 0);
 
     // Add to world
     this.world.add(this.airplane);
@@ -711,10 +840,11 @@ class PlaneView {
     const position = entity.getPosition();
     const rotation = entity.getRotation();
 
-    this.airplane.position.x = position.x;
-    this.airplane.position.y = position.y;
-    this.airplane.position.z = position.z;
-    this.airplane.rotation.z = rotation.z;
+    // For SIDE_SCROLLER profile: freeze X and Z position, only allow Y movement
+    this.airplane.position.x = 0; // Fixed X position
+    this.airplane.position.y = position.y; // Only Y movement allowed
+    this.airplane.position.z = 0; // Fixed Z position (plane never moves forward)
+    this.airplane.rotation.z = rotation.z; // Roll animation only
 
     // Animate propeller
     if (this.propeller) {
@@ -754,6 +884,8 @@ class EndlessMode {
     this.seaSystem = null;
     this.skySystem = null;
     this.worldAxisSystem = null;
+    this.depthLayerSystem = null;
+    this.worldLayoutSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -778,6 +910,8 @@ class EndlessMode {
     this.seaSystem = new SeaSystem(world);
     this.skySystem = new SkySystem(world);
     this.worldAxisSystem = new WorldAxisSystem();
+    this.depthLayerSystem = new DepthLayerSystem();
+    this.worldLayoutSystem = new WorldLayoutSystem();
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -797,9 +931,19 @@ class EndlessMode {
 
     // Initialize sea system
     this.seaSystem.init();
+    this.seaSystem.setWorldLayout(this.worldLayoutSystem);
 
     // Initialize sky system
     this.skySystem.init();
+    this.skySystem.setWorldLayout(this.worldLayoutSystem);
+
+    // Initialize plane view layout
+    this.planeView.setWorldLayout(this.worldLayoutSystem);
+
+    // Register systems with world layout zones
+    this.worldLayoutSystem.registerSystem('SeaSystem', 'GROUND_PLANE');
+    this.worldLayoutSystem.registerSystem('SkySystem', 'SKY_FAR');
+    this.worldLayoutSystem.registerSystem('PlaneView', 'MID_AIR');
 
     // Reset world axis system
     this.worldAxisSystem.reset();
@@ -837,13 +981,17 @@ class EndlessMode {
 
     // 4. World axis system updates
     this.worldAxisSystem.update(deltaTime);
-    const deltaZ = this.worldAxisSystem.getDeltaZ(deltaTime);
+    const baseDeltaZ = this.worldAxisSystem.getBaseDeltaZ();
 
     // 5. Sea system updates (moves on Z axis only)
-    this.seaSystem.update(deltaTime, deltaZ);
+    const seaMultiplier = this.depthLayerSystem.getMultiplier('SEA');
+    console.log(`[DepthLayer] SEA multiplier: ${seaMultiplier}`);
+    this.seaSystem.update(deltaTime, baseDeltaZ * seaMultiplier);
 
     // 6. Sky system updates (moves on Z axis only)
-    this.skySystem.update(deltaTime, deltaZ);
+    const cloudsMultiplier = this.depthLayerSystem.getMultiplier('CLOUDS');
+    console.log(`[DepthLayer] CLOUDS multiplier: ${cloudsMultiplier}`);
+    this.skySystem.update(deltaTime, baseDeltaZ * cloudsMultiplier);
 
     // 6. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
@@ -906,6 +1054,8 @@ class EndlessMode {
     this.skySystem = null;
     this.worldAxisSystem = null;
     this.viewProfileSystem = null;
+    this.depthLayerSystem = null;
+    this.worldLayoutSystem = null;
 
     console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
   }
