@@ -1792,6 +1792,100 @@ class PresentationSystem {
   }
 }
 
+// DebugWorldOverlaySystem class - real-time engine state display
+class DebugWorldOverlaySystem {
+  constructor(viewProfileSystem, distanceSystem, worldScrollerSystem, playerProxy, playerActionStateSystem) {
+    // Read-only observer: never mutates game state or influences gameplay
+    // Provides real-time engine state visibility for debugging
+
+    this.viewProfileSystem = viewProfileSystem;
+    this.distanceSystem = distanceSystem;
+    this.worldScrollerSystem = worldScrollerSystem;
+    this.playerProxy = playerProxy;
+    this.playerActionStateSystem = playerActionStateSystem;
+
+    this.overlayElement = null;
+    this.initializeOverlay();
+
+    console.log('[DebugOverlay] Real-time engine state overlay initialized');
+  }
+
+  initializeOverlay() {
+    // Create overlay container
+    this.overlayElement = document.createElement('div');
+    this.overlayElement.id = 'debug-world-overlay';
+    this.overlayElement.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #00ff00;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 9999;
+      pointer-events: none;
+      white-space: pre-line;
+      max-width: 300px;
+    `;
+
+    document.body.appendChild(this.overlayElement);
+  }
+
+  update(deltaTime) {
+    if (!this.overlayElement) return;
+
+    // Gather current engine state
+    const state = this.gatherEngineState();
+
+    // Format and display
+    this.overlayElement.textContent = this.formatStateDisplay(state);
+  }
+
+  gatherEngineState() {
+    return {
+      viewProfile: this.viewProfileSystem ? this.viewProfileSystem.currentProfile : 'unknown',
+      distance: this.distanceSystem ? Math.round(this.distanceSystem.getDistance()) : 0,
+      worldScroller: {
+        groundPlaneZ: this.worldScrollerSystem ? Math.round(this.worldScrollerSystem.getZoneZ('GROUND_PLANE')) : 0,
+        skyFarZ: this.worldScrollerSystem ? Math.round(this.worldScrollerSystem.getZoneZ('SKY_FAR')) : 0
+      },
+      playerProxy: {
+        x: this.playerProxy ? Math.round(this.playerProxy.getPosition().x) : 0,
+        y: this.playerProxy ? Math.round(this.playerProxy.getPosition().y) : 0,
+        z: this.playerProxy ? Math.round(this.playerProxy.getPosition().z) : 0
+      },
+      playerActionState: this.playerActionStateSystem ? this.playerActionStateSystem.getCurrentState() : {}
+    };
+  }
+
+  formatStateDisplay(state) {
+    return `VIEW: ${state.viewProfile}
+DIST: ${state.distance} units
+
+WORLD SCROLLER:
+  GROUND_PLANE Z: ${state.worldScroller.groundPlaneZ}
+  SKY_FAR Z: ${state.worldScroller.skyFarZ}
+
+PLAYER PROXY:
+  POS: (${state.playerProxy.x}, ${state.playerProxy.y}, ${state.playerProxy.z})
+
+ACTION STATE:
+  STATE: ${state.playerActionState.state || 'unknown'}
+  COOLDOWN: ${Math.max(0, Math.round(state.playerActionState.cooldownRemaining || 0))}ms
+  STUN: ${Math.max(0, Math.round(state.playerActionState.stunRemaining || 0))}ms`;
+  }
+
+  // Cleanup method
+  cleanup() {
+    if (this.overlayElement && this.overlayElement.parentNode) {
+      this.overlayElement.parentNode.removeChild(this.overlayElement);
+      this.overlayElement = null;
+    }
+  }
+}
+
 // AudioPresentationSystem class - observer-only audio feedback system
 class AudioPresentationSystem {
   constructor() {
@@ -2541,6 +2635,7 @@ class EndlessMode {
     this.presentationSystem = null;
     this.audioPresentationSystem = null;
     this.vfxPresentationSystem = null;
+    this.debugWorldOverlaySystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -2616,6 +2711,15 @@ class EndlessMode {
 
     // Create VFX presentation system - observer-only visual effects
     this.vfxPresentationSystem = new VFXPresentationSystem(world);
+
+    // Create debug world overlay system - real-time engine state display
+    this.debugWorldOverlaySystem = new DebugWorldOverlaySystem(
+      this.viewProfileSystem,
+      this.distanceSystem,
+      this.worldScrollerSystem,
+      this.playerProxy,
+      this.playerActionStateSystem
+    );
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -2792,7 +2896,10 @@ class EndlessMode {
     // 16. VFX presentation system observes domain events for visual effects
     this.vfxPresentationSystem.update(domainEvents);
 
-    // 16. Player proxy updates (visual representation)
+    // 17. Debug world overlay system displays real-time engine state
+    this.debugWorldOverlaySystem.update(deltaTime);
+
+    // 18. Player proxy updates (visual representation)
     this.playerProxy.update(deltaTime);
 
     // 17. Sea system updates (pure renderer - reads Z from scroller)
