@@ -1598,6 +1598,69 @@ class LaneObstacleEntity {
   }
 }
 
+// LaneObstacleCollisionSystem class - detects player vs lane obstacle collisions
+class LaneObstacleCollisionSystem {
+  constructor(zCollisionThreshold = 10) {
+    // Deterministic collision detection for lane-based obstacles
+    // Observes PlayerEntity and active obstacles, emits domain events
+    // Side-effect free: only detects and reports collisions
+
+    this.zCollisionThreshold = zCollisionThreshold;
+    this.domainEvents = []; // Domain events for current frame
+
+    console.log(`[LaneObstacleCollision] Lane obstacle collision detection established (Z threshold: ${zCollisionThreshold})`);
+  }
+
+  // Process collision detection and emit domain events
+  process(playerEntity, activeObstacles) {
+    console.assert(playerEntity, '[LaneObstacleCollision] ERROR: playerEntity required');
+    console.assert(Array.isArray(activeObstacles), '[LaneObstacleCollision] ERROR: activeObstacles must be an array');
+
+    // Clear previous frame's domain events
+    this.domainEvents = [];
+
+    // Get player's current state
+    const playerLaneIndex = playerEntity.laneIndex;
+    const playerZ = playerEntity.position.z; // Should always be 0
+
+    // Check each active obstacle for collision
+    for (const obstacle of activeObstacles) {
+      // Only check obstacles in the same lane as player
+      if (obstacle.laneIndex !== playerLaneIndex) {
+        continue;
+      }
+
+      // Calculate Z distance (player is at Z=0, obstacles move toward negative Z)
+      const zDistance = Math.abs(obstacle.position.z - playerZ);
+
+      // Check if within collision threshold
+      if (zDistance <= this.zCollisionThreshold) {
+        // Emit COLLISION domain event for obstacle collision
+        const collisionEvent = {
+          type: 'COLLISION',
+          source: 'OBSTACLE',
+          entityId: obstacle.id,
+          laneIndex: playerLaneIndex,
+          position: {
+            x: obstacle.position.x,
+            y: obstacle.position.y,
+            z: obstacle.position.z
+          },
+          value: zDistance, // Z distance as collision severity
+          timestamp: performance.now()
+        };
+
+        this.domainEvents.push(collisionEvent);
+
+        // Log collision detection (will be consumed by other systems)
+        console.log(`[LaneObstacleCollision] COLLISION: Player vs obstacle ${obstacle.id} (lane ${playerLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
+      }
+    }
+
+    return this.domainEvents;
+  }
+}
+
 // ObstacleSpawnSystem class - manages lane-based obstacle spawning
 class ObstacleSpawnSystem {
   constructor(distanceSystem, difficultyCurveSystem, laneSystem, worldLayoutSystem, world) {
@@ -1703,6 +1766,38 @@ class ObstacleSpawnSystem {
   getActiveObstacles() {
     return this.activeObstacles;
   }
+
+  // Remove obstacle by ID (called by collision consumption system)
+  removeObstacle(obstacleId) {
+    const index = this.activeObstacles.findIndex(obstacle => obstacle.id === obstacleId);
+    if (index !== -1) {
+      const obstacle = this.activeObstacles[index];
+      obstacle.destroy();
+      this.activeObstacles.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  // Process domain events and remove collided obstacles
+  processCollisionEvents(domainEvents) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return;
+    }
+
+    // Find COLLISION events with source 'OBSTACLE'
+    const obstacleCollisionEvents = domainEvents.filter(event =>
+      event.type === 'COLLISION' && event.source === 'OBSTACLE'
+    );
+
+    // Remove collided obstacles
+    for (const event of obstacleCollisionEvents) {
+      const removed = this.removeObstacle(event.entityId);
+      if (removed) {
+        console.log(`[ObstacleSpawn] Removed collided obstacle ${event.entityId}`);
+      }
+    }
+  }
 }
 
 // SpawnSystem class - rule-driven world population
@@ -1770,8 +1865,9 @@ class SpawnSystem {
 
 // CollisionConsumptionSystem class - processes collision intents into domain events
 class CollisionConsumptionSystem {
-  constructor(entityRegistry) {
+  constructor(entityRegistry, obstacleSpawnSystem = null) {
     this.entityRegistry = entityRegistry;
+    this.obstacleSpawnSystem = obstacleSpawnSystem;
     this.domainEvents = []; // Domain events for current frame
 
     console.log('[CollisionConsumption] Intent consumption system established');
@@ -1812,6 +1908,8 @@ class CollisionConsumptionSystem {
     // Handle different entity types
     if (target.type === 'coin') {
       this.processCoinCollection(target, laneIndex, intent);
+    } else if (target.type === 'obstacle') {
+      this.processObstacleCollision(target, laneIndex, intent);
     }
     // Future: Add other entity type handlers here
   }
@@ -3495,6 +3593,9 @@ class EndlessMode {
     // Create collision consumption system - processes intents into domain events
     this.collisionConsumptionSystem = new CollisionConsumptionSystem(this.entityRegistrySystem);
 
+    // Create lane obstacle collision system - detects player vs obstacle collisions
+    this.laneObstacleCollisionSystem = new LaneObstacleCollisionSystem(10); // 10 unit Z threshold
+
     // Create score system - authoritative scoring state management
     this.scoreSystem = new ScoreSystem();
 
@@ -3714,16 +3815,26 @@ class EndlessMode {
     // 8.6. Obstacle spawn system updates (lane-based obstacle spawning)
     this.obstacleSpawnSystem.update();
 
-    // 9. Collision intent system processes (deterministic collision detection)
+    // 9. Lane obstacle collision system detects player vs obstacle collisions
+    const activeObstacles = this.obstacleSpawnSystem.getActiveObstacles();
+    const obstacleCollisionEvents = this.laneObstacleCollisionSystem.process(this.playerEntity, activeObstacles);
+
+    // 10. Collision intent system processes (deterministic collision detection)
     const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
 
-    // 10. Collision consumption system processes intents into domain events
-    const domainEvents = this.collisionConsumptionSystem.process(collisionIntents);
+    // 11. Collision consumption system processes intents into domain events
+    const entityCollisionEvents = this.collisionConsumptionSystem.process(collisionIntents);
+
+    // 12. Merge all collision domain events
+    const domainEvents = [...obstacleCollisionEvents, ...entityCollisionEvents];
 
     // 11. Score system consumes domain events and updates score state
     this.scoreSystem.consume(domainEvents);
 
-    // 12. Collision impact system processes domain events into player consequences
+    // 12. Obstacle spawn system processes collision events to remove collided obstacles
+    this.obstacleSpawnSystem.processCollisionEvents(domainEvents);
+
+    // 13. Collision impact system processes domain events into player consequences
     this.collisionImpactSystem.process(domainEvents);
 
     // 13. Collision damage system processes domain events into health damage
