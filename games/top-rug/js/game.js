@@ -1149,13 +1149,13 @@ function createInitialGameState() {
   return {
     status: 'playing',
 
-    // Plane physics
+    // Plane collision physics
     planeCollisionSpeedX: 0,
     planeCollisionSpeedY: 0,
     planeCollisionDisplacementX: 0,
     planeCollisionDisplacementY: 0,
 
-    // Plane motion
+    // Plane movement
     planeSpeed: 0,
     planeMinSpeed: 1.2,
     planeMaxSpeed: 2.4,
@@ -1166,11 +1166,11 @@ function createInitialGameState() {
     planeRotXSensivity: 0.0008,
     planeRotZSensivity: 0.0004,
 
-    // World / progression
+    // World
     speed: 0.0005,
     level: 1,
 
-    // Camera / mode flags
+    // Flags
     fpv: false
   };
 }
@@ -2703,9 +2703,7 @@ function normalize(v,vmin,vmax,tmin, tmax){
 
 
 function initUI() {
-  // Initialize game object first
-  game = {};
-
+  // Game state is now initialized in Aviator1Game.init()
   // Mode initialization happens separately after scene creation
 }
 
