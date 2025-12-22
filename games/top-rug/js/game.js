@@ -367,8 +367,6 @@ class SeaSystem {
     this.mesh = null;
     this.material = null;
     this.geometry = null;
-    this.scrollPhase = 0;
-    this.worldLayout = null;
   }
 
   init() {
@@ -397,25 +395,12 @@ class SeaSystem {
     console.log('[SeaSystem] Initialized - sea mesh added to world');
   }
 
-  setWorldLayout(worldLayout) {
-    this.worldLayout = worldLayout;
-  }
-
-  update(deltaTime, deltaZ = 0) {
+  update(deltaTime, zoneZ) {
     if (!this.mesh) return;
 
-    // Move sea backward on Z axis for forward motion illusion
-    // Z axis is the ONLY forward axis - no X/Y movement
-    // deltaZ already includes depth layer multiplier
-    this.mesh.position.z += deltaZ;
-
-    // Use layout rules for Z wrapping (GROUND_PLANE rules)
-    if (this.worldLayout) {
-      const zone = this.worldLayout.getSystemZone('SeaSystem');
-      if (zone && Math.abs(this.mesh.position.z) > zone.zWrapLimit) {
-        this.mesh.position.z = this.mesh.position.z % zone.zWrapReset;
-      }
-    }
+    // Pure renderer: read Z offset from WorldScrollerSystem
+    // No movement logic here - WorldScrollerSystem owns all Z motion
+    this.mesh.position.z = zoneZ;
   }
 
   destroy() {
@@ -545,6 +530,56 @@ class WorldLayoutSystem {
   }
 }
 
+// WorldScrollerSystem class - single source of truth for forward motion
+class WorldScrollerSystem {
+  constructor(worldAxisSystem, worldLayoutSystem, depthLayerSystem) {
+    this.worldAxisSystem = worldAxisSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.depthLayerSystem = depthLayerSystem;
+
+    // Track scroll offsets per zone
+    this.scrollOffsets = {
+      GROUND_PLANE: 0,
+      SKY_FAR: 0
+    };
+
+    console.log('[WorldScroller] Single source of truth for forward motion established');
+  }
+
+  update(deltaTime) {
+    // Get base delta Z from WorldAxisSystem
+    const baseDeltaZ = this.worldAxisSystem.getBaseDeltaZ();
+
+    // Update scroll offsets for each zone
+    this.updateZoneOffset('GROUND_PLANE', baseDeltaZ);
+    this.updateZoneOffset('SKY_FAR', baseDeltaZ);
+
+    // Log current offsets for debugging
+    console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}`);
+    console.log(`[WorldScroller] SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
+  }
+
+  updateZoneOffset(zoneName, baseDeltaZ) {
+    const multiplier = this.depthLayerSystem.getMultiplier(
+      zoneName === 'GROUND_PLANE' ? 'SEA' : 'CLOUDS'
+    );
+
+    const deltaZ = baseDeltaZ * multiplier;
+    this.scrollOffsets[zoneName] += deltaZ;
+
+    // Apply layout wrapping rules
+    const zone = this.worldLayoutSystem.getZone(zoneName);
+    if (zone && Math.abs(this.scrollOffsets[zoneName]) > zone.zWrapLimit) {
+      this.scrollOffsets[zoneName] = this.scrollOffsets[zoneName] % zone.zWrapReset;
+      console.log(`[WorldScroller] ${zoneName} wrapped at limit ${zone.zWrapLimit}`);
+    }
+  }
+
+  getZoneZ(zoneName) {
+    return this.scrollOffsets[zoneName] || 0;
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -576,9 +611,7 @@ class SkySystem {
     this.world = world;
     this.cloudGroup = null;
     this.clouds = [];
-    this.animationSpeed = 0.0002; // Very slow movement for parallax
     this.cloudCount = 20; // Number of clouds
-    this.worldLayout = null;
   }
 
   init() {
@@ -669,20 +702,12 @@ class SkySystem {
     this.cloudGroup.add(cloudGroup);
   }
 
-  update(deltaTime, deltaZ = 0) {
+  update(deltaTime, zoneZ) {
     if (!this.cloudGroup) return;
 
-    // Move clouds backward on Z axis for parallax effect
-    // deltaZ already includes depth layer multiplier (0.5 for clouds)
-    this.cloudGroup.position.z += deltaZ;
-
-    // Use layout rules for Z wrapping (SKY_FAR rules)
-    if (this.worldLayout) {
-      const zone = this.worldLayout.getSystemZone('SkySystem');
-      if (zone && Math.abs(this.cloudGroup.position.z) > zone.zWrapLimit) {
-        this.cloudGroup.position.z = this.cloudGroup.position.z % zone.zWrapReset;
-      }
-    }
+    // Pure renderer: read Z offset from WorldScrollerSystem
+    // No movement logic here - WorldScrollerSystem owns all Z motion
+    this.cloudGroup.position.z = zoneZ;
   }
 
   destroy() {
@@ -886,6 +911,7 @@ class EndlessMode {
     this.worldAxisSystem = null;
     this.depthLayerSystem = null;
     this.worldLayoutSystem = null;
+    this.worldScrollerSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -912,6 +938,11 @@ class EndlessMode {
     this.worldAxisSystem = new WorldAxisSystem();
     this.depthLayerSystem = new DepthLayerSystem();
     this.worldLayoutSystem = new WorldLayoutSystem();
+    this.worldScrollerSystem = new WorldScrollerSystem(
+      this.worldAxisSystem,
+      this.worldLayoutSystem,
+      this.depthLayerSystem
+    );
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -931,11 +962,9 @@ class EndlessMode {
 
     // Initialize sea system
     this.seaSystem.init();
-    this.seaSystem.setWorldLayout(this.worldLayoutSystem);
 
     // Initialize sky system
     this.skySystem.init();
-    this.skySystem.setWorldLayout(this.worldLayoutSystem);
 
     // Initialize plane view layout
     this.planeView.setWorldLayout(this.worldLayoutSystem);
@@ -981,17 +1010,15 @@ class EndlessMode {
 
     // 4. World axis system updates
     this.worldAxisSystem.update(deltaTime);
-    const baseDeltaZ = this.worldAxisSystem.getBaseDeltaZ();
 
-    // 5. Sea system updates (moves on Z axis only)
-    const seaMultiplier = this.depthLayerSystem.getMultiplier('SEA');
-    console.log(`[DepthLayer] SEA multiplier: ${seaMultiplier}`);
-    this.seaSystem.update(deltaTime, baseDeltaZ * seaMultiplier);
+    // 5. World scroller system updates (single source of truth for forward motion)
+    this.worldScrollerSystem.update(deltaTime);
 
-    // 6. Sky system updates (moves on Z axis only)
-    const cloudsMultiplier = this.depthLayerSystem.getMultiplier('CLOUDS');
-    console.log(`[DepthLayer] CLOUDS multiplier: ${cloudsMultiplier}`);
-    this.skySystem.update(deltaTime, baseDeltaZ * cloudsMultiplier);
+    // 6. Sea system updates (pure renderer - reads Z from scroller)
+    this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
+
+    // 7. Sky system updates (pure renderer - reads Z from scroller)
+    this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
     // 6. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
