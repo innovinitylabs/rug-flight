@@ -3,10 +3,12 @@
 
 // Import modern abstractions
 import PlayerEntity from '/core/entities/PlayerEntity.js';
+import ObstacleEntity from '/core/entities/ObstacleEntity.js';
 import PlaneFactory from '/core/factories/PlaneFactory.js';
 import PlayerController from '/core/controllers/PlayerController.js';
 import PlayerMovementPipelineSystem from '/core/systems/PlayerMovementPipelineSystem.js';
 import LaneDebugVisualSystem from '/core/systems/LaneDebugVisualSystem.js';
+import SingleObstacleSpawnerSystem from '/core/systems/SingleObstacleSpawnerSystem.js';
 import DebugConfig from '/core/config/DebugConfig.js';
 
 // ModeSupervisor class - manages mode lifecycle
@@ -3890,6 +3892,13 @@ class EndlessMode {
       world
     );
 
+    // ===== DETERMINISTIC SINGLE OBSTACLE SYSTEM ===== (core gameplay loop)
+    this.singleObstacleSpawnerSystem = new SingleObstacleSpawnerSystem(
+      this.entityRegistrySystem,
+      this.laneSystem,
+      this.worldScrollerSystem
+    ); // Deterministic single obstacle spawning
+
     // ===== PRESENTATION-ONLY SYSTEMS ===== (no gameplay logic, pure visuals/audio)
     this.scoreSystem = new ScoreSystem(); // Authoritative scoring state
     this.presentationSystem = new PresentationSystem(); // DOM updates for UI
@@ -4005,6 +4014,9 @@ class EndlessMode {
     // Reset world axis system
     this.worldAxisSystem.reset();
 
+    // Reset single obstacle spawner for fresh game
+    this.singleObstacleSpawnerSystem.reset();
+
     // Reset entity to initial state
     this.planeEntity = new PlaneEntity(this.laneSystem); // Fresh entity
 
@@ -4058,13 +4070,21 @@ class EndlessMode {
     const groundZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
     const skyZ = this.worldScrollerSystem.getZoneZ('SKY_FAR');
 
+    // Get obstacle info
+    const obstacle = this.singleObstacleSpawnerSystem.getObstacle();
+    const obstacleInfo = obstacle ?
+      `Lane: ${obstacle.laneIndex}, Z: ${obstacle.z.toFixed(1)}` :
+      'None';
+
     this.debugOverlay.innerHTML = `
       <strong>Player:</strong><br>
       Lane: ${this.playerMovementPipeline.getCurrentLane()} → ${this.playerMovementPipeline.getTargetLane()}<br>
       X: ${playerPos.x.toFixed(1)}<br>
       <strong>World:</strong><br>
       Ground Z: ${groundZ.toFixed(1)}<br>
-      Sky Z: ${skyZ.toFixed(1)}
+      Sky Z: ${skyZ.toFixed(1)}<br>
+      <strong>Obstacle:</strong><br>
+      ${obstacleInfo}
     `;
   }
 
@@ -4178,6 +4198,12 @@ class EndlessMode {
     // 8.6. Obstacle spawn system updates (lane-based obstacle spawning)
     this.obstacleSpawnSystem.update();
 
+    // 8.7. Single obstacle spawner system updates (deterministic single obstacle)
+    if (!this.singleObstacleSpawnerSystem.hasSpawned) {
+      this.singleObstacleSpawnerSystem.spawnObstacle();
+    }
+    this.singleObstacleSpawnerSystem.updateObstaclePosition();
+
     // 9. Lane obstacle collision system detects player vs obstacle collisions
     const activeObstacles = this.obstacleSpawnSystem.getActiveObstacles();
     const obstacleCollisionEvents = this.laneObstacleCollisionSystem.process(this.playerEntity, activeObstacles);
@@ -4188,8 +4214,11 @@ class EndlessMode {
     // 11. Collision consumption system processes intents into domain events
     const entityCollisionEvents = this.collisionConsumptionSystem.process(collisionIntents);
 
+    // 11.5. Handle single obstacle collisions
+    const singleObstacleCollisionEvents = this.processSingleObstacleCollisions(collisionIntents);
+
     // 12. Merge all collision domain events
-    const domainEvents = [...obstacleCollisionEvents, ...entityCollisionEvents];
+    const domainEvents = [...obstacleCollisionEvents, ...entityCollisionEvents, ...singleObstacleCollisionEvents];
 
     // 11. Score system consumes domain events and updates score state
     this.scoreSystem.consume(domainEvents);
@@ -4334,6 +4363,50 @@ class EndlessMode {
     this.worldLayoutSystem = null;
 
     console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
+  }
+
+  // Process single obstacle collision intents and handle damage/destruction
+  processSingleObstacleCollisions(collisionIntents) {
+    const domainEvents = [];
+    const obstacleCollisions = collisionIntents.filter(intent =>
+      intent.type === 'COLLISION' &&
+      intent.target &&
+      intent.target.type === 'OBSTACLE'
+    );
+
+    // Process each obstacle collision (should only be one)
+    for (const collision of obstacleCollisions) {
+      const obstacle = collision.target;
+
+      // Apply damage to player (1 life)
+      const damageApplied = this.healthSystem.applyDamage(1);
+      if (damageApplied > 0) {
+        console.log(`[EndlessMode] Player hit obstacle ${obstacle.id}, lost ${damageApplied} life(s)`);
+
+        // Create collision domain event
+        const domainEvent = {
+          type: 'COLLISION',
+          obstacleId: obstacle.id,
+          laneIndex: collision.laneIndex,
+          zDistance: collision.zDistance,
+          damage: damageApplied
+        };
+        domainEvents.push(domainEvent);
+
+        // Immediately unregister and destroy obstacle
+        this.entityRegistrySystem.unregister(obstacle);
+        if (obstacle.destroy) {
+          obstacle.destroy();
+        }
+
+        // Reset spawner for potential respawn (though deterministic system may not respawn)
+        this.singleObstacleSpawnerSystem.reset();
+
+        console.log(`[EndlessMode] Obstacle ${obstacle.id} destroyed after collision`);
+      }
+    }
+
+    return domainEvents;
   }
 }
 
