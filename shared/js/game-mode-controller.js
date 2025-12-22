@@ -107,64 +107,83 @@
 
       // Determine which game script to load based on mode
       var gameScriptPath;
-      if (mode === 'endless') {
-        gameScriptPath = 'games/top-rug/js/game.js';
-      } else if (mode === 'combat') {
+      if (mode === 'combat') {
         gameScriptPath = 'games/top-rug-maverick/js/game.js';
+      } else if (mode === 'endless') {
+        // Endless mode uses ES modules only - no script path needed
+        gameScriptPath = null;
       } else {
         console.error('[Game Controller] Unknown game mode:', mode);
         return;
       }
 
-      // Load utils first, then MovementModel, then the game script
-      var utilsScript = document.createElement('script');
-      utilsScript.src = 'shared/js/utils.js';
-      utilsScript.onload = function() {
-        console.log('[Game Controller] utils loaded');
+      // Load dependencies based on mode
+      if (mode === 'endless') {
+        // Endless mode: ES module loading (no script injection)
+        // Show intro screen
+        var introScreen = document.getElementById('intro-screen');
+        if (introScreen) {
+          introScreen.classList.add('visible');
+        }
 
-        // Now load MovementModel
-      var movementScript = document.createElement('script');
-      movementScript.src = 'core/MovementModel.js';
-      movementScript.onload = function() {
-        console.log('[Game Controller] MovementModel loaded');
+        // Load Endless mode as ES module
+        import('/games/top-rug/js/game.js')
+          .then(module => {
+            console.log('[Game Controller] Endless module loaded correctly');
+            module.default.init();
+          })
+          .catch(err => {
+            console.error('[Game Controller] Failed to load Endless module', err);
+          });
 
-        // Now load the game script
-        var script = document.createElement('script');
-        script.src = gameScriptPath;
-        script.onload = function() {
-          console.log('[Game Controller] Game loaded for mode:', mode);
+      } else if (mode === 'combat') {
+        // Combat mode: Legacy script loading
+        // Load utils first, then MovementModel, then the game script
+        var utilsScript = document.createElement('script');
+        utilsScript.src = 'shared/js/utils.js';
+        utilsScript.onload = function() {
+          console.log('[Game Controller] utils loaded');
 
-          // Show intro screen
-          var introScreen = document.getElementById('intro-screen');
-          if (introScreen) {
-            introScreen.classList.add('visible');
-          }
+          // Now load MovementModel
+        var movementScript = document.createElement('script');
+        movementScript.src = 'core/MovementModel.js';
+        movementScript.onload = function() {
+          console.log('[Game Controller] MovementModel loaded');
 
-          // Initialize the game (different namespaces for different modes)
-          if (mode === 'endless' && typeof window.Aviator1Game !== 'undefined') {
-            window.Aviator1Game.init();
+          // Now load the game script
+          var script = document.createElement('script');
+          script.src = gameScriptPath;
+          script.onload = function() {
+            console.log('[Game Controller] Game loaded for mode:', mode);
 
-            // System initialization now handled by mode.init()
-          } else if (mode === 'combat' && typeof window.Aviator2Game !== 'undefined') {
-            window.Aviator2Game.init();
-          } else {
-            console.error('[Game Controller] Game namespace not found for mode:', mode);
-          }
+            // Show intro screen
+            var introScreen = document.getElementById('intro-screen');
+            if (introScreen) {
+              introScreen.classList.add('visible');
+            }
+
+            // Initialize the game
+            if (typeof window.Aviator2Game !== 'undefined') {
+              window.Aviator2Game.init();
+            } else {
+              console.error('[Game Controller] Game namespace not found for mode:', mode);
+            }
+          };
+          script.onerror = function() {
+            console.error('[Game Controller] Failed to load game script for mode:', mode, 'path:', gameScriptPath);
+          };
+          document.head.appendChild(script);
         };
-        script.onerror = function() {
-          console.error('[Game Controller] Failed to load game script for mode:', mode, 'path:', gameScriptPath);
+        movementScript.onerror = function() {
+          console.error('[Game Controller] Failed to load MovementModel script');
         };
-        document.head.appendChild(script);
-      };
-      movementScript.onerror = function() {
-        console.error('[Game Controller] Failed to load MovementModel script');
-      };
-      document.head.appendChild(movementScript);
-      };
-      utilsScript.onerror = function() {
-        console.error('[Game Controller] Failed to load utils script');
-      };
-      document.head.appendChild(utilsScript);
+        document.head.appendChild(movementScript);
+        };
+        utilsScript.onerror = function() {
+          console.error('[Game Controller] Failed to load utils script');
+        };
+        document.head.appendChild(utilsScript);
+      }
     },
 
     loadModeCSS: function(mode) {

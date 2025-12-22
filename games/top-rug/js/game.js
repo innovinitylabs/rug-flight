@@ -1,6 +1,14 @@
 // Clean architecture for Endless game mode
 // Single authoritative module with minimal public API
 
+// Import modern abstractions
+import PlayerEntity from '/core/entities/PlayerEntity.js';
+import PlaneFactory from '/core/factories/PlaneFactory.js';
+import PlayerController from '/core/controllers/PlayerController.js';
+import PlayerMovementPipelineSystem from '/core/systems/PlayerMovementPipelineSystem.js';
+import LaneDebugVisualSystem from '/core/systems/LaneDebugVisualSystem.js';
+import DebugConfig from '/core/config/DebugConfig.js';
+
 // ModeSupervisor class - manages mode lifecycle
 class ModeSupervisor {
   constructor() {
@@ -57,9 +65,9 @@ class ModeSupervisor {
   }
 }
 
-window.Aviator1Game = {
+const AviatorEndlessGame = {
   init() {
-    console.log('[Aviator1Game] Initializing clean architecture...');
+    console.log('[AviatorEndlessGame] Initializing clean architecture...');
 
     // Create GameState
     const gameState = {
@@ -400,7 +408,10 @@ class SeaSystem {
     this.material = null;
     this.geometry = null;
     this.basePositions = null; // Store original vertex positions
-    this.waves = []; // Wave animation data
+    this.vertexWaves = []; // Per-vertex wave data
+
+    // Debug flag for visibility
+    this.DEBUG_SEA = true;
   }
 
   init() {
@@ -416,11 +427,12 @@ class SeaSystem {
       10              // height segments
     );
 
-    // Simple blue material
+    // Debug material for visibility
     this.material = new THREE.MeshLambertMaterial({
       color: 0x006994,
       transparent: true,
-      opacity: 0.8
+      opacity: 0.8,
+      wireframe: this.DEBUG_SEA // Wireframe for debug visibility
     });
 
     // Create mesh and position it
@@ -457,7 +469,7 @@ class SeaSystem {
     for (let i = 0; i < this.basePositions.length; i += 3) {
       this.vertexWaves.push({
         angle: Math.random() * Math.PI * 2,  // Random starting angle
-        amplitude: 1 + Math.random() * 2,     // 1-3 units amplitude
+        amplitude: 3 + Math.random() * 4,     // 3-7 units amplitude (exaggerated for visibility)
         speed: 0.5 + Math.random() * 1.5      // 0.5-2.0 speed
       });
     }
@@ -465,13 +477,19 @@ class SeaSystem {
     console.log(`[SeaSystem] Initialized ${this.vertexWaves.length} vertex waves`);
   }
 
+  // WorldScrollConsumer contract
+  updateScroll(zoneZ) {
+    if (!this.mesh) return;
+
+    // Apply Z scrolling - world illusion through mesh translation
+    this.mesh.position.z = this.baseZ + zoneZ;
+  }
+
   update(deltaTime, zoneZ) {
     if (!this.mesh) return;
 
-    // Apply Z scrolling as before
-    this.mesh.position.z = this.baseZ + zoneZ;
-
-    // Animate wave vertices
+    // Legacy compatibility - apply scrolling and animation
+    this.updateScroll(zoneZ);
     this.animateWaves(deltaTime);
   }
 
@@ -493,13 +511,13 @@ class SeaSystem {
       const baseY = this.basePositions[i + 1];
       const baseZ = this.basePositions[i + 2];
 
-      // Apply wave motion in X, Y, and Z directions
+      // Apply exaggerated wave motion for visibility
       const waveOffsetX = Math.cos(wave.angle) * wave.amplitude * 0.5;
       const waveOffsetY = Math.sin(wave.angle) * wave.amplitude;
 
-      // Add subtle Z offset for forward flow illusion (phase-based, time-dependent)
-      // Creates parallax effect without moving camera
-      const waveOffsetZ = Math.sin(wave.angle + baseX * 0.05) * wave.amplitude * 0.6;
+      // Exaggerated Z offset for forward flow illusion (phase-based, time-dependent)
+      // Creates clear parallax effect without moving camera
+      const waveOffsetZ = Math.sin(wave.angle + baseX * 0.05) * wave.amplitude * 1.2;
 
       // Apply offsets to current position
       positions[i] = baseX + waveOffsetX;         // X coordinate
@@ -734,6 +752,11 @@ class WorldScrollerSystem {
       SKY_FAR: 0
     };
 
+    // Logging state for throttled debug output
+    this._logTimer = 0;
+    this._lastLoggedGround = 0;
+    this._lastLoggedSky = 0;
+
     console.log('[WorldScroller] Single source of truth for forward motion established');
   }
 
@@ -745,8 +768,24 @@ class WorldScrollerSystem {
     this.updateZoneOffset('GROUND_PLANE', baseDeltaZ);
     this.updateZoneOffset('SKY_FAR', baseDeltaZ);
 
-    // Temporary debug logging to verify scrolling is working
-    console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}, SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
+    // Gated, throttled logging for debug purposes
+    if (DebugConfig.ENABLE_WORLD_SCROLL_LOGS) {
+      this._logTimer += deltaTime;
+
+      // Log at most once every 500ms and only if offsets changed significantly
+      if (this._logTimer >= 0.5) {
+        const groundChanged = Math.abs(this.scrollOffsets.GROUND_PLANE - this._lastLoggedGround) > 10;
+        const skyChanged = Math.abs(this.scrollOffsets.SKY_FAR - this._lastLoggedSky) > 10;
+
+        if (groundChanged || skyChanged) {
+          console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}, SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
+          this._lastLoggedGround = this.scrollOffsets.GROUND_PLANE;
+          this._lastLoggedSky = this.scrollOffsets.SKY_FAR;
+        }
+
+        this._logTimer = 0;
+      }
+    }
   }
 
   updateZoneOffset(zoneName, baseDeltaZ) {
@@ -1914,6 +1953,9 @@ class ObstacleSpawnSystem {
     // Lane tracking to avoid blocking all lanes or same-lane spawns
     this.lastSpawnLane = -1;
 
+    // Debug logging
+    this.lastMultiplier = 1.0; // Track multiplier changes
+
     console.log('[ObstacleSpawn] Lane-based obstacle spawning system established');
   }
 
@@ -1931,7 +1973,12 @@ class ObstacleSpawnSystem {
     }
 
     // Update all active obstacles
-    console.log(`[ObstacleSpeed] multiplier = ${difficultyState.speedMultiplier}`);
+    // Log multiplier only when it changes
+    if (DebugConfig.ENABLE_OBSTACLE_LOGS && difficultyState.speedMultiplier !== this.lastMultiplier) {
+      console.log(`[ObstacleSpeed] multiplier changed: ${this.lastMultiplier} → ${difficultyState.speedMultiplier}`);
+      this.lastMultiplier = difficultyState.speedMultiplier;
+    }
+
     for (let i = this.activeObstacles.length - 1; i >= 0; i--) {
       const obstacle = this.activeObstacles[i];
 
@@ -2439,44 +2486,6 @@ ACTION STATE:
   }
 }
 
-// PlayerVisualMovementSystem class - presentation-only lane-based visual movement
-class PlayerVisualMovementSystem {
-  constructor(laneController, laneSystem, playerActionStateSystem, playerEntity) {
-    // Presentation-only system: observes gameplay state, drives visual movement
-    // Never mutates gameplay logic, only affects visual representation
-    // Connects lane controller decisions to visual player movement
-
-    this.laneController = laneController;
-    this.laneSystem = laneSystem;
-    this.playerActionStateSystem = playerActionStateSystem;
-    this.playerEntity = playerEntity;
-
-    console.log('[PlayerVisualMovement] Lane-based visual movement system established');
-  }
-
-  update(deltaTime) {
-    if (!this.playerEntity || !this.laneController || !this.laneSystem) {
-      return; // Safety check
-    }
-
-    // Check if player is stunned - if so, stop all lateral movement
-    const actionState = this.playerActionStateSystem.getCurrentState();
-    if (actionState.state === 'STUNNED') {
-      // Player is stunned - no lateral movement allowed
-      return;
-    }
-
-    // Get the target lane index from lane controller
-    const targetLaneIndex = this.laneController.targetLaneIndex;
-
-    // If the target lane has changed, update the player entity's lane
-    if (targetLaneIndex !== this.playerEntity.laneIndex) {
-      this.playerEntity.setLane(targetLaneIndex);
-      // Update the lane controller's current lane to match
-      this.laneController.setCurrentLane(targetLaneIndex);
-    }
-  }
-}
 
 // PlayerVerticalConstraintSystem class - enforces vertical positioning constraints
 class PlayerVerticalConstraintSystem {
@@ -3196,23 +3205,31 @@ class VFXPresentationSystem {
 
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
-  constructor(distanceSystem) {
-    this.distanceSystem = distanceSystem;
+  constructor() {
+    this.speed = 60;       // forward units per second
+    this.baseDeltaZ = 0;
+    this.worldScrollLogTimer = 0; // Throttled world scroll logging
   }
 
   update(deltaTime) {
-    // DistanceSystem already updates distance
+    this.baseDeltaZ = this.speed * deltaTime;
+
+    // Throttled world scroll logging (500ms intervals)
+    if (DebugConfig.ENABLE_WORLD_SCROLL_LOGS) {
+      this.worldScrollLogTimer += deltaTime;
+      if (this.worldScrollLogTimer >= 0.5) {
+        console.log('[WorldAxis] baseDeltaZ:', this.baseDeltaZ.toFixed(2));
+        this.worldScrollLogTimer = 0;
+      }
+    }
   }
 
   getBaseDeltaZ() {
-    // Negative Z = forward illusion
-    return -this.distanceSystem.getDelta();
+    return this.baseDeltaZ;
   }
 
   reset() {
-    if (this.distanceSystem && this.distanceSystem.reset) {
-      this.distanceSystem.reset();
-    }
+    this.baseDeltaZ = 0;
   }
 }
 
@@ -3316,12 +3333,19 @@ class SkySystem {
     this.cloudGroup.add(cloudGroup);
   }
 
+  // WorldScrollConsumer contract
+  updateScroll(zoneZ) {
+    if (!this.cloudGroup) return;
+
+    // Apply Z scrolling - world illusion through mesh translation
+    this.cloudGroup.position.z = this.baseZ + zoneZ;
+  }
+
   update(deltaTime, zoneZ) {
     if (!this.cloudGroup) return;
 
-    // Pure renderer: read Z offset from WorldScrollerSystem
-    // No movement logic here - WorldScrollerSystem owns all Z motion
-    this.cloudGroup.position.z = this.baseZ + zoneZ;
+    // Legacy compatibility - apply scrolling
+    this.updateScroll(zoneZ);
   }
 
   destroy() {
@@ -3714,118 +3738,7 @@ class PlayerProxy {
   }
 }
 
-// PlayerEntity class - lane-based player entity
-class PlayerEntity {
-  constructor(laneSystem, worldLayoutSystem, world) {
-    this.laneSystem = laneSystem;
-    this.worldLayoutSystem = worldLayoutSystem;
-    this.world = world;
-
-    // Lane-based properties
-    this.laneIndex = 1; // Default to center lane (assuming 3 lanes: 0, 1, 2)
-    this.targetX = 0; // Target X position for smooth interpolation
-    this.position = { x: 0, y: 100, z: 0 }; // Will be updated based on lane and layout
-
-    // Visual mesh (reuse PlayerProxy approach)
-    this.mesh = null;
-
-    // Movement smoothing
-    this.lerpSpeed = 0.1;
-
-    this.createMesh();
-    this.updatePositionFromLane();
-
-    console.log('[PlayerEntity] Lane-based player entity created');
-  }
-
-  createMesh() {
-    // Simple box geometry for player representation
-    const geometry = new THREE.BoxGeometry(4, 4, 4);
-    const material = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // Red box
-
-    this.mesh = new THREE.Mesh(geometry, material);
-
-    // Initial position will be set by updatePositionFromLane
-    this.world.add(this.mesh);
-
-    console.log('[PlayerEntity] Player mesh created');
-  }
-
-  setLane(laneIndex) {
-    // Clamp lane index within bounds
-    const maxLane = this.laneSystem.getLaneCount() - 1;
-    this.laneIndex = Math.max(0, Math.min(maxLane, laneIndex));
-
-    // Update target position
-    this.updatePositionFromLane();
-  }
-
-  // Handle player intents for lane switching
-  processIntent(intentType) {
-    if (intentType === 'MOVE_LEFT') {
-      this.setLane(this.laneIndex - 1);
-    } else if (intentType === 'MOVE_RIGHT') {
-      this.setLane(this.laneIndex + 1);
-    }
-  }
-
-  updatePositionFromLane() {
-    if (!this.laneSystem || !this.worldLayoutSystem) {
-      return;
-    }
-
-    // Get lane center X position
-    const laneCenterX = this.laneSystem.getLaneCenter(this.laneIndex);
-
-    // Get MID_AIR baseline Y position
-    const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
-    const baselineY = midAirZone && midAirZone.baselineY ? midAirZone.baselineY : 100;
-
-    // Update target position
-    this.targetX = laneCenterX;
-    this.position.x = laneCenterX; // Immediately set for collision detection
-    this.position.y = baselineY;
-    this.position.z = 0; // Player always at Z=0
-  }
-
-  getPosition() {
-    return this.mesh.position;
-  }
-
-  moveLane(direction) {
-    const oldLaneIndex = this.laneIndex;
-    this.laneIndex += direction;
-    this.laneIndex = Math.max(0, Math.min(2, this.laneIndex));
-    this.targetX = this.laneSystem.getLaneCenter(this.laneIndex);
-    console.log('[PLAYER] moveLane', oldLaneIndex, '→', this.laneIndex);
-  }
-
-  update(deltaTime) {
-    if (!this.mesh) {
-      return;
-    }
-
-    // Smoothly move X toward target
-    this.position.x += (this.targetX - this.position.x) * 0.2;
-
-    // FORCE mesh sync
-    this.mesh.position.x = this.position.x;
-    this.mesh.position.y = this.position.y;
-    this.mesh.position.z = this.position.z;
-
-    // Simple rotation for visual feedback
-    this.mesh.rotation.y += deltaTime * 0.5;
-  }
-
-  destroy() {
-    if (this.mesh && this.world) {
-      this.world.remove(this.mesh);
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
-      this.mesh = null;
-    }
-  }
-}
+// PlayerEntity imported from core/entities/PlayerEntity.js
 
 // EndlessMode class - orchestrates the components
 class EndlessMode {
@@ -3841,6 +3754,7 @@ class EndlessMode {
     // Logging guards
     this.lastDistanceLog = null;
     this.debugLogTimer = 0;
+    this.frameLogTimer = 0; // Throttled frame logging
 
     // Dependencies
     this.gameState = null;
@@ -3854,6 +3768,9 @@ class EndlessMode {
     this.planeController = null;
     this.planeView = null;
     this.playerEntity = null;
+    this.playerController = null;
+    this.playerMovementPipeline = null;
+    this.laneDebugVisualSystem = null;
     this.seaSystem = null;
     this.skySystem = null;
     this.distanceSystem = null;
@@ -3880,7 +3797,6 @@ class EndlessMode {
     this.vfxPresentationSystem = null;
     this.debugWorldOverlaySystem = null;
     this.laneVisualGuideSystem = null;
-    this.playerVisualMovementSystem = null;
     this.laneEntitySpawnSystem = null;
     this.laneEntityVisualSystem = null;
     this.laneEntityApproachSystem = null;
@@ -3903,7 +3819,7 @@ class EndlessMode {
 
     // ===== CORE GAMEPLAY SYSTEMS ===== (game logic, state management)
     this.distanceSystem = new DistanceSystem(); // Tracks forward progress
-    this.worldAxisSystem = new WorldAxisSystem(this.distanceSystem); // Z-axis movement authority
+    this.worldAxisSystem = new WorldAxisSystem(); // Z-axis movement authority
     this.depthLayerSystem = new DepthLayerSystem(); // Parallax speed multipliers
     this.worldLayoutSystem = new WorldLayoutSystem(); // Spatial semantics and zones
     this.difficultyCurveSystem = new DifficultyCurveSystem(); // Progressive difficulty scaling
@@ -3928,7 +3844,21 @@ class EndlessMode {
     this.planeView = new PlaneView(world); // Plane visual representation
 
     // ===== ENTITY SYSTEMS ===== (gameplay logic)
-    this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world); // Player position and lane state
+    const playerMesh = PlaneFactory.createBasicPlane(); // Create visual placeholder
+    world.add(playerMesh); // Add to scene
+    this.playerEntity = new PlayerEntity(playerMesh); // Pure visual entity
+    this.playerController = new PlayerController(this.playerEntity, this.laneSystem); // Lane logic controller
+    this.playerMovementPipeline = new PlayerMovementPipelineSystem(
+      this.playerIntentSystem,
+      this.playerActionStateSystem,
+      this.playerController,
+      this.playerEntity
+    ); // Complete movement pipeline
+    this.laneDebugVisualSystem = new LaneDebugVisualSystem(
+      this.laneSystem,
+      this.playerMovementPipeline,
+      world
+    ); // Visual lane debugging
     this.cameraRig.follow(this.playerEntity);
     this.simpleObstacleSpawnSystem = new SimpleObstacleSpawnSystem(this.laneSystem, this.worldLayoutSystem, this.worldScrollerSystem, world); // Minimal obstacle spawning
 
@@ -3974,12 +3904,6 @@ class EndlessMode {
     );
 
     // ===== VISUAL COORDINATION SYSTEMS ===== (presentation-only, coordinate visuals)
-    this.playerVisualMovementSystem = new PlayerVisualMovementSystem( // Lane-based visual lerping
-      this.laneController,
-      this.laneSystem,
-      this.playerActionStateSystem,
-      this.playerEntity
-    );
     this.playerVerticalConstraintSystem = new PlayerVerticalConstraintSystem( // Y position constraints
       this.worldLayoutSystem,
       this.playerEntity
@@ -4097,13 +4021,60 @@ class EndlessMode {
     this.world.add(axesHelper);
     console.log('[EndlessMode] Debug coordinate axes added (X=red, Y=green, Z=blue)');
 
+    // Create debug overlay
+    this.createDebugOverlay();
+
     // Start camera following PlayerProxy
     this.cameraRig.follow(this.playerEntity);
 
     console.log('[EndlessMode] Started - input active, state reset');
   }
 
+  createDebugOverlay() {
+    // Create debug overlay element
+    this.debugOverlay = document.createElement('div');
+    this.debugOverlay.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 1000;
+      pointer-events: none;
+    `;
+    document.body.appendChild(this.debugOverlay);
+
+    console.log('[EndlessMode] Debug overlay created');
+  }
+
+  updateDebugOverlay() {
+    if (!this.debugOverlay) return;
+
+    const playerPos = this.playerEntity.getPosition();
+    const groundZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
+    const skyZ = this.worldScrollerSystem.getZoneZ('SKY_FAR');
+
+    this.debugOverlay.innerHTML = `
+      <strong>Player:</strong><br>
+      Lane: ${this.playerMovementPipeline.getCurrentLane()} → ${this.playerMovementPipeline.getTargetLane()}<br>
+      X: ${playerPos.x.toFixed(1)}<br>
+      <strong>World:</strong><br>
+      Ground Z: ${groundZ.toFixed(1)}<br>
+      Sky Z: ${skyZ.toFixed(1)}
+    `;
+  }
+
   update(deltaTime) {
+    // Mental model assertions (NON NEGOTIABLE)
+    const playerPosition = this.playerEntity.getPosition();
+    if (playerPosition.z !== 0) {
+      console.error('[MENTAL MODEL VIOLATION] Player Z changed:', playerPosition.z, '- Player must stay at Z=0!');
+    }
+
     // Silent health check - core systems are validated at init/start time
     if (!this.isActive) {
       return;
@@ -4111,7 +4082,7 @@ class EndlessMode {
 
     // Only run when active and not paused
     if (this.isPaused) return;
-    if (!this.planeEntity || !this.planeController || !this.planeView || !this.input) return;
+    if (!this.playerEntity || !this.input || !this.worldAxisSystem || !this.worldScrollerSystem) return;
 
     // Check for game over - skip gameplay logic if player is dead
     if (this.gameState.status === 'GAME_OVER') {
@@ -4123,35 +4094,31 @@ class EndlessMode {
       return;
     }
 
-    console.log('[EndlessMode] tick', deltaTime.toFixed(3));
+    // 1. Advance world axis (THIS WAS MISSING)
+    this.worldAxisSystem.update(deltaTime);
 
-    // a) this.distanceSystem.update(deltaTime)
-    this.distanceSystem.update(deltaTime);
-
-    // b) this.worldScrollerSystem.update(deltaTime)
+    // 2. Scroll the world using axis delta
     this.worldScrollerSystem.update(deltaTime);
 
-    // c) const groundZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE')
-    //    const skyZ = this.worldScrollerSystem.getZoneZ('SKY_FAR')
+    // 3. Fetch zone offsets
     const groundZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
     const skyZ = this.worldScrollerSystem.getZoneZ('SKY_FAR');
 
-    // d) this.seaSystem.update(deltaTime, groundZ)
-    //    this.skySystem.update(deltaTime, skyZ)
-    this.seaSystem.update(deltaTime, groundZ);
-    this.skySystem.update(deltaTime, skyZ);
+    // 4. Apply movement to visuals (WorldScrollConsumer pattern)
+    this.seaSystem.updateScroll(groundZ);
+    this.skySystem.updateScroll(skyZ);
 
-    // e) this.playerIntentSystem.update(this.input, deltaTime)
-    this.playerIntentSystem.update(this.input, deltaTime);
-
-    // f) this.laneController.update(this.playerIntentSystem.getCurrentIntent())
-    this.laneController.update(this.playerIntentSystem.getCurrentIntent());
-
-    // Update player visual position
-    this.playerEntity.update(deltaTime);
+    // Execute complete player movement pipeline
+    this.playerMovementPipeline.update(this.input, deltaTime);
 
     // g) this.cameraRig.update()
     this.cameraRig.update();
+
+    // Update debug overlay
+    this.updateDebugOverlay();
+
+    // Update lane debug visualization
+    this.laneDebugVisualSystem.update(deltaTime);
 
     // Clear intent
     this.playerIntentSystem.clear();
@@ -4174,17 +4141,6 @@ class EndlessMode {
       }
     }
 
-    // 3. Controller processes input into intent
-    const intent = this.planeController.processInput(this.input);
-
-    // 3. Entity updates state based on intent
-    this.planeEntity.setTargetLane(laneIntent.targetLaneIndex);
-    this.planeEntity.setTargetY(intent.targetY);
-    this.planeEntity.setTargetRoll(intent.targetRoll);
-    this.planeEntity.update(deltaTime);
-
-    // 3. View updates visuals from entity state
-    this.planeView.updateFromEntity(this.planeEntity);
 
     // 4. World axis system updates (DistanceSystem first)
     this.worldAxisSystem.update(deltaTime);
@@ -4286,10 +4242,7 @@ class EndlessMode {
       }
     }
 
-    // 19. Player visual movement system updates lane-based X position
-    this.playerVisualMovementSystem.update(deltaTime);
-
-    // 19.5. Player vertical constraint system enforces Y positioning for camera framing
+    // 19. Player vertical constraint system enforces Y positioning for camera framing
     this.playerVerticalConstraintSystem.update(deltaTime);
 
 
@@ -4383,3 +4336,5 @@ class EndlessMode {
     console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
   }
 }
+
+export default AviatorEndlessGame;
