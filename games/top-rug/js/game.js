@@ -260,7 +260,7 @@ class World {
       if (object.material) {
         if (Array.isArray(object.material)) {
           object.material.forEach(material => material.dispose());
-    } else {
+                } else {
           object.material.dispose();
         }
       }
@@ -954,6 +954,136 @@ class EntityRegistrySystem {
   }
 }
 
+// CollisionIntentSystem class - deterministic collision detection layer
+class CollisionIntentSystem {
+  constructor(zCollisionThreshold = 10) {
+    this.zCollisionThreshold = zCollisionThreshold; // Configurable Z distance for collision
+    this.currentFrameIntents = []; // Intents for current frame only
+
+    console.log(`[CollisionIntent] Deterministic collision detection layer established (Z threshold: ${zCollisionThreshold})`);
+  }
+
+  // Process collision detection for current frame
+  process(planeEntity, entityRegistry, spawnBandSystem) {
+    console.assert(planeEntity, '[CollisionIntent] ERROR: planeEntity required');
+    console.assert(entityRegistry, '[CollisionIntent] ERROR: entityRegistry required');
+    console.assert(spawnBandSystem, '[CollisionIntent] ERROR: spawnBandSystem required');
+
+    // Clear previous frame's intents
+    this.currentFrameIntents = [];
+
+    // Only check entities in ACTIVE_WINDOW band (near player)
+    const activeEntities = entityRegistry.getByBand(spawnBandSystem, 'ACTIVE_WINDOW');
+
+    // Get plane's current lane (from PlaneEntity)
+    const planeLaneIndex = planeEntity.currentLaneIndex;
+    const planeZ = planeEntity.position.z; // Always 0 for plane
+
+    // Check each active entity for collision
+    for (const entity of activeEntities) {
+      // Skip if entity doesn't have laneIndex (not lane-aware)
+      if (typeof entity.laneIndex !== 'number') continue;
+
+      // Only check entities in the same lane as plane
+      if (entity.laneIndex !== planeLaneIndex) continue;
+
+      // Calculate Z distance (plane is always at Z=0)
+      const zDistance = Math.abs(entity.z - planeZ);
+
+      // Check if within collision threshold
+      if (zDistance <= this.zCollisionThreshold) {
+        // Create collision intent
+        const intent = {
+          type: 'COLLISION',
+          source: planeEntity,
+          target: entity,
+          laneIndex: planeLaneIndex,
+          zDistance: zDistance
+        };
+
+        this.currentFrameIntents.push(intent);
+
+        // Log collision intent
+        console.log(`[CollisionIntent] COLLISION: Plane vs ${entity.type} entity ${entity.id} (lane ${planeLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
+      }
+    }
+
+    return this.currentFrameIntents;
+  }
+
+  // Get intents for current frame
+  getCurrentIntents() {
+    return [...this.currentFrameIntents]; // Return copy
+  }
+
+  // Get intents filtered by type
+  getIntentsByType(intentType) {
+    return this.currentFrameIntents.filter(intent => intent.type === intentType);
+  }
+
+  // Get collision intents specifically
+  getCollisionIntents() {
+    return this.getIntentsByType('COLLISION');
+  }
+
+  // Check if plane has any collisions this frame
+  hasCollisions() {
+    return this.currentFrameIntents.length > 0;
+  }
+
+  // Get statistics for current frame
+  getFrameStats() {
+    const stats = {
+      totalIntents: this.currentFrameIntents.length,
+      intentsByType: {},
+      collisionCount: 0,
+      averageZDistance: 0
+    };
+
+    let totalZDistance = 0;
+
+    for (const intent of this.currentFrameIntents) {
+      // Count by type
+      stats.intentsByType[intent.type] = (stats.intentsByType[intent.type] || 0) + 1;
+
+      // Collision-specific stats
+      if (intent.type === 'COLLISION') {
+        stats.collisionCount++;
+        totalZDistance += intent.zDistance;
+      }
+    }
+
+    if (stats.collisionCount > 0) {
+      stats.averageZDistance = totalZDistance / stats.collisionCount;
+    }
+
+    return stats;
+  }
+
+  // Clear intents (called at end of frame)
+  clear() {
+    const clearedCount = this.currentFrameIntents.length;
+    this.currentFrameIntents = [];
+
+    if (clearedCount > 0) {
+      console.log(`[CollisionIntent] Cleared ${clearedCount} intents for next frame`);
+    }
+
+    return clearedCount;
+  }
+
+  // Configuration methods
+  setZCollisionThreshold(threshold) {
+    console.assert(threshold > 0, '[CollisionIntent] ERROR: Z threshold must be positive');
+    this.zCollisionThreshold = threshold;
+    console.log(`[CollisionIntent] Z collision threshold updated to ${threshold}`);
+  }
+
+  getZCollisionThreshold() {
+    return this.zCollisionThreshold;
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -1323,6 +1453,7 @@ class EndlessMode {
     this.laneController = null;
     this.spawnBandSystem = null;
     this.entityRegistrySystem = null;
+    this.collisionIntentSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1364,6 +1495,9 @@ class EndlessMode {
 
     // Create entity registry system - authoritative source of truth for entities
     this.entityRegistrySystem = new EntityRegistrySystem();
+
+    // Create collision intent system - deterministic collision detection layer
+    this.collisionIntentSystem = new CollisionIntentSystem(15); // 15 unit Z threshold
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -1451,7 +1585,10 @@ class EndlessMode {
     this.entityRegistrySystem.update(deltaTime);
     this.entityRegistrySystem.cleanup(this.spawnBandSystem);
 
-    // 8. Sea system updates (pure renderer - reads Z from scroller)
+    // 8. Collision intent system processes (deterministic collision detection)
+    this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
+
+    // 9. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
     // 9. Sky system updates (pure renderer - reads Z from scroller)
@@ -1459,6 +1596,9 @@ class EndlessMode {
 
     // 10. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
+
+    // 11. Clear collision intents for next frame
+    this.collisionIntentSystem.clear();
 
     // Update game time
     this.gameState.time += deltaTime;
