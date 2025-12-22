@@ -311,6 +311,7 @@ class CameraRig {
 
     // Z-axis lock assertion (deferred until camera exists)
     this._initialCameraZ = null;
+    this._zViolationLogged = false; // Guard for one-time error logging
   }
 
   follow(entity) {
@@ -341,10 +342,11 @@ class CameraRig {
     }
 
     // Camera Z position assertion - camera NEVER moves in Z
-    console.assert(this.world.camera.position.z === this._initialCameraZ,
-      '[CameraRig] ERROR: Camera Z position changed - Z axis locked!');
     if (this.world.camera.position.z !== this._initialCameraZ) {
-      console.warn('[CameraRig] WARNING: Camera Z position modified externally, resetting');
+      if (!this._zViolationLogged) {
+        console.error('[CameraRig] ERROR: Camera Z position changed - Z axis locked!');
+        this._zViolationLogged = true;
+      }
       this.world.camera.position.z = this._initialCameraZ;
     }
 
@@ -769,6 +771,10 @@ class PlayerActionStateSystem {
     this.cooldownRemaining = 0;
     this.stunRemaining = 0;
 
+    // Logging guards (one-time per state transition)
+    this._recoveryLogged = false;
+    this._cooldownLogged = false;
+
     console.log('[PlayerActionState] Action state management established');
   }
 
@@ -788,10 +794,20 @@ class PlayerActionStateSystem {
     // State transitions
     if (this.currentState === 'STUNNED' && this.stunRemaining <= 0) {
       this.currentState = 'READY';
-      console.log('[PlayerActionState] Recovered from stun');
+      if (!this._recoveryLogged) {
+        console.log('[PlayerActionState] Recovered from stun');
+        this._recoveryLogged = true;
+      }
     } else if (this.currentState === 'LANE_SWITCH_COOLDOWN' && this.cooldownRemaining <= 0) {
       this.currentState = 'READY';
-      console.log('[PlayerActionState] Lane switch cooldown ended');
+      if (!this._cooldownLogged) {
+        console.log('[PlayerActionState] Lane switch cooldown ended');
+        this._cooldownLogged = true;
+      }
+    } else {
+      // Reset flags when not in these states
+      this._recoveryLogged = false;
+      this._cooldownLogged = false;
     }
   }
 
@@ -1089,6 +1105,9 @@ class SpawnBandSystem {
     this.worldProgress = 0;
     this.lastBandCrossings = {};
 
+    // Logging guard for periodic progress updates
+    this._lastProgressLog = 0;
+
     console.log('[SpawnBandSystem] Spatial spawn rules established');
     console.log('[SpawnBandSystem] Bands relative to player Z=0:');
     Object.values(this.bands).forEach(band => {
@@ -1115,7 +1134,12 @@ class SpawnBandSystem {
       this.lastBandCrossings[bandKey] = isInBand;
     });
 
-    console.log(`[SpawnBandSystem] World progress: ${this.worldProgress.toFixed(0)}, Player Z: ${worldZ.toFixed(2)}`);
+    // Log world progress periodically (not every frame)
+    const now = performance.now();
+    if (!this._lastProgressLog || now - this._lastProgressLog > 5000) { // Log every 5 seconds
+      console.log(`[SpawnBandSystem] World progress: ${this.worldProgress.toFixed(0)}, Player Z: ${worldZ.toFixed(2)}`);
+      this._lastProgressLog = now;
+    }
   }
 
   isInBand(z, bandName) {
