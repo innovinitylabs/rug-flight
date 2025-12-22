@@ -1196,26 +1196,41 @@ class CollisionConsumptionSystem {
   }
 
   processCollisionIntent(intent) {
-    const { target, laneIndex } = intent;
+    const { source, target, laneIndex, zDistance } = intent;
+
+    // Emit COLLISION domain event (metadata-rich, reusable across modes)
+    const collisionEvent = {
+      type: 'COLLISION',
+      entityId: target.id,
+      laneIndex: laneIndex,
+      position: { x: target.position?.x || 0, y: target.position?.y || 0, z: target.z || 0 },
+      value: zDistance, // Z distance as collision severity/intensity
+      timestamp: performance.now()
+    };
+
+    this.domainEvents.push(collisionEvent);
 
     // Handle different entity types
     if (target.type === 'coin') {
-      this.processCoinCollection(target, laneIndex);
+      this.processCoinCollection(target, laneIndex, intent);
     }
     // Future: Add other entity type handlers here
   }
 
-  processCoinCollection(coinEntity, laneIndex) {
+  processCoinCollection(coinEntity, laneIndex, intent) {
     const entityId = coinEntity.id;
+    const { source } = intent; // Plane entity
 
     // Unregister the coin from the entity registry
     const unregistered = this.entityRegistry.unregister(coinEntity);
     if (unregistered) {
-      // Emit domain event for coin collection
+      // Emit standardized COIN_COLLECTED domain event (metadata-rich, reusable)
       const domainEvent = {
         type: 'COIN_COLLECTED',
+        value: 1, // Coin value
         entityId: entityId,
         laneIndex: laneIndex,
+        position: { x: source.position?.x || 0, y: source.position?.y || 0, z: source.position?.z || 0 }, // Plane position
         timestamp: performance.now()
       };
 
@@ -1399,6 +1414,94 @@ class PresentationSystem {
   cleanup() {
     this.coinsElement = null;
     this.lastRenderedCoins = -1;
+  }
+}
+
+// AudioPresentationSystem class - observer-only audio feedback system
+class AudioPresentationSystem {
+  constructor() {
+    // Observer-only system: never mutates game state or influences gameplay
+    // Listens to domain events to provide audio feedback
+    // Must never mutate state - only observes and plays sounds
+
+    // Initialize audio context and load sound references
+    this.initializeAudio();
+
+    console.log('[AudioPresentation] Observer-only audio feedback system established');
+  }
+
+  initializeAudio() {
+    // In a real implementation, this would load audio assets
+    // For now, we reference them by name and handle gracefully if missing
+    this.audioAssets = {
+      coinCollect: 'coin_collect.wav',
+      collision: 'collision.wav'
+    };
+  }
+
+  // Observer-only update method - reads domain events, plays sounds
+  update(domainEvents) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return; // Safety check
+    }
+
+    // Process each domain event
+    for (const event of domainEvents) {
+      this.processDomainEvent(event);
+    }
+  }
+
+  processDomainEvent(event) {
+    // Switch on event type to determine audio response
+    switch (event.type) {
+      case 'COIN_COLLECTED':
+        this.playCoinCollectSound(event);
+        break;
+
+      case 'COLLISION':
+        this.playCollisionSound(event);
+        break;
+
+      default:
+        // Gracefully ignore unknown events
+        break;
+    }
+  }
+
+  playCoinCollectSound(event) {
+    // Play coin collection sound
+    // In a real implementation, this would play the audio asset
+    try {
+      // Placeholder for audio playback
+      // this.playSound(this.audioAssets.coinCollect, event.value || 1);
+      console.log(`[AudioPresentation] 🎵 Coin collected sound (value: ${event.value || 1})`);
+    } catch (error) {
+      // Gracefully handle missing audio assets
+      console.warn('[AudioPresentation] Coin collect audio not available');
+    }
+  }
+
+  playCollisionSound(event) {
+    // Play collision sound
+    try {
+      // Placeholder for audio playback
+      // this.playSound(this.audioAssets.collision, event.value || 1);
+      console.log(`[AudioPresentation] 💥 Collision sound (intensity: ${event.value || 1})`);
+    } catch (error) {
+      // Gracefully handle missing audio assets
+      console.warn('[AudioPresentation] Collision audio not available');
+    }
+  }
+
+  // Placeholder for actual audio playback (would integrate with Web Audio API or Howler.js)
+  playSound(assetName, volume = 1) {
+    // This would be implemented with actual audio playback
+    // For now, it's a placeholder that does nothing but could be extended
+  }
+
+  // Optional cleanup method
+  cleanup() {
+    // Stop any playing sounds, release audio resources
   }
 }
 
@@ -1776,6 +1879,7 @@ class EndlessMode {
     this.collisionConsumptionSystem = null;
     this.scoreSystem = null;
     this.presentationSystem = null;
+    this.audioPresentationSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1837,6 +1941,9 @@ class EndlessMode {
 
     // Create presentation system - observer-only DOM updates for Endless mode
     this.presentationSystem = new PresentationSystem();
+
+    // Create audio presentation system - observer-only audio feedback
+    this.audioPresentationSystem = new AudioPresentationSystem();
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -1938,6 +2045,9 @@ class EndlessMode {
 
     // 12. Presentation system observes score and domain events for DOM updates
     this.presentationSystem.update(this.scoreSystem, domainEvents);
+
+    // 13. Audio presentation system observes domain events for sound feedback
+    this.audioPresentationSystem.update(domainEvents);
 
     // 14. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
