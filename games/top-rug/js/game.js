@@ -1886,6 +1886,54 @@ ACTION STATE:
   }
 }
 
+// PlayerVisualMovementSystem class - presentation-only lane-based visual movement
+class PlayerVisualMovementSystem {
+  constructor(laneController, laneSystem, playerActionStateSystem, playerProxy) {
+    // Presentation-only system: observes gameplay state, drives visual movement
+    // Never mutates gameplay logic, only affects visual representation
+    // Connects lane controller decisions to visual player movement
+
+    this.laneController = laneController;
+    this.laneSystem = laneSystem;
+    this.playerActionStateSystem = playerActionStateSystem;
+    this.playerProxy = playerProxy;
+
+    // Movement smoothing
+    this.lerpSpeed = 0.1; // How quickly player moves to target lane
+
+    console.log('[PlayerVisualMovement] Lane-based visual movement system established');
+  }
+
+  update(deltaTime) {
+    if (!this.playerProxy || !this.laneController || !this.laneSystem) {
+      return; // Safety check
+    }
+
+    // Check if player is stunned - if so, stop all lateral movement
+    const actionState = this.playerActionStateSystem.getCurrentState();
+    if (actionState.state === 'STUNNED') {
+      // Player is stunned - no lateral movement allowed
+      return;
+    }
+
+    // Get the target lane index from lane controller
+    const targetLaneIndex = this.laneController.targetLaneIndex;
+
+    // Get the X position of the target lane center
+    const targetLaneX = this.laneSystem.getLaneCenter(targetLaneIndex);
+
+    // Get current player X position
+    const currentPosition = this.playerProxy.getPosition();
+    const currentX = currentPosition.x;
+
+    // Smoothly interpolate toward target lane X position
+    const newX = currentX + (targetLaneX - currentX) * this.lerpSpeed;
+
+    // Update player proxy position (only X, preserve Y and Z)
+    this.playerProxy.setPosition(newX, currentPosition.y, currentPosition.z);
+  }
+}
+
 // AudioPresentationSystem class - observer-only audio feedback system
 class AudioPresentationSystem {
   constructor() {
@@ -2636,6 +2684,7 @@ class EndlessMode {
     this.audioPresentationSystem = null;
     this.vfxPresentationSystem = null;
     this.debugWorldOverlaySystem = null;
+    this.playerVisualMovementSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -2719,6 +2768,14 @@ class EndlessMode {
       this.worldScrollerSystem,
       this.playerProxy,
       this.playerActionStateSystem
+    );
+
+    // Create player visual movement system - presentation-only lane movement
+    this.playerVisualMovementSystem = new PlayerVisualMovementSystem(
+      this.laneController,
+      this.laneSystem,
+      this.playerActionStateSystem,
+      this.playerProxy
     );
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
@@ -2902,7 +2959,10 @@ class EndlessMode {
     // 18. Player proxy updates (visual representation)
     this.playerProxy.update(deltaTime);
 
-    // 17. Sea system updates (pure renderer - reads Z from scroller)
+    // 19. Player visual movement system updates lane-based X position
+    this.playerVisualMovementSystem.update(deltaTime);
+
+    // 20. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
     // 17. Sky system updates (pure renderer - reads Z from scroller)
