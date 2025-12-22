@@ -3678,11 +3678,11 @@ class EndlessMode {
     this.skySystem = new SkySystem(world); // Parallax cloud layer
     this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
 
+    // ===== VISUAL COMPONENTS ===== (presentation)
+    this.planeView = new PlaneView(world); // Plane visual representation
+
     // ===== ENTITY SYSTEMS ===== (gameplay logic)
     this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world); // Player position and lane state
-    this.playerIntentSystem = new PlayerIntentSystem(); // Mouse → semantic intents
-    this.playerActionStateSystem = new PlayerActionStateSystem(); // Cooldowns and state gating
-    this.laneController = new LaneController(this.laneSystem); // Intent → lane target
 
     // ===== HEALTH AND DAMAGE SYSTEMS ===== (gameplay consequences)
     this.healthSystem = new HealthSystem(3); // Player lives (start with 3)
@@ -3782,6 +3782,13 @@ class EndlessMode {
   }
 
   start() {
+    // Defensive guard: check for null systems
+    for (const key in this) {
+      if (this[key] === null && key.includes('System')) {
+        console.warn('[EndlessMode] Null system detected:', key);
+      }
+    }
+
     // Defensive assertion: LaneVisualGuideSystem must exist before start
     console.assert(
       this.laneVisualGuideSystem,
