@@ -1923,7 +1923,7 @@ ACTION STATE:
 
 // PlayerVisualMovementSystem class - presentation-only lane-based visual movement
 class PlayerVisualMovementSystem {
-  constructor(laneController, laneSystem, playerActionStateSystem, playerProxy) {
+  constructor(laneController, laneSystem, playerActionStateSystem, playerEntity) {
     // Presentation-only system: observes gameplay state, drives visual movement
     // Never mutates gameplay logic, only affects visual representation
     // Connects lane controller decisions to visual player movement
@@ -1931,16 +1931,13 @@ class PlayerVisualMovementSystem {
     this.laneController = laneController;
     this.laneSystem = laneSystem;
     this.playerActionStateSystem = playerActionStateSystem;
-    this.playerProxy = playerProxy;
-
-    // Movement smoothing
-    this.lerpSpeed = 0.1; // How quickly player moves to target lane
+    this.playerEntity = playerEntity;
 
     console.log('[PlayerVisualMovement] Lane-based visual movement system established');
   }
 
   update(deltaTime) {
-    if (!this.playerProxy || !this.laneController || !this.laneSystem) {
+    if (!this.playerEntity || !this.laneController || !this.laneSystem) {
       return; // Safety check
     }
 
@@ -1954,18 +1951,12 @@ class PlayerVisualMovementSystem {
     // Get the target lane index from lane controller
     const targetLaneIndex = this.laneController.targetLaneIndex;
 
-    // Get the X position of the target lane center
-    const targetLaneX = this.laneSystem.getLaneCenter(targetLaneIndex);
-
-    // Get current player X position
-    const currentPosition = this.playerProxy.getPosition();
-    const currentX = currentPosition.x;
-
-    // Smoothly interpolate toward target lane X position
-    const newX = currentX + (targetLaneX - currentX) * this.lerpSpeed;
-
-    // Update player proxy position (only X, preserve Y and Z)
-    this.playerProxy.setPosition(newX, currentPosition.y, currentPosition.z);
+    // If the target lane has changed, update the player entity's lane
+    if (targetLaneIndex !== this.playerEntity.laneIndex) {
+      this.playerEntity.setLane(targetLaneIndex);
+      // Update the lane controller's current lane to match
+      this.laneController.setCurrentLane(targetLaneIndex);
+    }
   }
 }
 
@@ -3097,6 +3088,104 @@ class PlayerProxy {
   }
 }
 
+// PlayerEntity class - lane-based player entity
+class PlayerEntity {
+  constructor(laneSystem, worldLayoutSystem, world) {
+    this.laneSystem = laneSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.world = world;
+
+    // Lane-based properties
+    this.laneIndex = 1; // Default to center lane (assuming 3 lanes: 0, 1, 2)
+    this.position = { x: 0, y: 100, z: 0 }; // Will be updated based on lane and layout
+
+    // Visual mesh (reuse PlayerProxy approach)
+    this.mesh = null;
+
+    // Movement smoothing
+    this.lerpSpeed = 0.1;
+
+    this.createMesh();
+    this.updatePositionFromLane();
+
+    console.log('[PlayerEntity] Lane-based player entity created');
+  }
+
+  createMesh() {
+    // Simple box geometry for player representation
+    const geometry = new THREE.BoxGeometry(4, 4, 4);
+    const material = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // Red box
+
+    this.mesh = new THREE.Mesh(geometry, material);
+
+    // Initial position will be set by updatePositionFromLane
+    this.world.add(this.mesh);
+
+    console.log('[PlayerEntity] Player mesh created');
+  }
+
+  setLane(laneIndex) {
+    // Clamp lane index within bounds
+    const maxLane = this.laneSystem.getLaneCount() - 1;
+    this.laneIndex = Math.max(0, Math.min(maxLane, laneIndex));
+
+    // Update target position
+    this.updatePositionFromLane();
+  }
+
+  updatePositionFromLane() {
+    if (!this.laneSystem || !this.worldLayoutSystem) {
+      return;
+    }
+
+    // Get lane center X position
+    const laneCenterX = this.laneSystem.getLaneCenter(this.laneIndex);
+
+    // Get MID_AIR baseline Y position
+    const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+    const baselineY = midAirZone && midAirZone.baselineY ? midAirZone.baselineY : 100;
+
+    // Update target position
+    this.position.x = laneCenterX;
+    this.position.y = baselineY;
+    this.position.z = 0; // Player always at Z=0
+  }
+
+  getPosition() {
+    return { ...this.position };
+  }
+
+  update(deltaTime) {
+    if (!this.mesh) {
+      return;
+    }
+
+    // Smoothly lerp mesh position toward target position
+    const currentPos = this.mesh.position;
+    const targetPos = this.position;
+
+    // Lerp X position toward lane center
+    const newX = currentPos.x + (targetPos.x - currentPos.x) * this.lerpSpeed;
+
+    // Y position is constrained by PlayerVerticalConstraintSystem
+    // Z position is always 0 for player
+
+    this.mesh.position.set(newX, currentPos.y, targetPos.z);
+
+    // Simple rotation for visual feedback
+    this.mesh.rotation.y += deltaTime * 0.5;
+  }
+
+  destroy() {
+    if (this.mesh && this.world) {
+      this.world.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      this.mesh.material.dispose();
+      this.mesh = null;
+    }
+  }
+}
+
 // EndlessMode class - orchestrates the components
 class EndlessMode {
   constructor() {
@@ -3175,7 +3264,7 @@ class EndlessMode {
     this.planeView = new PlaneView(world);
     this.seaSystem = new SeaSystem(world);
     this.skySystem = new SkySystem(world);
-    this.playerProxy = new PlayerProxy(world, this.worldLayoutSystem);
+    this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world);
     this.distanceSystem = new DistanceSystem();
     this.worldAxisSystem = new WorldAxisSystem(this.distanceSystem);
     this.depthLayerSystem = new DepthLayerSystem();
@@ -3242,13 +3331,13 @@ class EndlessMode {
       this.laneController,
       this.laneSystem,
       this.playerActionStateSystem,
-      this.playerProxy
+      this.playerEntity
     );
 
     // Create player vertical constraint system - enforces Y positioning for camera framing
     this.playerVerticalConstraintSystem = new PlayerVerticalConstraintSystem(
       this.worldLayoutSystem,
-      this.playerProxy
+      this.playerEntity
     );
 
     // Create lane entity spawn system - gameplay entity spawning
@@ -3327,7 +3416,7 @@ class EndlessMode {
     console.log('[EndlessMode] Debug coordinate axes added (X=red, Y=green, Z=blue)');
 
     // Start camera following PlayerProxy
-    this.cameraRig.follow(this.playerProxy);
+    this.cameraRig.follow(this.playerEntity);
 
     console.log('[EndlessMode] Started - input active, state reset');
   }
@@ -3463,7 +3552,7 @@ class EndlessMode {
     this.debugWorldOverlaySystem.update(deltaTime);
 
     // 18. Player proxy updates (visual representation)
-    this.playerProxy.update(deltaTime);
+    this.playerEntity.update(deltaTime);
 
     // 19. Player visual movement system updates lane-based X position
     this.playerVisualMovementSystem.update(deltaTime);
