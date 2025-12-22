@@ -757,6 +757,96 @@ class PlayerIntentSystem {
   }
 }
 
+// PlayerActionStateSystem class - manages player action states and cooldowns
+class PlayerActionStateSystem {
+  constructor(laneSwitchCooldownMs = 200) {
+    this.laneSwitchCooldownMs = laneSwitchCooldownMs;
+
+    // States: 'READY', 'LANE_SWITCH_COOLDOWN', 'STUNNED'
+    this.currentState = 'READY';
+
+    // Timers in milliseconds
+    this.cooldownRemaining = 0;
+    this.stunRemaining = 0;
+
+    console.log('[PlayerActionState] Action state management established');
+  }
+
+  // Update timers and state transitions
+  update(deltaTime) {
+    const deltaMs = deltaTime * 1000; // Convert to milliseconds
+
+    // Update timers
+    if (this.cooldownRemaining > 0) {
+      this.cooldownRemaining -= deltaMs;
+    }
+
+    if (this.stunRemaining > 0) {
+      this.stunRemaining -= deltaMs;
+    }
+
+    // State transitions
+    if (this.currentState === 'STUNNED' && this.stunRemaining <= 0) {
+      this.currentState = 'READY';
+      console.log('[PlayerActionState] Recovered from stun');
+    } else if (this.currentState === 'LANE_SWITCH_COOLDOWN' && this.cooldownRemaining <= 0) {
+      this.currentState = 'READY';
+      console.log('[PlayerActionState] Lane switch cooldown ended');
+    }
+  }
+
+  // Check if an intent type can be executed in current state
+  canExecute(intentType) {
+    switch (this.currentState) {
+      case 'READY':
+        return true; // All intents allowed in ready state
+
+      case 'LANE_SWITCH_COOLDOWN':
+        // Only non-lane-change intents allowed during cooldown
+        return intentType !== 'MOVE_LEFT' && intentType !== 'MOVE_RIGHT';
+
+      case 'STUNNED':
+        return false; // No intents allowed while stunned
+
+      default:
+        return false;
+    }
+  }
+
+  // Called when an intent is successfully executed
+  onIntentExecuted(intentType) {
+    if (intentType === 'MOVE_LEFT' || intentType === 'MOVE_RIGHT') {
+      // Enter lane switch cooldown
+      this.currentState = 'LANE_SWITCH_COOLDOWN';
+      this.cooldownRemaining = this.laneSwitchCooldownMs;
+      console.log(`[PlayerActionState] Lane switch executed - cooldown ${this.laneSwitchCooldownMs}ms`);
+    }
+  }
+
+  // Apply stun state (for future use)
+  applyStun(durationMs) {
+    this.currentState = 'STUNNED';
+    this.stunRemaining = durationMs;
+    console.log(`[PlayerActionState] Stunned for ${durationMs}ms`);
+  }
+
+  // Get current state for debugging
+  getCurrentState() {
+    return {
+      state: this.currentState,
+      cooldownRemaining: Math.max(0, this.cooldownRemaining),
+      stunRemaining: Math.max(0, this.stunRemaining)
+    };
+  }
+
+  // Reset to ready state
+  reset() {
+    this.currentState = 'READY';
+    this.cooldownRemaining = 0;
+    this.stunRemaining = 0;
+  }
+}
+
 // LaneController class - converts input intent into lane change requests
 class LaneController {
   constructor(laneSystem) {
@@ -767,6 +857,9 @@ class LaneController {
   }
 
   processIntents(intents) {
+    // LaneController assumes intents are pre-approved by PlayerActionStateSystem
+    // Separation of concerns: Action state gates intents, LaneController executes them
+
     if (!intents || intents.length === 0) {
       return { targetLaneIndex: this.currentLaneIndex };
     }
@@ -788,19 +881,7 @@ class LaneController {
         break;
     }
 
-    // Check if we can accept this intent (not already switching lanes)
-    const canAcceptIntent = (this.targetLaneIndex === this.currentLaneIndex);
-    if (!canAcceptIntent && targetLaneDelta !== 0) {
-      // Log rejected intent (throttled to once per second)
-      const now = performance.now();
-      if (!this.lastRejectLog || now - this.lastRejectLog > 1000) {
-        console.log(`[LaneController] Intent ${intent.type} rejected - already switching lanes`);
-        this.lastRejectLog = now;
-      }
-      return { targetLaneIndex: this.targetLaneIndex };
-    }
-
-    // Compute absolute target lane index
+    // Compute absolute target lane index (no rejection logic - assume intent is approved)
     this.targetLaneIndex = Math.max(0, Math.min(this.laneSystem.getLaneCount() - 1,
       this.currentLaneIndex + targetLaneDelta));
 
@@ -2237,6 +2318,7 @@ class EndlessMode {
     this.worldScrollerSystem = null;
     this.laneSystem = null;
     this.playerIntentSystem = null;
+    this.playerActionStateSystem = null;
     this.laneController = null;
     this.spawnBandSystem = null;
     this.entityRegistrySystem = null;
@@ -2283,6 +2365,7 @@ class EndlessMode {
     // Create lane system - 3 lanes, 40 units wide
     this.laneSystem = new LaneSystem(3, 40);
     this.playerIntentSystem = new PlayerIntentSystem();
+    this.playerActionStateSystem = new PlayerActionStateSystem();
     this.laneController = new LaneController(this.laneSystem);
 
     // Create spawn band system - defines spatial spawn rules
@@ -2374,12 +2457,31 @@ class EndlessMode {
     if (this.isPaused) return;
     if (!this.planeEntity || !this.planeController || !this.planeView || !this.input) return;
 
-    // 1. Player intent system converts raw input into semantic intents
-    this.playerIntentSystem.update(this.input, deltaTime);
-    const playerIntents = this.playerIntentSystem.getIntents();
+    // 1. Player action state system manages cooldowns and state
+    this.playerActionStateSystem.update(deltaTime);
 
-    // 2. Lane controller processes player intents into lane changes
-    const laneIntent = this.laneController.processIntents(playerIntents);
+    // 2. Player intent system converts raw input into semantic intents
+    this.playerIntentSystem.update(this.input, deltaTime);
+    const rawPlayerIntents = this.playerIntentSystem.getIntents();
+
+    // 3. Filter intents through action state system (gate based on cooldowns)
+    const approvedIntents = rawPlayerIntents.filter(intent =>
+      this.playerActionStateSystem.canExecute(intent.type)
+    );
+
+    // 4. Lane controller processes approved player intents into lane changes
+    const laneIntent = this.laneController.processIntents(approvedIntents);
+
+    // 5. Notify action state system of executed intents
+    if (approvedIntents.length > 0 && laneIntent.targetLaneIndex !== laneIntent.currentLaneIndex) {
+      // Lane change was executed - notify action state system
+      const executedIntent = approvedIntents.find(intent =>
+        intent.type === 'MOVE_LEFT' || intent.type === 'MOVE_RIGHT'
+      );
+      if (executedIntent) {
+        this.playerActionStateSystem.onIntentExecuted(executedIntent.type);
+      }
+    }
 
     // 3. Controller processes input into intent
     const intent = this.planeController.processInput(this.input);
