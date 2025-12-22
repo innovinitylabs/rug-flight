@@ -1113,69 +1113,8 @@ function resetGame(){
     return;
   }
 
-  game = {speed:0,
-          initSpeed:.00035,
-          baseSpeed:.00035,
-          targetBaseSpeed:.00035,
-          incrementSpeedByTime:.0000025,
-          incrementSpeedByLevel:.000005,
-          distanceForSpeedUpdate:100,
-          speedLastUpdate:0,
-
-          distance:0,
-          ratioSpeedDistance:50,
-          energy:100,
-          ratioSpeedEnergy:3,
-
-          level:1,
-          levelLastUpdate:0,
-          distanceForLevelUpdate:1000,
-
-          planeDefaultHeight:100,
-          planeAmpHeight:80,
-          planeAmpWidth:75,
-          planeMoveSensivity:0.005,
-          planeRotXSensivity:0.0008,
-          planeRotZSensivity:0.0004,
-          planeFallSpeed:.001,
-          planeMinSpeed:1.2,
-          planeMaxSpeed:1.6,
-          planeSpeed:0,
-          planeCollisionDisplacementX:0,
-          planeCollisionSpeedX:0,
-
-          planeCollisionDisplacementY:0,
-          planeCollisionSpeedY:0,
-
-          seaRadius:600,
-          seaLength:800,
-          //seaRotationSpeed:0.006,
-          wavesMinAmp : 5,
-          wavesMaxAmp : 20,
-          wavesMinSpeed : 0.001,
-          wavesMaxSpeed : 0.003,
-
-          cameraFarPos:500,
-          cameraNearPos:150,
-          cameraSensivity:0.002,
-
-          coinDistanceTolerance:15,
-          coinValue:3,
-          coinsSpeed:.5,
-          coinLastSpawn:0,
-          distanceForCoinsSpawn:100,
-
-          ennemyDistanceTolerance:10,
-          ennemyValue:10,
-          ennemiesSpeed:.6,
-          ennemyLastSpawn:0,
-          distanceForEnnemiesSpawn:50,
-
-          collectibleDistanceTolerance:15,
-          collectiblesSpeed:.6,
-
-          status : "playing",
-         };
+  // Reset game state to initial values
+  Object.assign(game, createInitialGameState());
 
   // Make ropes visible again when game resets
   if (ropeLeft) ropeLeft.visible = true;
@@ -1204,6 +1143,83 @@ function resetGame(){
   } else {
     console.log('[PROPELLER] resetGame: User not interacted yet');
   }
+}
+
+function createInitialGameState() {
+  return {
+    status: 'playing',
+
+    // Plane physics
+    planeCollisionSpeedX: 0,
+    planeCollisionSpeedY: 0,
+    planeCollisionDisplacementX: 0,
+    planeCollisionDisplacementY: 0,
+
+    // Plane params
+    planeSpeed: 0,
+    planeMinSpeed: 1.2,
+    planeMaxSpeed: 1.6,
+    planeAmpWidth: 75,
+    planeAmpHeight: 80,
+    planeDefaultHeight: 100,
+    planeMoveSensivity: 0.005,
+    planeRotXSensivity: 0.0008,
+    planeRotZSensivity: 0.0004,
+    planeFallSpeed: 0.001,
+
+    // Core game state
+    speed: 0.00035,
+    initSpeed: 0.00035,
+    baseSpeed: 0.00035,
+    targetBaseSpeed: 0.00035,
+    incrementSpeedByTime: 0.0000025,
+    incrementSpeedByLevel: 0.000005,
+    distanceForSpeedUpdate: 100,
+    speedLastUpdate: 0,
+
+    distance: 0,
+    ratioSpeedDistance: 50,
+    energy: 100,
+    ratioSpeedEnergy: 3,
+
+    level: 1,
+    levelLastUpdate: 0,
+    distanceForLevelUpdate: 1000,
+
+    // World settings
+    seaRadius: 600,
+    seaLength: 800,
+    wavesMinAmp: 5,
+    wavesMaxAmp: 20,
+    wavesMinSpeed: 0.001,
+    wavesMaxSpeed: 0.003,
+
+    // Camera settings
+    cameraFarPos: 500,
+    cameraNearPos: 150,
+    cameraSensivity: 0.002,
+
+    // Coin settings
+    coinDistanceTolerance: 15,
+    coinValue: 3,
+    coinsSpeed: 0.5,
+    coinLastSpawn: 0,
+    distanceForCoinsSpawn: 100,
+
+    // Enemy settings
+    ennemyDistanceTolerance: 10,
+    ennemyValue: 10,
+    ennemiesSpeed: 0.6,
+    ennemyLastSpawn: 0,
+    distanceForEnnemiesSpawn: 50,
+
+    // Collectible settings
+    collectibleDistanceTolerance: 15,
+    collectiblesSpeed: 0.6,
+
+    // Mode flags
+    fpv: false
+  };
 }
 
 //THREEJS RELATED VARIABLES
@@ -2809,6 +2825,9 @@ window.Aviator1Game = {
 
   bindDOM() {
     console.log('[Aviator1Game] bindDOM');
+
+    // Initialize canonical game state
+    game = createInitialGameState();
 
     // Initialize audio manager
     audioManager = new AudioManager();
