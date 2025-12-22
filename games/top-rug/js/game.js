@@ -1155,69 +1155,22 @@ function createInitialGameState() {
     planeCollisionDisplacementX: 0,
     planeCollisionDisplacementY: 0,
 
-    // Plane params
+    // Plane motion
     planeSpeed: 0,
     planeMinSpeed: 1.2,
-    planeMaxSpeed: 1.6,
+    planeMaxSpeed: 2.4,
     planeAmpWidth: 75,
     planeAmpHeight: 80,
     planeDefaultHeight: 100,
     planeMoveSensivity: 0.005,
     planeRotXSensivity: 0.0008,
     planeRotZSensivity: 0.0004,
-    planeFallSpeed: 0.001,
 
-    // Core game state
-    speed: 0.00035,
-    initSpeed: 0.00035,
-    baseSpeed: 0.00035,
-    targetBaseSpeed: 0.00035,
-    incrementSpeedByTime: 0.0000025,
-    incrementSpeedByLevel: 0.000005,
-    distanceForSpeedUpdate: 100,
-    speedLastUpdate: 0,
-
-    distance: 0,
-    ratioSpeedDistance: 50,
-    energy: 100,
-    ratioSpeedEnergy: 3,
-
+    // World / progression
+    speed: 0.0005,
     level: 1,
-    levelLastUpdate: 0,
-    distanceForLevelUpdate: 1000,
 
-    // World settings
-    seaRadius: 600,
-    seaLength: 800,
-    wavesMinAmp: 5,
-    wavesMaxAmp: 20,
-    wavesMinSpeed: 0.001,
-    wavesMaxSpeed: 0.003,
-
-    // Camera settings
-    cameraFarPos: 500,
-    cameraNearPos: 150,
-    cameraSensivity: 0.002,
-
-    // Coin settings
-    coinDistanceTolerance: 15,
-    coinValue: 3,
-    coinsSpeed: 0.5,
-    coinLastSpawn: 0,
-    distanceForCoinsSpawn: 100,
-
-    // Enemy settings
-    ennemyDistanceTolerance: 10,
-    ennemyValue: 10,
-    ennemiesSpeed: 0.6,
-    ennemyLastSpawn: 0,
-    distanceForEnnemiesSpawn: 50,
-
-    // Collectible settings
-    collectibleDistanceTolerance: 15,
-    collectiblesSpeed: 0.6,
-
-    // Mode flags
+    // Camera / mode flags
     fpv: false
   };
 }
@@ -2819,15 +2772,15 @@ window.Aviator1Game = {
   init() {
     console.log('[Aviator1Game] init');
 
+    // Initialize canonical game state BEFORE any scene creation, mode init, or loop start
+    game = createInitialGameState();
+
     this.bindDOM();
     this.loadAssets();
   },
 
   bindDOM() {
     console.log('[Aviator1Game] bindDOM');
-
-    // Initialize canonical game state
-    game = createInitialGameState();
 
     // Initialize audio manager
     audioManager = new AudioManager();
