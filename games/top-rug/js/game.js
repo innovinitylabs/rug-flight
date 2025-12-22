@@ -2207,6 +2207,63 @@ class LaneEntityVisualSystem {
   }
 }
 
+// LaneEntityApproachSystem class - presentation-only visual approach effect
+class LaneEntityApproachSystem {
+  constructor(entityRegistrySystem, distanceSystem, worldLayoutSystem, laneEntityVisualSystem) {
+    // Presentation-only system: creates illusion of entities approaching player
+    // Never mutates game state, entities, or influences gameplay
+    // Only modifies mesh Z positions for visual approach effect
+
+    this.entityRegistrySystem = entityRegistrySystem;
+    this.distanceSystem = distanceSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.laneEntityVisualSystem = laneEntityVisualSystem;
+
+    // Player plane is always at Z = 0
+    this.PLAYER_PLANE_Z = 0;
+
+    console.log('[LaneEntityApproach] Visual approach effect system established');
+  }
+
+  update() {
+    if (!this.entityRegistrySystem || !this.distanceSystem || !this.laneEntityVisualSystem) {
+      return; // Safety check
+    }
+
+    // Get current distance traveled
+    const currentDistance = this.distanceSystem.getDistance();
+
+    // Get all coin entities
+    const coinEntities = this.entityRegistrySystem.getByType('coin');
+
+    // Process each entity
+    for (const entity of coinEntities) {
+      if (!entity.spawnDistance) {
+        // Entity doesn't have spawn distance recorded, skip
+        continue;
+      }
+
+      // Calculate approach Z position
+      // As distance increases, entities appear to move toward player
+      const approachZ = -(currentDistance - entity.spawnDistance);
+
+      // Access the visual mesh through the visual system
+      const visualData = this.laneEntityVisualSystem.visualEntities.get(entity.id);
+      if (visualData && visualData.mesh) {
+        // Update only the Z position for approach effect
+        visualData.mesh.position.z = approachZ;
+
+        // Check if entity has crossed the player plane
+        if (approachZ > this.PLAYER_PLANE_Z + 10) {
+          // Entity has passed the player, unregister it
+          console.log('[Approach] Entity crossed player plane');
+          this.entityRegistrySystem.unregister(entity);
+        }
+      }
+    }
+  }
+}
+
 // AudioPresentationSystem class - observer-only audio feedback system
 class AudioPresentationSystem {
   constructor() {
@@ -2960,6 +3017,7 @@ class EndlessMode {
     this.playerVisualMovementSystem = null;
     this.laneEntitySpawnSystem = null;
     this.laneEntityVisualSystem = null;
+    this.laneEntityApproachSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -3068,6 +3126,14 @@ class EndlessMode {
       this.laneSystem,
       this.worldLayoutSystem,
       world
+    );
+
+    // Create lane entity approach system - presentation-only approach effect
+    this.laneEntityApproachSystem = new LaneEntityApproachSystem(
+      this.entityRegistrySystem,
+      this.distanceSystem,
+      this.worldLayoutSystem,
+      this.laneEntityVisualSystem
     );
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
@@ -3248,10 +3314,13 @@ class EndlessMode {
     // 16. VFX presentation system observes domain events for visual effects
     this.vfxPresentationSystem.update(domainEvents);
 
-    // 17. Lane entity visual system manages visuals for lane entities
+    // 17. Lane entity approach system creates visual approach effect
+    this.laneEntityApproachSystem.update();
+
+    // 18. Lane entity visual system manages visuals for lane entities
     this.laneEntityVisualSystem.update();
 
-    // 18. Debug world overlay system displays real-time engine state
+    // 19. Debug world overlay system displays real-time engine state
     this.debugWorldOverlaySystem.update(deltaTime);
 
     // 18. Player proxy updates (visual representation)
