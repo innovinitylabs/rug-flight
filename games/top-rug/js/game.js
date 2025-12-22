@@ -580,6 +580,104 @@ class WorldScrollerSystem {
   }
 }
 
+// LaneSystem class - defines discrete lateral gameplay space
+class LaneSystem {
+  constructor(laneCount = 3, laneWidth = 40) {
+    this.laneCount = laneCount;
+    this.laneWidth = laneWidth;
+
+    // Compute lane center positions
+    // Lane 0 = center, -1 = left, +1 = right for 3 lanes
+    this.laneCenters = [];
+    const totalWidth = (laneCount - 1) * laneWidth;
+    const startX = -totalWidth / 2;
+
+    for (let i = 0; i < laneCount; i++) {
+      this.laneCenters[i] = startX + (i * laneWidth);
+    }
+
+    console.log(`[LaneSystem] ${laneCount} lanes configured:`, this.laneCenters);
+  }
+
+  getLaneCenter(laneIndex) {
+    // Clamp lane index to valid range
+    const clampedIndex = Math.max(0, Math.min(this.laneCount - 1, laneIndex));
+    return this.laneCenters[clampedIndex];
+  }
+
+  getLaneIndexForX(x) {
+    // Find closest lane to given X position
+    let closestIndex = 0;
+    let minDistance = Math.abs(x - this.laneCenters[0]);
+
+    for (let i = 1; i < this.laneCount; i++) {
+      const distance = Math.abs(x - this.laneCenters[i]);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+
+    return closestIndex;
+  }
+
+  getLaneCount() {
+    return this.laneCount;
+  }
+}
+
+// LaneController class - converts input intent into lane change requests
+class LaneController {
+  constructor(laneSystem) {
+    this.laneSystem = laneSystem;
+    this.currentLaneIndex = 1; // Start in middle lane for 3-lane setup
+    this.targetLaneIndex = 1;
+    console.log(`[LaneController] Initialized on lane ${this.currentLaneIndex}`);
+  }
+
+  processInput(input) {
+    if (!input) return { targetLaneIndex: this.currentLaneIndex };
+
+    // Map mouse.x to lane changes
+    // Divide screen into thirds: left third → lane -1, center → lane 0, right third → lane +1
+    const mouseX = input.mouseX; // Normalized -1 to 1
+
+    let targetLaneDelta = 0;
+    if (mouseX < -0.33) {
+      // Left third of screen
+      targetLaneDelta = -1;
+    } else if (mouseX > 0.33) {
+      // Right third of screen
+      targetLaneDelta = 1;
+    } else {
+      // Center third of screen
+      targetLaneDelta = 0;
+    }
+
+    // Compute absolute target lane index
+    this.targetLaneIndex = Math.max(0, Math.min(this.laneSystem.getLaneCount() - 1,
+      this.currentLaneIndex + targetLaneDelta));
+
+    return {
+      targetLaneIndex: this.targetLaneIndex,
+      currentLaneIndex: this.currentLaneIndex
+    };
+  }
+
+  setCurrentLane(laneIndex) {
+    this.currentLaneIndex = laneIndex;
+    this.targetLaneIndex = laneIndex;
+  }
+
+  getCurrentLaneIndex() {
+    return this.currentLaneIndex;
+  }
+
+  getTargetLaneIndex() {
+    return this.targetLaneIndex;
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -730,23 +828,38 @@ class SkySystem {
 
 // PlaneEntity - state and transform only (X and Y only, Z locked to 0)
 class PlaneEntity {
-  constructor() {
+  constructor(laneSystem = null) {
+    this.laneSystem = laneSystem;
+
     // State
     this.position = { x: 0, y: 100, z: 0 };
     this.rotation = { z: 0 }; // roll only for now
 
     // Movement targets and smoothing
     this.targetY = 100;
+    this.targetX = 0; // Lane-based X target
     this.targetRoll = 0;
     this.moveLerpSpeed = 0.1;
     this.rollLerpSpeed = 0.1;
 
     // Z-axis lock assertion
     this._lastZ = 0;
+
+    // Lane tracking
+    this.currentLaneIndex = 1; // Start in middle lane
   }
 
   setTargetY(y) {
     this.targetY = Math.max(40, Math.min(160, y)); // Clamp bounds
+  }
+
+  setTargetLane(laneIndex) {
+    if (!this.laneSystem) return;
+
+    this.currentLaneIndex = laneIndex;
+    this.targetX = this.laneSystem.getLaneCenter(laneIndex);
+
+    console.log(`[PlaneEntity] Targeting lane ${laneIndex} at X=${this.targetX.toFixed(2)}`);
   }
 
   setTargetRoll(roll) {
@@ -755,6 +868,7 @@ class PlaneEntity {
 
   update(deltaTime) {
     // Smooth movement towards targets
+    this.position.x += (this.targetX - this.position.x) * this.moveLerpSpeed;
     this.position.y += (this.targetY - this.position.y) * this.moveLerpSpeed;
     this.rotation.z += (this.targetRoll - this.rotation.z) * this.rollLerpSpeed;
 
@@ -765,6 +879,23 @@ class PlaneEntity {
       this.position.z = 0; // Force reset
     }
     this._lastZ = this.position.z;
+
+    // Lane system assertions - X must always be near a lane center
+    if (this.laneSystem) {
+      const currentLaneIndex = this.laneSystem.getLaneIndexForX(this.position.x);
+      const laneCenter = this.laneSystem.getLaneCenter(currentLaneIndex);
+      const distanceFromLane = Math.abs(this.position.x - laneCenter);
+
+      // Assert that plane is within reasonable distance of a lane center
+      console.assert(distanceFromLane < this.laneSystem.laneWidth * 0.6,
+        `[PlaneEntity] ERROR: Plane X=${this.position.x.toFixed(2)} too far from lane center ${laneCenter.toFixed(2)}`);
+
+      if (distanceFromLane > this.laneSystem.laneWidth * 0.4) {
+        console.warn(`[PlaneEntity] WARNING: Plane drifting from lane center (distance: ${distanceFromLane.toFixed(2)})`);
+      }
+
+      console.log(`[PlaneEntity] Lane ${currentLaneIndex}, X=${this.position.x.toFixed(2)}, Target=${this.targetX.toFixed(2)}`);
+    }
   }
 
   getPosition() {
@@ -912,6 +1043,8 @@ class EndlessMode {
     this.depthLayerSystem = null;
     this.worldLayoutSystem = null;
     this.worldScrollerSystem = null;
+    this.laneSystem = null;
+    this.laneController = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -930,7 +1063,7 @@ class EndlessMode {
     this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
 
     // Create components - no initialization
-    this.planeEntity = new PlaneEntity();
+    this.planeEntity = new PlaneEntity(this.laneSystem);
     this.planeController = new PlaneController();
     this.planeView = new PlaneView(world);
     this.seaSystem = new SeaSystem(world);
@@ -943,6 +1076,10 @@ class EndlessMode {
       this.worldLayoutSystem,
       this.depthLayerSystem
     );
+
+    // Create lane system - 3 lanes, 40 units wide
+    this.laneSystem = new LaneSystem(3, 40);
+    this.laneController = new LaneController(this.laneSystem);
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -978,7 +1115,11 @@ class EndlessMode {
     this.worldAxisSystem.reset();
 
     // Reset entity to initial state
-    this.planeEntity = new PlaneEntity(); // Fresh entity
+    this.planeEntity = new PlaneEntity(this.laneSystem); // Fresh entity
+
+    // Initialize lane controller to middle lane
+    this.laneController.setCurrentLane(1); // Middle lane for 3-lane setup
+    this.planeEntity.setTargetLane(1); // Sync entity with lane controller
 
     // Start camera following
     this.cameraRig.follow(this.planeEntity);
@@ -997,10 +1138,14 @@ class EndlessMode {
     if (this.isPaused) return;
     if (!this.planeEntity || !this.planeController || !this.planeView || !this.input) return;
 
-    // 1. Controller processes input into intent
+    // 1. Lane controller processes input into lane intent
+    const laneIntent = this.laneController.processInput(this.input);
+
+    // 2. Controller processes input into intent
     const intent = this.planeController.processInput(this.input);
 
-    // 2. Entity updates state based on intent
+    // 3. Entity updates state based on intent
+    this.planeEntity.setTargetLane(laneIntent.targetLaneIndex);
     this.planeEntity.setTargetY(intent.targetY);
     this.planeEntity.setTargetRoll(intent.targetRoll);
     this.planeEntity.update(deltaTime);
