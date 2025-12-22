@@ -3984,7 +3984,9 @@ class EndlessMode {
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
     // 17.5. Lane visual guide system updates (presentation-only lane guides)
-    this.laneVisualGuideSystem.update();
+    if (this.laneVisualGuideSystem) {
+      this.laneVisualGuideSystem.update();
+    }
 
     // 18. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
@@ -4037,6 +4039,11 @@ class EndlessMode {
     if (this.skySystem) {
       this.skySystem.destroy();
       this.skySystem = null;
+    }
+
+    if (this.laneVisualGuideSystem) {
+      this.laneVisualGuideSystem.destroy();
+      this.laneVisualGuideSystem = null;
     }
 
     // Clear all component references
