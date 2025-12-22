@@ -678,6 +678,101 @@ class LaneController {
   }
 }
 
+// SpawnBandSystem class - defines spatial spawn rules along Z axis
+class SpawnBandSystem {
+  constructor() {
+    // Band definitions relative to player Z = 0
+    // All Z values are offsets from player's current position
+    this.bands = {
+      BEHIND_CLEANUP: {
+        name: 'BEHIND_CLEANUP',
+        minZ: -200,    // Behind player, recycle objects here
+        maxZ: -50,     // Up to 50 units behind
+        description: 'Recycle zone - objects too far behind'
+      },
+      ACTIVE_WINDOW: {
+        name: 'ACTIVE_WINDOW',
+        minZ: -50,     // Slightly behind player
+        maxZ: 150,     // Ahead of player (camera view + buffer)
+        description: 'Active gameplay zone - objects can interact'
+      },
+      AHEAD_SPAWN: {
+        name: 'AHEAD_SPAWN',
+        minZ: 150,     // Beyond active window
+        maxZ: 300,     // Far ahead for spawning
+        description: 'Spawn zone - create new objects here'
+      },
+      FAR_BUFFER: {
+        name: 'FAR_BUFFER',
+        minZ: 300,     // Very far ahead
+        maxZ: 500,     // Buffer zone
+        description: 'Buffer zone - prepare for future spawning'
+      }
+    };
+
+    // Track virtual world progress for procedural generation
+    this.worldProgress = 0;
+    this.lastBandCrossings = {};
+
+    console.log('[SpawnBandSystem] Spatial spawn rules established');
+    console.log('[SpawnBandSystem] Bands relative to player Z=0:');
+    Object.values(this.bands).forEach(band => {
+      console.log(`  ${band.name}: Z[${band.minZ}, ${band.maxZ}] - ${band.description}`);
+    });
+  }
+
+  update(deltaTime, worldZ) {
+    // Update virtual world progress based on forward motion
+    this.worldProgress += Math.abs(worldZ) * deltaTime;
+
+    // Check for band threshold crossings
+    Object.values(this.bands).forEach(band => {
+      const bandKey = band.name;
+      const wasInBand = this.lastBandCrossings[bandKey] || false;
+      const isInBand = this.isInBand(worldZ, bandKey);
+
+      if (!wasInBand && isInBand) {
+        console.log(`[SpawnBandSystem] Entered ${bandKey} at world progress ${this.worldProgress.toFixed(0)}`);
+      } else if (wasInBand && !isInBand) {
+        console.log(`[SpawnBandSystem] Exited ${bandKey} at world progress ${this.worldProgress.toFixed(0)}`);
+      }
+
+      this.lastBandCrossings[bandKey] = isInBand;
+    });
+
+    console.log(`[SpawnBandSystem] World progress: ${this.worldProgress.toFixed(0)}, Player Z: ${worldZ.toFixed(2)}`);
+  }
+
+  isInBand(z, bandName) {
+    const band = this.bands[bandName];
+    console.assert(band, `[SpawnBandSystem] ERROR: Unknown band '${bandName}'`);
+    return z >= band.minZ && z <= band.maxZ;
+  }
+
+  getSpawnZ(bandName) {
+    const band = this.bands[bandName];
+    console.assert(band, `[SpawnBandSystem] ERROR: Unknown band '${bandName}'`);
+    // Return center of the band as default spawn point
+    return (band.minZ + band.maxZ) / 2;
+  }
+
+  shouldRecycle(z) {
+    return this.isInBand(z, 'BEHIND_CLEANUP');
+  }
+
+  getBandInfo(bandName) {
+    return this.bands[bandName];
+  }
+
+  getAllBands() {
+    return { ...this.bands };
+  }
+
+  getWorldProgress() {
+    return this.worldProgress;
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -1045,6 +1140,7 @@ class EndlessMode {
     this.worldScrollerSystem = null;
     this.laneSystem = null;
     this.laneController = null;
+    this.spawnBandSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1080,6 +1176,9 @@ class EndlessMode {
     // Create lane system - 3 lanes, 40 units wide
     this.laneSystem = new LaneSystem(3, 40);
     this.laneController = new LaneController(this.laneSystem);
+
+    // Create spawn band system - defines spatial spawn rules
+    this.spawnBandSystem = new SpawnBandSystem();
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -1159,13 +1258,17 @@ class EndlessMode {
     // 5. World scroller system updates (single source of truth for forward motion)
     this.worldScrollerSystem.update(deltaTime);
 
-    // 6. Sea system updates (pure renderer - reads Z from scroller)
+    // 6. Spawn band system updates (defines spatial spawn rules)
+    // Player is always at Z=0, so pass current world scroll offset
+    this.spawnBandSystem.update(deltaTime, 0);
+
+    // 7. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
-    // 7. Sky system updates (pure renderer - reads Z from scroller)
+    // 8. Sky system updates (pure renderer - reads Z from scroller)
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
-    // 6. Camera system updates (delegated to CameraRig)
+    // 9. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
     // Update game time
