@@ -270,26 +270,42 @@ class World {
   }
 }
 
-// CameraRig class - manages camera follow behavior
+// CameraRig class - manages camera follow behavior (Y only, Z locked)
 class CameraRig {
   constructor(world) {
     this.world = world;
     this.targetEntity = null;
     this.lerpSpeed = 0.02;
     this.targetCameraY = 100;
+
+    // Z-axis lock assertion (deferred until camera exists)
+    this._initialCameraZ = null;
   }
 
   follow(entity) {
     this.targetEntity = entity;
-    console.log('[CameraRig] Now following entity');
+    console.log('[CameraRig] Now following entity - Z axis locked');
   }
 
   update() {
     if (!this.targetEntity) return;
 
+    // Initialize camera Z check on first use
+    if (this._initialCameraZ === null) {
+      this._initialCameraZ = this.world.camera.position.z;
+    }
+
     const entityPos = this.targetEntity.getPosition();
     this.targetCameraY = entityPos.y;
     this.world.camera.position.y += (this.targetCameraY - this.world.camera.position.y) * this.lerpSpeed;
+
+    // Camera Z position assertion - camera NEVER moves in Z
+    console.assert(this.world.camera.position.z === this._initialCameraZ,
+      '[CameraRig] ERROR: Camera Z position changed - Z axis locked!');
+    if (this.world.camera.position.z !== this._initialCameraZ) {
+      console.warn('[CameraRig] WARNING: Camera Z position modified externally, resetting');
+      this.world.camera.position.z = this._initialCameraZ;
+    }
 
     // Camera always looks at airplane position
     this.world.camera.lookAt(entityPos.x, entityPos.y, entityPos.z);
@@ -337,15 +353,17 @@ class SeaSystem {
     console.log('[SeaSystem] Initialized - sea mesh added to world');
   }
 
-  update(deltaTime, distanceDelta = 0) {
+  update(deltaTime, deltaZ = 0) {
     if (!this.mesh) return;
 
-    // Accumulate smooth phase
-    this.scrollPhase += distanceDelta * 0.05;
+    // Move sea backward on Z axis for forward motion illusion
+    // Z axis is the ONLY forward axis - no X/Y movement
+    this.mesh.position.z += deltaZ * 100; // Scale for visible motion
 
-    // Apply as sinusoidal offset (never resets)
-    this.mesh.position.z = Math.sin(this.scrollPhase) * 10;
-    this.mesh.position.x = Math.cos(this.scrollPhase * 0.7) * 5;
+    // Prevent excessive Z drift (but don't hard reset)
+    if (Math.abs(this.mesh.position.z) > 5000) {
+      this.mesh.position.z = this.mesh.position.z % 1000;
+    }
   }
 
   destroy() {
@@ -392,6 +410,31 @@ class DistanceSystem {
 
   getDelta() {
     return this.lastDelta;
+  }
+}
+
+// WorldAxisSystem class - manages world forward motion on Z axis only
+class WorldAxisSystem {
+  constructor() {
+    this.distanceSystem = new DistanceSystem();
+    this.forwardSpeed = 0.02; // Matches DistanceSystem speed
+  }
+
+  reset() {
+    this.distanceSystem.reset();
+  }
+
+  update(deltaTime) {
+    this.distanceSystem.update(deltaTime);
+  }
+
+  getDeltaZ(deltaTime) {
+    // Return negative Z movement to create forward illusion
+    return -this.distanceSystem.getDelta();
+  }
+
+  getDistance() {
+    return this.distanceSystem.getDistance();
   }
 }
 
@@ -470,11 +513,17 @@ class SkySystem {
     this.cloudGroup.add(cloudGroup);
   }
 
-  update(deltaTime) {
+  update(deltaTime, deltaZ = 0) {
     if (!this.cloudGroup) return;
 
-    // Slow horizontal movement for parallax effect
-    this.cloudGroup.rotation.y += this.animationSpeed * deltaTime;
+    // Move clouds backward on Z axis for parallax effect
+    // Slower than sea for depth perception
+    this.cloudGroup.position.z += deltaZ * 50; // Slower than sea
+
+    // Prevent excessive Z drift (but don't hard reset)
+    if (Math.abs(this.cloudGroup.position.z) > 10000) {
+      this.cloudGroup.position.z = this.cloudGroup.position.z % 2000;
+    }
   }
 
   destroy() {
@@ -495,7 +544,7 @@ class SkySystem {
   }
 }
 
-// PlaneEntity - state and transform only
+// PlaneEntity - state and transform only (X and Y only, Z locked to 0)
 class PlaneEntity {
   constructor() {
     // State
@@ -507,6 +556,9 @@ class PlaneEntity {
     this.targetRoll = 0;
     this.moveLerpSpeed = 0.1;
     this.rollLerpSpeed = 0.1;
+
+    // Z-axis lock assertion
+    this._lastZ = 0;
   }
 
   setTargetY(y) {
@@ -521,6 +573,14 @@ class PlaneEntity {
     // Smooth movement towards targets
     this.position.y += (this.targetY - this.position.y) * this.moveLerpSpeed;
     this.rotation.z += (this.targetRoll - this.rotation.z) * this.rollLerpSpeed;
+
+    // Z-axis lock assertion - plane NEVER moves in Z
+    console.assert(this.position.z === 0, '[PlaneEntity] ERROR: Plane Z position changed - Z axis locked!');
+    if (this.position.z !== this._lastZ) {
+      console.warn('[PlaneEntity] WARNING: Z position modified externally');
+      this.position.z = 0; // Force reset
+    }
+    this._lastZ = this.position.z;
   }
 
   getPosition() {
@@ -649,7 +709,7 @@ class EndlessMode {
     this.planeView = null;
     this.seaSystem = null;
     this.skySystem = null;
-    this.distanceSystem = null;
+    this.worldAxisSystem = null;
   }
 
   init(gameState, world, input, cameraRig) {
@@ -669,9 +729,10 @@ class EndlessMode {
     this.planeView = new PlaneView(world);
     this.seaSystem = new SeaSystem(world);
     this.skySystem = new SkySystem(world);
-    this.distanceSystem = new DistanceSystem();
+    this.worldAxisSystem = new WorldAxisSystem();
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
+    console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
   }
 
   start() {
@@ -692,8 +753,8 @@ class EndlessMode {
     // Initialize sky system
     this.skySystem.init();
 
-    // Reset distance system
-    this.distanceSystem.reset();
+    // Reset world axis system
+    this.worldAxisSystem.reset();
 
     // Reset entity to initial state
     this.planeEntity = new PlaneEntity(); // Fresh entity
@@ -726,14 +787,15 @@ class EndlessMode {
     // 3. View updates visuals from entity state
     this.planeView.updateFromEntity(this.planeEntity);
 
-    // 4. Distance system updates
-    this.distanceSystem.update(deltaTime);
+    // 4. World axis system updates
+    this.worldAxisSystem.update(deltaTime);
+    const deltaZ = this.worldAxisSystem.getDeltaZ(deltaTime);
 
-    // 5. Sea system updates (now uses distance for motion illusion)
-    this.seaSystem.update(deltaTime, this.distanceSystem.getDelta());
+    // 5. Sea system updates (moves on Z axis only)
+    this.seaSystem.update(deltaTime, deltaZ);
 
-    // 6. Sky system updates
-    this.skySystem.update(deltaTime);
+    // 6. Sky system updates (moves on Z axis only)
+    this.skySystem.update(deltaTime, deltaZ);
 
     // 6. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
@@ -794,7 +856,7 @@ class EndlessMode {
     this.cameraRig = null;
     this.seaSystem = null;
     this.skySystem = null;
-    this.distanceSystem = null;
+    this.worldAxisSystem = null;
 
     console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
   }
