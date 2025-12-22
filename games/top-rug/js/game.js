@@ -74,8 +74,11 @@ window.Aviator1Game = {
     // Create World (scene, camera, renderer owner)
     const world = new World();
 
+    // Create ViewProfileSystem (declarative view orientation)
+    const viewProfileSystem = new ViewProfileSystem();
+
     // Create CameraRig (camera follow system)
-    const cameraRig = new CameraRig(world);
+    const cameraRig = new CameraRig(world, viewProfileSystem);
 
     // Create ModeSupervisor (mode lifecycle manager)
     const modeSupervisor = new ModeSupervisor();
@@ -87,7 +90,7 @@ window.Aviator1Game = {
     world.init();
 
     // Initialize endless mode
-    endlessMode.init(gameState, world, input, cameraRig);
+    endlessMode.init(gameState, world, input, cameraRig, viewProfileSystem);
 
     // Set mode and start via supervisor
     modeSupervisor.setMode(endlessMode);
@@ -270,10 +273,38 @@ class World {
   }
 }
 
+// View profiles for different game genres
+const VIEW_PROFILES = {
+  SIDE_SCROLLER: {
+    name: 'SIDE_SCROLLER',
+    description: 'Endless flight - plane appears to fly horizontally',
+    planeVisualForwardAxis: 'X', // Plane visually faces right
+    cameraOffset: { x: -80, y: 30, z: 0 }, // Lateral camera position
+    cameraLookTarget: 'plane' // Look directly at plane
+  }
+};
+
+// ViewProfileSystem class - declarative view orientation for multi-genre support
+class ViewProfileSystem {
+  constructor() {
+    this.currentProfile = null;
+  }
+
+  setProfile(profile) {
+    this.currentProfile = profile;
+    console.log(`[ViewProfile] Active profile: ${profile.name} - ${profile.description}`);
+  }
+
+  getProfile() {
+    return this.currentProfile;
+  }
+}
+
 // CameraRig class - manages camera follow behavior (Y only, Z locked)
 class CameraRig {
-  constructor(world) {
+  constructor(world, viewProfileSystem) {
     this.world = world;
+    this.viewProfileSystem = viewProfileSystem;
     this.targetEntity = null;
     this.lerpSpeed = 0.02;
     this.targetCameraY = 100;
@@ -288,7 +319,10 @@ class CameraRig {
   }
 
   update() {
-    if (!this.targetEntity) return;
+    if (!this.targetEntity || !this.viewProfileSystem) return;
+
+    const profile = this.viewProfileSystem.getProfile();
+    if (!profile) return;
 
     // Initialize camera Z check on first use
     if (this._initialCameraZ === null) {
@@ -296,8 +330,15 @@ class CameraRig {
     }
 
     const entityPos = this.targetEntity.getPosition();
-    this.targetCameraY = entityPos.y;
-    this.world.camera.position.y += (this.targetCameraY - this.world.camera.position.y) * this.lerpSpeed;
+
+    // Apply profile-based camera behavior
+    if (profile.cameraOffset) {
+      // Base position from entity
+      this.world.camera.position.x = entityPos.x + profile.cameraOffset.x;
+      this.world.camera.position.y = entityPos.y + profile.cameraOffset.y;
+      // Z remains locked - never changes from initial value
+      this.world.camera.position.z = this._initialCameraZ;
+    }
 
     // Camera Z position assertion - camera NEVER moves in Z
     console.assert(this.world.camera.position.z === this._initialCameraZ,
@@ -307,8 +348,10 @@ class CameraRig {
       this.world.camera.position.z = this._initialCameraZ;
     }
 
-    // Camera always looks at airplane position
-    this.world.camera.lookAt(entityPos.x, entityPos.y, entityPos.z);
+    // Camera look target strategy
+    if (profile.cameraLookTarget === 'plane') {
+      this.world.camera.lookAt(entityPos.x, entityPos.y, entityPos.z);
+    }
   }
 
   clear() {
@@ -702,6 +745,7 @@ class EndlessMode {
     this.world = null;
     this.input = null;
     this.cameraRig = null;
+    this.viewProfileSystem = null;
 
     // Components
     this.planeEntity = null;
@@ -712,7 +756,7 @@ class EndlessMode {
     this.worldAxisSystem = null;
   }
 
-  init(gameState, world, input, cameraRig) {
+  init(gameState, world, input, cameraRig, viewProfileSystem) {
     // Lifecycle guard: init must run only once
     console.assert(!this.hasInitialized, '[EndlessMode] ERROR: init() called multiple times');
     this.hasInitialized = true;
@@ -722,6 +766,10 @@ class EndlessMode {
     this.world = world;
     this.input = input;
     this.cameraRig = cameraRig;
+    this.viewProfileSystem = viewProfileSystem;
+
+    // Set view profile for endless flight mode
+    this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
 
     // Create components - no initialization
     this.planeEntity = new PlaneEntity();
@@ -857,6 +905,7 @@ class EndlessMode {
     this.seaSystem = null;
     this.skySystem = null;
     this.worldAxisSystem = null;
+    this.viewProfileSystem = null;
 
     console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
   }
