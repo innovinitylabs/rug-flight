@@ -2137,12 +2137,30 @@ class LaneEntityVisualSystem {
     // Track which entities we've created visuals for
     this.visualEntities = new Map(); // entityId -> { entity, mesh }
 
+    // Debug sphere for testing visual system
+    this.debugSphereCreated = false;
+
     console.log('[LaneEntityVisual] Lane entity visual system established');
   }
 
   update() {
     if (!this.entityRegistrySystem || !this.laneSystem || !this.worldLayoutSystem || !this.world) {
       return; // Safety check
+    }
+
+    // TEMPORARY DEBUG: Create a test sphere to verify visual system works
+    if (!this.debugSphereCreated) {
+      try {
+        const geometry = new THREE.SphereGeometry(10, 16, 12);
+        const material = new THREE.MeshLambertMaterial({ color: 0xff00ff }); // Bright magenta
+        const debugSphere = new THREE.Mesh(geometry, material);
+        debugSphere.position.set(0, 100, -200); // In front of plane
+        this.world.add(debugSphere);
+        this.debugSphereCreated = true;
+        console.log('[LaneEntityVisual] DEBUG: Magenta test sphere created at (0, 100, -200)');
+      } catch (error) {
+        console.warn('[LaneEntityVisual] WARNING: Failed to create debug sphere');
+      }
     }
 
     // Get all current entities
