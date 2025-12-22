@@ -5,6 +5,8 @@
 // - Registers entity with EntityRegistrySystem
 // - No randomness, no complexity
 
+import DebugConfig from '/core/config/DebugConfig.js';
+
 class SingleObstacleSpawnerSystem {
   constructor(entityRegistrySystem, laneSystem, worldScrollerSystem) {
     this.entityRegistrySystem = entityRegistrySystem;
