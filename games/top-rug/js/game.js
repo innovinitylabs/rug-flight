@@ -260,7 +260,7 @@ class World {
       if (object.material) {
         if (Array.isArray(object.material)) {
           object.material.forEach(material => material.dispose());
-                } else {
+      } else {
           object.material.dispose();
         }
       }
@@ -696,6 +696,67 @@ class LaneSystem {
   }
 }
 
+// PlayerIntentSystem class - converts raw input into semantic gameplay intents
+class PlayerIntentSystem {
+  constructor() {
+    // Why intent is separated from input: Enables combat, racing, and multiplayer modes
+    // How this enables different modes: Intents can be remapped, combined, or denied
+    // Why intent can be denied later: Lane switching, cooldowns, or game state restrictions
+
+    this.currentIntent = null;
+
+    console.log('[PlayerIntent] Semantic intent interpretation established');
+  }
+
+  // Convert raw input into semantic gameplay intent
+  update(input, deltaTime) {
+    if (!input) {
+      this.currentIntent = {
+        type: 'HOLD',
+        strength: 0,
+        timestamp: performance.now()
+      };
+      return;
+    }
+
+    const mouseX = input.mouseX;
+
+    // Determine intent based on mouse position
+    let intentType;
+    const strength = Math.abs(mouseX); // Strength based on how far from center
+
+    if (mouseX < -0.33) {
+      intentType = 'MOVE_LEFT';
+    } else if (mouseX > 0.33) {
+      intentType = 'MOVE_RIGHT';
+    } else {
+      intentType = 'HOLD';
+    }
+
+    // Create intent (at most one per frame)
+    this.currentIntent = {
+      type: intentType,
+      strength: Math.min(strength, 1.0), // Clamp to 0-1
+      timestamp: performance.now()
+    };
+  }
+
+  // Get current frame's intent
+  getIntents() {
+    return this.currentIntent ? [this.currentIntent] : [];
+  }
+
+  // Clear intent for next frame
+  clear() {
+    this.currentIntent = null;
+  }
+
+  // Get current intent (for immediate access)
+  getCurrentIntent() {
+    return this.currentIntent;
+  }
+}
+
 // LaneController class - converts input intent into lane change requests
 class LaneController {
   constructor(laneSystem) {
@@ -705,23 +766,38 @@ class LaneController {
     console.log(`[LaneController] Initialized on lane ${this.currentLaneIndex}`);
   }
 
-  processInput(input) {
-    if (!input) return { targetLaneIndex: this.currentLaneIndex };
+  processIntents(intents) {
+    if (!intents || intents.length === 0) {
+      return { targetLaneIndex: this.currentLaneIndex };
+    }
 
-    // Map mouse.x to lane changes
-    // Divide screen into thirds: left third → lane -1, center → lane 0, right third → lane +1
-    const mouseX = input.mouseX; // Normalized -1 to 1
+    // Process the first (and typically only) intent
+    const intent = intents[0];
 
     let targetLaneDelta = 0;
-    if (mouseX < -0.33) {
-      // Left third of screen
-      targetLaneDelta = -1;
-    } else if (mouseX > 0.33) {
-      // Right third of screen
-      targetLaneDelta = 1;
-    } else {
-      // Center third of screen
-      targetLaneDelta = 0;
+    switch (intent.type) {
+      case 'MOVE_LEFT':
+        targetLaneDelta = -1;
+        break;
+      case 'MOVE_RIGHT':
+        targetLaneDelta = 1;
+        break;
+      case 'HOLD':
+      default:
+        targetLaneDelta = 0;
+        break;
+    }
+
+    // Check if we can accept this intent (not already switching lanes)
+    const canAcceptIntent = (this.targetLaneIndex === this.currentLaneIndex);
+    if (!canAcceptIntent && targetLaneDelta !== 0) {
+      // Log rejected intent (throttled to once per second)
+      const now = performance.now();
+      if (!this.lastRejectLog || now - this.lastRejectLog > 1000) {
+        console.log(`[LaneController] Intent ${intent.type} rejected - already switching lanes`);
+        this.lastRejectLog = now;
+      }
+      return { targetLaneIndex: this.targetLaneIndex };
     }
 
     // Compute absolute target lane index
@@ -2160,6 +2236,7 @@ class EndlessMode {
     this.difficultyCurveSystem = null;
     this.worldScrollerSystem = null;
     this.laneSystem = null;
+    this.playerIntentSystem = null;
     this.laneController = null;
     this.spawnBandSystem = null;
     this.entityRegistrySystem = null;
@@ -2205,6 +2282,7 @@ class EndlessMode {
 
     // Create lane system - 3 lanes, 40 units wide
     this.laneSystem = new LaneSystem(3, 40);
+    this.playerIntentSystem = new PlayerIntentSystem();
     this.laneController = new LaneController(this.laneSystem);
 
     // Create spawn band system - defines spatial spawn rules
@@ -2296,10 +2374,14 @@ class EndlessMode {
     if (this.isPaused) return;
     if (!this.planeEntity || !this.planeController || !this.planeView || !this.input) return;
 
-    // 1. Lane controller processes input into lane intent
-    const laneIntent = this.laneController.processInput(this.input);
+    // 1. Player intent system converts raw input into semantic intents
+    this.playerIntentSystem.update(this.input, deltaTime);
+    const playerIntents = this.playerIntentSystem.getIntents();
 
-    // 2. Controller processes input into intent
+    // 2. Lane controller processes player intents into lane changes
+    const laneIntent = this.laneController.processIntents(playerIntents);
+
+    // 3. Controller processes input into intent
     const intent = this.planeController.processInput(this.input);
 
     // 3. Entity updates state based on intent
@@ -2358,10 +2440,10 @@ class EndlessMode {
     // 18. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
-    // 19. Clear collision intents and domain events for next frame
+    // 19. Clear collision intents, domain events, and player intents for next frame
     this.collisionIntentSystem.clear();
     this.collisionConsumptionSystem.clear();
-    this.collisionIntentSystem.clear();
+    this.playerIntentSystem.clear();
 
     // Update game time
     this.gameState.time += deltaTime;
