@@ -260,7 +260,7 @@ class World {
       if (object.material) {
         if (Array.isArray(object.material)) {
           object.material.forEach(material => material.dispose());
-                } else {
+      } else {
           object.material.dispose();
         }
       }
@@ -1276,6 +1276,78 @@ class CollisionConsumptionSystem {
   }
 }
 
+// ScoreSystem class - authoritative scoring state management
+class ScoreSystem {
+  constructor() {
+    this.coinsCollected = 0;
+
+    console.log('[ScoreSystem] Authoritative scoring system established');
+  }
+
+  // Consume domain events and update score state
+  consume(domainEvents) {
+    console.assert(Array.isArray(domainEvents), '[ScoreSystem] ERROR: domainEvents must be an array');
+
+    let coinsBefore = this.coinsCollected;
+
+    // Process each domain event
+    for (const event of domainEvents) {
+      if (event.type === 'COIN_COLLECTED') {
+        this.processCoinCollected(event);
+      }
+      // Future: Add other event type handlers here
+    }
+
+    // Log score changes
+    const coinsGained = this.coinsCollected - coinsBefore;
+    if (coinsGained > 0) {
+      console.log(`[ScoreSystem] SCORE: +${coinsGained} coins (Total: ${this.coinsCollected})`);
+    }
+
+    return coinsGained;
+  }
+
+  processCoinCollected(event) {
+    // Increment coins collected
+    this.coinsCollected += 1;
+
+    console.log(`[ScoreSystem] Coin collected in lane ${event.laneIndex} (Entity ${event.entityId})`);
+  }
+
+  // Get current score state
+  getCoinsCollected() {
+    return this.coinsCollected;
+  }
+
+  // Get complete score state
+  getScoreState() {
+    return {
+      coinsCollected: this.coinsCollected,
+      // Future: Add more score metrics here
+    };
+  }
+
+  // Reset score (useful for new game)
+  reset() {
+    const previousScore = this.coinsCollected;
+    this.coinsCollected = 0;
+
+    if (previousScore > 0) {
+      console.log(`[ScoreSystem] Score reset from ${previousScore} to 0`);
+    }
+
+    return previousScore;
+  }
+
+  // Get statistics
+  getStats() {
+    return {
+      coinsCollected: this.coinsCollected,
+      scoreState: this.getScoreState()
+    };
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -1648,6 +1720,7 @@ class EndlessMode {
     this.collisionIntentSystem = null;
     this.spawnSystem = null;
     this.collisionConsumptionSystem = null;
+    this.scoreSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1703,6 +1776,9 @@ class EndlessMode {
 
     // Create collision consumption system - processes intents into domain events
     this.collisionConsumptionSystem = new CollisionConsumptionSystem(this.entityRegistrySystem);
+
+    // Create score system - authoritative scoring state management
+    this.scoreSystem = new ScoreSystem();
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -1797,18 +1873,21 @@ class EndlessMode {
     const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
 
     // 10. Collision consumption system processes intents into domain events
-    this.collisionConsumptionSystem.process(collisionIntents);
+    const domainEvents = this.collisionConsumptionSystem.process(collisionIntents);
 
-    // 12. Sea system updates (pure renderer - reads Z from scroller)
+    // 11. Score system consumes domain events and updates score state
+    this.scoreSystem.consume(domainEvents);
+
+    // 13. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
-    // 13. Sky system updates (pure renderer - reads Z from scroller)
+    // 14. Sky system updates (pure renderer - reads Z from scroller)
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
-    // 14. Camera system updates (delegated to CameraRig)
+    // 15. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
-    // 15. Clear collision intents and domain events for next frame
+    // 16. Clear collision intents and domain events for next frame
     this.collisionIntentSystem.clear();
     this.collisionConsumptionSystem.clear();
     this.collisionIntentSystem.clear();
