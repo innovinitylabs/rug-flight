@@ -115,6 +115,37 @@ class SingleObstacleSpawnerSystem {
       return true;
     }
   }
+
+  // Reset system state for fresh game run
+  // Destroys and unregisters any active obstacle, clears spawn flags
+  reset() {
+    // Destroy and unregister any active obstacle
+    if (this.hasSpawned && this.spawnedObstacleId) {
+      // Check if obstacle still exists (might have been cleaned up already)
+      const obstacle = this.entityRegistrySystem.entities.get(this.spawnedObstacleId);
+      if (obstacle) {
+        // Unregister from entity registry
+        this.entityRegistrySystem.unregister(this.spawnedObstacleId);
+
+        // Call destroy method if obstacle has one
+        if (obstacle.destroy) {
+          obstacle.destroy();
+        }
+
+        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+          console.log(`[SingleObstacleSpawner] Reset: destroyed obstacle ${this.spawnedObstacleId}`);
+        }
+      }
+    }
+
+    // Clear internal spawn flags and state
+    this.hasSpawned = false;
+    this.spawnedObstacleId = null;
+
+    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      console.log('[SingleObstacleSpawner] Reset complete - ready for new game run');
+    }
+  }
 }
 
 export default SingleObstacleSpawnerSystem;
