@@ -1955,8 +1955,25 @@ class LaneEntitySpawnSystem {
   }
 
   update(currentTime) {
+    // Defensive guard - exit if required dependencies are missing
+    if (!this.difficultyCurveSystem) {
+      console.warn('[LaneEntitySpawn] WARNING: difficultyCurveSystem missing, skipping update');
+      return;
+    }
+
     // Check if it's time to spawn a new entity
-    const difficultyState = this.difficultyCurveSystem.getDifficultyState();
+    let difficultyState;
+    try {
+      difficultyState = this.difficultyCurveSystem.getDifficultyState();
+      if (!difficultyState || typeof difficultyState.spawnRateMultiplier !== 'number') {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid difficulty state, skipping spawn check');
+        return;
+      }
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to get difficulty state, skipping update');
+      return;
+    }
+
     const adjustedInterval = this.baseSpawnInterval / difficultyState.spawnRateMultiplier;
 
     if (currentTime - this.lastSpawnTime >= adjustedInterval) {
@@ -1966,41 +1983,227 @@ class LaneEntitySpawnSystem {
   }
 
   spawnEntity() {
+    // Defensive guards - exit early if required dependencies are missing
+    if (!this.laneSystem || !this.worldLayoutSystem || !this.entityRegistrySystem || !this.world) {
+      console.warn('[LaneEntitySpawn] WARNING: Missing required dependencies, skipping spawn');
+      return;
+    }
+
     // Choose random lane
-    const laneIndex = Math.floor(Math.random() * this.laneSystem.getLaneCount());
+    let laneIndex;
+    try {
+      const laneCount = this.laneSystem.getLaneCount();
+      if (typeof laneCount !== 'number' || laneCount <= 0) {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid lane count, skipping spawn');
+        return;
+      }
+      laneIndex = Math.floor(Math.random() * laneCount);
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to get lane count, skipping spawn');
+      return;
+    }
 
     // Get lane center X position
-    const laneCenterX = this.laneSystem.getLaneCenter(laneIndex);
+    let laneCenterX;
+    try {
+      laneCenterX = this.laneSystem.getLaneCenter(laneIndex);
+      if (typeof laneCenterX !== 'number') {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid lane center X, skipping spawn');
+        return;
+      }
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to get lane center, skipping spawn');
+      return;
+    }
 
     // Get MID_AIR baseline Y position
-    const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
-    const spawnY = midAirZone.baselineY;
+    let spawnY;
+    try {
+      const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+      if (!midAirZone || typeof midAirZone.baselineY !== 'number') {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid MID_AIR zone or baselineY, skipping spawn');
+        return;
+      }
+      spawnY = midAirZone.baselineY;
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to get MID_AIR zone, skipping spawn');
+      return;
+    }
 
     // Spawn ahead of player (positive Z)
     const spawnDistance = 200; // Units ahead of player
     const spawnZ = spawnDistance;
 
     // Create entity data
-    const entityId = this.entityRegistrySystem.generateId();
+    let entityId;
+    try {
+      entityId = this.entityRegistrySystem.generateId();
+      if (typeof entityId !== 'number') {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid entity ID generated, skipping spawn');
+        return;
+      }
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to generate entity ID, skipping spawn');
+      return;
+    }
+
     const coinEntity = new CoinEntity(entityId, laneIndex, spawnZ);
 
     // Set position
     coinEntity.position = { x: laneCenterX, y: spawnY, z: spawnZ };
 
     // Create simple visual mesh (placeholder)
-    const geometry = new THREE.SphereGeometry(3, 8, 6);
-    const material = new THREE.MeshLambertMaterial({ color: 0xffd700 }); // Gold color
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(laneCenterX, spawnY, spawnZ);
-    this.world.add(mesh);
+    try {
+      const geometry = new THREE.SphereGeometry(3, 8, 6);
+      const material = new THREE.MeshLambertMaterial({ color: 0xffd700 }); // Gold color
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(laneCenterX, spawnY, spawnZ);
+      this.world.add(mesh);
 
-    // Store mesh reference for cleanup
-    coinEntity.mesh = mesh;
+      // Store mesh reference for cleanup
+      coinEntity.mesh = mesh;
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to create visual mesh, continuing without visuals');
+      // Continue without mesh - entity can still participate in collisions
+    }
 
     // Register entity for collision detection and other systems
-    this.entityRegistrySystem.register(coinEntity);
+    try {
+      this.entityRegistrySystem.register(coinEntity);
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to register entity, skipping spawn');
+      return;
+    }
 
-    console.log(`[LaneEntitySpawn] SPAWNED: Coin ${entityId} in lane ${laneIndex} at (${laneCenterX.toFixed(1)}, ${spawnY.toFixed(1)}, ${spawnZ})`);
+    // Safe logging with defensive .toFixed() calls
+    const laneCenterXStr = (typeof laneCenterX === 'number') ? laneCenterX.toFixed(1) : 'undefined';
+    const spawnYStr = (typeof spawnY === 'number') ? spawnY.toFixed(1) : 'undefined';
+
+    console.log(`[LaneEntitySpawn] SPAWNED: Coin ${entityId} in lane ${laneIndex} at (${laneCenterXStr}, ${spawnYStr}, ${spawnZ})`);
+  }
+}
+
+// LaneEntityVisualSystem class - presentation-only visual management for lane entities
+class LaneEntityVisualSystem {
+  constructor(entityRegistrySystem, laneSystem, worldLayoutSystem, world) {
+    // Presentation-only system: observes entities and manages their visual representation
+    // Never mutates game state, entities, or influences gameplay
+    // Only creates, positions, and removes THREE.js meshes for lane entities
+
+    this.entityRegistrySystem = entityRegistrySystem;
+    this.laneSystem = laneSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.world = world;
+
+    // Track which entities we've created visuals for
+    this.visualEntities = new Map(); // entityId -> { entity, mesh }
+
+    console.log('[LaneEntityVisual] Lane entity visual system established');
+  }
+
+  update() {
+    if (!this.entityRegistrySystem || !this.laneSystem || !this.worldLayoutSystem || !this.world) {
+      return; // Safety check
+    }
+
+    // Get all current entities
+    const currentEntities = this.entityRegistrySystem.getAll();
+
+    // Track which entities we still have
+    const currentEntityIds = new Set();
+
+    // Update or create visuals for current entities
+    for (const entity of currentEntities) {
+      if (entity.type === 'coin') { // Only handle coin entities for now
+        currentEntityIds.add(entity.id);
+        this.ensureVisualForEntity(entity);
+        this.updateVisualPosition(entity);
+      }
+    }
+
+    // Remove visuals for entities that no longer exist
+    for (const [entityId, visualData] of this.visualEntities) {
+      if (!currentEntityIds.has(entityId)) {
+        this.removeVisualForEntity(entityId, visualData);
+      }
+    }
+  }
+
+  ensureVisualForEntity(entity) {
+    if (this.visualEntities.has(entity.id)) {
+      return; // Already have visual
+    }
+
+    // Create visual mesh for entity
+    try {
+      const geometry = new THREE.SphereGeometry(3, 8, 6);
+      const material = new THREE.MeshLambertMaterial({ color: 0xffd700 }); // Gold color
+      const mesh = new THREE.Mesh(geometry, material);
+
+      // Add to world
+      this.world.add(mesh);
+
+      // Store visual data
+      this.visualEntities.set(entity.id, {
+        entity: entity,
+        mesh: mesh
+      });
+
+    } catch (error) {
+      console.warn(`[LaneEntityVisual] WARNING: Failed to create visual for entity ${entity.id}`);
+    }
+  }
+
+  updateVisualPosition(entity) {
+    const visualData = this.visualEntities.get(entity.id);
+    if (!visualData || !visualData.mesh) {
+      return;
+    }
+
+    const mesh = visualData.mesh;
+
+    // Update position based on entity data
+    if (entity.position) {
+      mesh.position.set(
+        entity.position.x || 0,
+        entity.position.y || 0,
+        entity.position.z || 0
+      );
+    }
+  }
+
+  removeVisualForEntity(entityId, visualData) {
+    try {
+      if (visualData.mesh && this.world) {
+        // Dispose geometry and material
+        if (visualData.mesh.geometry) {
+          visualData.mesh.geometry.dispose();
+        }
+        if (visualData.mesh.material) {
+          if (Array.isArray(visualData.mesh.material)) {
+            visualData.mesh.material.forEach(mat => mat.dispose());
+          } else {
+            visualData.mesh.material.dispose();
+          }
+        }
+
+        // Remove from world
+        this.world.remove(visualData.mesh);
+      }
+    } catch (error) {
+      console.warn(`[LaneEntityVisual] WARNING: Failed to clean up visual for entity ${entityId}`);
+    }
+
+    // Remove from our tracking
+    this.visualEntities.delete(entityId);
+  }
+
+  // Cleanup all visuals (useful for mode transitions)
+  cleanup() {
+    for (const [entityId, visualData] of this.visualEntities) {
+      this.removeVisualForEntity(entityId, visualData);
+    }
+    this.visualEntities.clear();
   }
 }
 
@@ -2756,6 +2959,7 @@ class EndlessMode {
     this.debugWorldOverlaySystem = null;
     this.playerVisualMovementSystem = null;
     this.laneEntitySpawnSystem = null;
+    this.laneEntityVisualSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -2855,6 +3059,14 @@ class EndlessMode {
       this.worldLayoutSystem,
       this.difficultyCurveSystem,
       this.entityRegistrySystem,
+      world
+    );
+
+    // Create lane entity visual system - presentation-only visual management
+    this.laneEntityVisualSystem = new LaneEntityVisualSystem(
+      this.entityRegistrySystem,
+      this.laneSystem,
+      this.worldLayoutSystem,
       world
     );
 
@@ -3036,7 +3248,10 @@ class EndlessMode {
     // 16. VFX presentation system observes domain events for visual effects
     this.vfxPresentationSystem.update(domainEvents);
 
-    // 17. Debug world overlay system displays real-time engine state
+    // 17. Lane entity visual system manages visuals for lane entities
+    this.laneEntityVisualSystem.update();
+
+    // 18. Debug world overlay system displays real-time engine state
     this.debugWorldOverlaySystem.update(deltaTime);
 
     // 18. Player proxy updates (visual representation)
