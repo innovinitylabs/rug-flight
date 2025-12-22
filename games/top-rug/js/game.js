@@ -1,968 +1,223 @@
-// AUDIO MANAGER - Using Three.js Audio API exactly like Aviator2
-var AudioManager = function() {
-  this.sounds = {}; // HTML5 Audio for one-shot sounds
-  this.categories = {};
-  this.playingSounds = {}; // HTML5 Audio instances (only for one-shot sounds)
-  this.userInteracted = false;
-  this.pendingPlays = [];
-  this.startTime = performance.now();
-  this.loadTimes = {}; // Track when each sound starts loading
-  this.loadedTimes = {}; // Track when each sound finishes loading
-  
-  // Initialize Three.js Audio API (exactly like Aviator2)
-  if (typeof THREE !== 'undefined' && THREE.AudioLoader && THREE.Audio && THREE.AudioListener) {
-    this.loader = new THREE.AudioLoader();
-    this.listener = new THREE.AudioListener();
-    this.buffers = {}; // Store loaded audio buffers for Three.js Audio
-    this.threeJSSupported = true;
-    
-    // Track all Three.js Audio instances for debugging
-    this.allPropellerInstances = [];
-    
-    // Monitor audio context state
-    if (this.listener.context) {
-      console.log('[PROPELLER] Audio context state:', this.listener.context.state);
-      this.listener.context.addEventListener('statechange', function() {
-        console.log('[PROPELLER] Audio context state changed to:', this.listener.context.state);
-      }.bind(this));
-    }
-  } else {
-    this.threeJSSupported = false;
-    console.warn('[PROPELLER] Three.js Audio API not available');
-  }
-};
+// Clean architecture for Endless game mode
+// Single authoritative module with minimal public API
 
-AudioManager.prototype.init = function(camera) {
-  var _this = this;
-  
-  // Attach Three.js AudioListener to camera (like Aviator2)
-  if (this.threeJSSupported && camera && this.listener) {
-    camera.add(this.listener);
-    console.log('[PROPELLER] AudioListener attached to camera');
-    if (this.listener.context) {
-      console.log('[PROPELLER] Audio context state after attaching:', this.listener.context.state);
-      // Monitor context state changes
-      this.listener.context.addEventListener('statechange', function() {
-        console.log('[PROPELLER] Audio context state changed to:', this.listener.context.state);
-        if (this.listener.context.state === 'suspended') {
-          console.warn('[PROPELLER] ⚠️ Audio context SUSPENDED - this will cause audio to stop!');
-        }
-      }.bind(this));
-    }
-  }
-  
-  // Enable audio after first user interaction (click, touchstart, or keydown)
-  var enableAudio = function() {
-    _this.userInteracted = true;
-    
-    // Play any pending sounds
-    for (var i = 0; i < _this.pendingPlays.length; i++) {
-      var pending = _this.pendingPlays[i];
-      _this.play(pending.soundId, pending.options);
-    }
-    _this.pendingPlays = [];
-    
-    // Start background sounds immediately on valid interaction
-    setTimeout(function() {
-      // Check if sounds are loaded (either HTML5 Audio or Three.js buffer)
-      var propellerLoaded = _this.sounds['propeller'] || (_this.threeJSSupported && _this.buffers['propeller']);
-      var oceanLoaded = _this.sounds['ocean'] || (_this.threeJSSupported && _this.buffers['ocean']);
-      
-      console.log('[PROPELLER] enableAudio: propellerLoaded =', propellerLoaded, 'threeJSSupported =', _this.threeJSSupported, 'buffer exists =', !!_this.buffers['propeller']);
-      
-      if (propellerLoaded) {
-        console.log('[PROPELLER] Starting airplane sound (first attempt)');
-        _this.play('propeller', {loop: true, volume: 0.6});
-      } else {
-        console.log('[PROPELLER] Propeller not loaded yet, will retry in 200ms');
-        setTimeout(function() {
-          var propellerLoadedRetry = _this.sounds['propeller'] || (_this.threeJSSupported && _this.buffers['propeller']);
-          console.log('[PROPELLER] Retry check: propellerLoaded =', propellerLoadedRetry);
-          if (propellerLoadedRetry) {
-            console.log('[PROPELLER] Starting airplane sound (delayed retry)');
-            _this.play('propeller', {loop: true, volume: 0.6});
-          } else {
-            console.warn('[PROPELLER] Still not loaded after retry');
-          }
-        }, 200);
-      }
-      if (oceanLoaded) {
-        _this.play('ocean', {loop: true, volume: 0.4});
-      } else {
-        setTimeout(function() {
-          var oceanLoadedRetry = _this.sounds['ocean'] || (_this.threeJSSupported && _this.buffers['ocean']);
-          if (oceanLoadedRetry) {
-            _this.play('ocean', {loop: true, volume: 0.4});
-          }
-        }, 200);
-      }
-    }, 10);
-    
-    document.removeEventListener('click', enableAudio);
-    document.removeEventListener('touchstart', enableAudio);
-    document.removeEventListener('keydown', enableAudio);
-  };
-  document.addEventListener('click', enableAudio, {once: true});
-  document.addEventListener('touchstart', enableAudio, {once: true});
-  document.addEventListener('keydown', enableAudio, {once: true});
-};
+// ModeSupervisor class - manages mode lifecycle
+class ModeSupervisor {
+  constructor() {
+    this.currentMode = null;
 
-AudioManager.prototype.load = function(soundId, category, path) {
-  var loadStartTime = performance.now();
-  var _this = this;
-  _this.loadTimes[soundId] = loadStartTime;
-  
-  // Log only for propeller sound
-  if (soundId === 'propeller') {
-    console.log('[PROPELLER] Loading airplane sound from:', path);
+    // Health check: track lifecycle state
+    this.hasActiveMode = false;
   }
-  
-  return new Promise(function(resolve, reject) {
-    var html5Loaded = false;
-    var threeJSLoaded = false;
-    
-    var checkBothLoaded = function() {
-      if (html5Loaded && threeJSLoaded) {
-      var loadedTime = performance.now();
-      _this.loadedTimes[soundId] = loadedTime;
-        
-        // Log only for propeller sound
-        if (soundId === 'propeller') {
-          var loadDuration = loadedTime - loadStartTime;
-          console.log('[PROPELLER] Airplane sound loaded in', loadDuration.toFixed(2), 'ms');
-          if (_this.buffers[soundId]) {
-            console.log('[PROPELLER] Duration:', _this.buffers[soundId].duration.toFixed(2), 'seconds');
-          }
-        }
-      
-        if (category !== null) {
-          if (!_this.categories[category]) {
-            _this.categories[category] = [];
-          }
-          _this.categories[category].push(soundId);
-        }
-      
-        resolve();
-      }
+
+  setMode(mode) {
+    // Health check: warn if setting mode while another is active
+    if (this.hasActiveMode) {
+      console.warn('[ModeSupervisor] WARNING: Setting new mode while previous mode is still active');
+    }
+
+    this.currentMode = mode;
+    this.hasActiveMode = false; // Reset until started
+  }
+
+  start() {
+    // Health check: ensure mode is set before starting
+    console.assert(this.currentMode, '[ModeSupervisor] ERROR: Cannot start without setting a mode first');
+
+    if (this.currentMode) {
+      this.currentMode.start();
+      this.hasActiveMode = true;
+    }
+  }
+
+  update(deltaTime) {
+    if (this.currentMode && this.hasActiveMode) {
+      this.currentMode.update(deltaTime);
+    }
+  }
+
+  pause() {
+    if (this.currentMode && this.hasActiveMode) {
+      this.currentMode.pause();
+    }
+  }
+
+  resume() {
+    if (this.currentMode && this.hasActiveMode) {
+      this.currentMode.resume();
+    }
+  }
+
+  destroy() {
+    if (this.currentMode && this.hasActiveMode) {
+      this.currentMode.destroy();
+      this.currentMode = null;
+      this.hasActiveMode = false;
+    }
+  }
+}
+
+window.Aviator1Game = {
+  init() {
+    console.log('[Aviator1Game] Initializing clean architecture...');
+
+    // Create GameState
+    const gameState = {
+      status: 'playing',
+      speed: 0,
+      time: 0
     };
-    
-    // Load HTML5 Audio for one-shot sounds
-    var audio = new Audio();
-    audio.preload = 'auto';
-    
-    var onLoaded = function() {
-      if (!html5Loaded) {
-        html5Loaded = true;
-        _this.sounds[soundId] = audio;
-        checkBothLoaded();
-      }
+
+    // Create Input (mouse tracking)
+    const input = new Input();
+
+    // Create World (scene, camera, renderer owner)
+    const world = new World();
+
+    // Create ViewProfileSystem (declarative view orientation)
+    const viewProfileSystem = new ViewProfileSystem();
+
+    // Create CameraRig (camera follow system)
+    const cameraRig = new CameraRig(world, viewProfileSystem);
+
+    // Create ModeSupervisor (mode lifecycle manager)
+    const modeSupervisor = new ModeSupervisor();
+
+    // Create EndlessMode
+    const endlessMode = new EndlessMode();
+
+    // Initialize world
+    world.init();
+
+    // Initialize endless mode
+    endlessMode.init(gameState, world, input, cameraRig, viewProfileSystem);
+
+    // Set mode and start via supervisor
+    modeSupervisor.setMode(endlessMode);
+    modeSupervisor.start();
+
+    // Start animation loop
+    let lastTime = 0;
+    const loop = (currentTime) => {
+      const deltaTime = currentTime - lastTime;
+      lastTime = currentTime;
+
+      modeSupervisor.update(deltaTime);
+      world.render();
+
+      requestAnimationFrame(loop);
     };
-    
-    var onLoadedData = function() {
-      onLoaded();
-    };
-    
-    var onCanPlayThrough = function() {
-      onLoaded();
-    };
-    
-    var onError = function(e) {
-      if (soundId === 'propeller') {
-        console.error('[PROPELLER] Failed to load airplane sound:', e);
-      }
-      audio.removeEventListener('loadeddata', onLoadedData);
-      audio.removeEventListener('canplaythrough', onCanPlayThrough);
-      audio.removeEventListener('error', onError);
-      reject(e);
-    };
-    
-    audio.addEventListener('loadeddata', onLoadedData, {once: true});
-    audio.addEventListener('canplaythrough', onCanPlayThrough, {once: true});
-    audio.addEventListener('error', onError, {once: true});
-    
-    audio.src = path;
-    audio.load();
-    
-    // Load Three.js Audio buffer for looping sounds (like Aviator2)
-    if (_this.threeJSSupported && _this.loader) {
-      _this.loader.load(
-        path,
-        function(audioBuffer) {
-          _this.buffers[soundId] = audioBuffer;
-          threeJSLoaded = true;
-          checkBothLoaded();
-        },
-        function() {
-          // Progress callback (not needed)
-        },
-        function(err) {
-          // Error loading Three.js buffer, continue with HTML5 Audio
-          if (soundId === 'propeller') {
-            console.warn('[PROPELLER] Failed to load Three.js buffer, using HTML5 Audio fallback');
-          }
-          threeJSLoaded = true;
-          checkBothLoaded();
-        }
-      );
-    } else {
-      // Three.js not supported, just use HTML5 Audio
-      threeJSLoaded = true;
-      checkBothLoaded();
-    }
-  });
-};
 
-AudioManager.prototype.play = function(soundIdOrCategory, options) {
-  options = options || {};
-  
-  if (soundIdOrCategory === 'propeller') {
-    console.log('[PROPELLER] ===== play() CALLED =====');
-    console.log('[PROPELLER] Options:', JSON.stringify(options));
-    console.log('[PROPELLER] Stack trace:', new Error().stack.split('\n').slice(1, 4).join('\n'));
-  }
+    requestAnimationFrame(loop);
 
-  var soundId = soundIdOrCategory;
-  // Check if it's a category (array of sounds)
-  if (this.categories[soundIdOrCategory]) {
-    var categorySounds = this.categories[soundIdOrCategory];
-    if (categorySounds.length > 0) {
-    soundId = categorySounds[Math.floor(Math.random() * categorySounds.length)];
-    } else {
-      return null;
-    }
-  }
-
-  // Check if sound is loaded (either HTML5 Audio or Three.js buffer)
-  var audio = this.sounds[soundId];
-  var threeJSBuffer = this.threeJSSupported ? this.buffers[soundId] : null;
-  
-  if (!audio && !threeJSBuffer) {
-    if (soundId === 'propeller') {
-      console.warn('[PROPELLER] Airplane sound not loaded yet');
-    }
-    return null;
-  }
-
-  // If user hasn't interacted yet and this is a looping sound, queue it
-  if (!this.userInteracted && options.loop) {
-    if (soundId === 'propeller') {
-      console.log('[PROPELLER] User not interacted, queuing sound');
-    }
-    this.pendingPlays.push({soundId: soundId, options: options});
-    return null;
-  }
-
-  var sound;
-  
-  // For looping sounds, use Three.js Audio API exactly like Aviator2
-  // Aviator2 doesn't stop existing sounds - it creates new instances and lets them play
-  // This provides truly seamless looping without any gaps
-  if (options.loop) {
-    // Use Three.js Audio API if available (exactly like Aviator2)
-    if (this.threeJSSupported && this.listener && this.buffers[soundId]) {
-      if (soundId === 'propeller') {
-        console.log('[PROPELLER] play() called - threeJSSupported =', this.threeJSSupported, 'listener =', !!this.listener, 'buffer =', !!this.buffers[soundId]);
-        console.log('[PROPELLER] Buffer duration:', this.buffers[soundId].duration, 'seconds');
-      }
-      
-      // Create new Three.js Audio instance (like Aviator2 - no stopping of existing)
-      var buffer = this.buffers[soundId];
-      var threeJSSound;
-
-      // --- PROPELLER: single persistent engine ---
-      if (soundId === 'propeller') {
-
-        // If already running, just update volume
-        if (this.propellerSource) {
-          if (this.propellerGain && options.volume !== undefined) {
-            this.propellerGain.gain.value = Math.max(0, Math.min(1, options.volume));
-          }
-          return this.propellerSource;
-        }
-
-        const ctx = this.listener.context;
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-        source.loopStart = 0.022;
-        source.loopEnd = 3.628;
-
-        const gainNode = ctx.createGain();
-        gainNode.gain.value = options.volume !== undefined
-          ? Math.max(0, Math.min(1, options.volume))
-          : 0.6;
-
-        source.connect(gainNode);
-        gainNode.connect(this.listener.gain);
-        source.start();
-
-        this.propellerSource = source;
-        this.propellerGain = gainNode;
-
-        console.log('[PROPELLER] Engine started once, looping forever');
-        return source;
-      } else {
-        threeJSSound = new THREE.Audio(this.listener);
-      }
-      
-      if (soundId === 'propeller') {
-        console.log('[PROPELLER] Created new THREE.Audio instance');
-        // Track this instance
-        this.allPropellerInstances.push({
-          instance: threeJSSound,
-          createdAt: new Date().toISOString(),
-          uuid: threeJSSound.uuid
-        });
-        console.log('[PROPELLER] Total instances created:', this.allPropellerInstances.length);
-      }
-      
-      threeJSSound.setBuffer(buffer);
-      threeJSSound.setLoop(true);
-      
-      if (soundId === 'propeller') {
-        console.log('[PROPELLER] Set buffer and loop = true');
-        console.log('[PROPELLER] Buffer sampleRate:', buffer.sampleRate);
-        console.log('[PROPELLER] Buffer numberOfChannels:', buffer.numberOfChannels);
-        console.log('[PROPELLER] Buffer length:', buffer.length, 'samples');
-      }
-      
-      if (options.volume !== undefined) {
-        threeJSSound.setVolume(Math.max(0, Math.min(1, options.volume)));
-        if (soundId === 'propeller') {
-          console.log('[PROPELLER] Set volume to', options.volume);
-        }
-      } else {
-        threeJSSound.setVolume(1.0);
-      }
-      
-      if (soundId === 'propeller') {
-        console.log('[PROPELLER] Calling play() on THREE.Audio instance');
-        console.log('[PROPELLER] Sound isPlaying before play():', threeJSSound.isPlaying);
-        console.log('[PROPELLER] Audio context state before play():', this.listener.context ? this.listener.context.state : 'no-context');
-      }
-      
-      threeJSSound.play();
-
-      if (soundId === 'propeller') {
-        console.log('[PROPELLER] play() called, isPlaying after:', threeJSSound.isPlaying);
-        console.log('[PROPELLER] Sound source:', threeJSSound.source);
-        console.log('[PROPELLER] Sound context:', threeJSSound.context);
-        if (threeJSSound.source) {
-          console.log('[PROPELLER] Source loop:', threeJSSound.source.loop);
-          console.log('[PROPELLER] Source buffer:', !!threeJSSound.source.buffer);
-          console.log('[PROPELLER] Source playbackRate:', threeJSSound.source.playbackRate.value);
-          console.log('[PROPELLER] Source loopStart:', threeJSSound.source.loopStart);
-          console.log('[PROPELLER] Source loopEnd:', threeJSSound.source.loopEnd);
-          console.log('[PROPELLER] Buffer duration:', buffer.duration, 'seconds');
-
-          // FIX: Set proper loop points to avoid silence gaps
-          // Skip 0.022s of silence at start, end loop before 0.003s fade at end
-          if (soundId === 'propeller') {
-            threeJSSound.source.loopStart = 0.022; // Skip initial silence
-            threeJSSound.source.loopEnd = 3.628;   // End before fade-out
-            console.log('[PROPELLER] ✅ FIXED loop points: loopStart=0.022s, loopEnd=3.628s');
-            console.log('[PROPELLER] Effective loop duration:', (3.628 - 0.022).toFixed(3), 'seconds');
-          }
-
-          // CRITICAL: Check if loopEnd is set correctly
-          // When loopEnd is 0, it means "use buffer length", but let's verify
-          if (threeJSSound.source.loopEnd === 0) {
-            console.log('[PROPELLER] loopEnd is 0 (defaults to buffer length =', buffer.duration, 'seconds)');
-          } else if (threeJSSound.source.loopEnd !== buffer.duration) {
-            console.warn('[PROPELLER] ⚠️ loopEnd (' + threeJSSound.source.loopEnd + ') != buffer duration (' + buffer.duration + ')');
-          }
-          
-          // Analyze buffer for silence at start/end and waveform discontinuity
-          if (buffer.getChannelData) {
-            try {
-              var channelData = buffer.getChannelData(0);
-              var startSamples = channelData.slice(0, 100); // First 100 samples
-              var endSamples = channelData.slice(-100); // Last 100 samples
-              var startAvg = Math.abs(startSamples.reduce(function(a, b) { return a + Math.abs(b); }, 0) / startSamples.length);
-              var endAvg = Math.abs(endSamples.reduce(function(a, b) { return a + Math.abs(b); }, 0) / endSamples.length);
-              var startEndDiff = Math.abs(channelData[0] - channelData[channelData.length - 1]);
-              
-              console.log('[PROPELLER] ===== BUFFER ANALYSIS =====');
-              console.log('[PROPELLER] Start samples (first 100) avg amplitude:', startAvg.toFixed(6));
-              console.log('[PROPELLER] End samples (last 100) avg amplitude:', endAvg.toFixed(6));
-              console.log('[PROPELLER] First sample value:', channelData[0].toFixed(6));
-              console.log('[PROPELLER] Last sample value:', channelData[channelData.length - 1].toFixed(6));
-              console.log('[PROPELLER] Start/End sample difference:', startEndDiff.toFixed(6));
-              
-              // Check for silence (very low amplitude)
-              var silenceThreshold = 0.001;
-              if (startAvg < silenceThreshold) {
-                console.error('[PROPELLER] ⚠️⚠️⚠️ START OF BUFFER HAS SILENCE! (avg amplitude:', startAvg.toFixed(6), ')');
-                console.error('[PROPELLER] This creates a gap when looping back to start');
-              }
-              if (endAvg < silenceThreshold) {
-                console.error('[PROPELLER] ⚠️⚠️⚠️ END OF BUFFER HAS SILENCE! (avg amplitude:', endAvg.toFixed(6), ')');
-                console.error('[PROPELLER] This creates a gap before looping');
-              }
-              if (startEndDiff > 0.1) {
-                console.error('[PROPELLER] ⚠️⚠️⚠️ WAVEFORM DISCONTINUITY! (difference:', startEndDiff.toFixed(6), ')');
-                console.error('[PROPELLER] First sample (', channelData[0].toFixed(6), ') != Last sample (', channelData[channelData.length - 1].toFixed(6), ')');
-                console.error('[PROPELLER] This will cause a click/pop at loop point');
-              }
-              
-              // Check how many samples of silence at start
-              var silenceStartCount = 0;
-              for (var i = 0; i < Math.min(1000, channelData.length); i++) {
-                if (Math.abs(channelData[i]) < silenceThreshold) {
-                  silenceStartCount++;
-                } else {
-                  break;
-                }
-              }
-              if (silenceStartCount > 0) {
-                var silenceStartDuration = (silenceStartCount / buffer.sampleRate);
-                console.warn('[PROPELLER] ⚠️', silenceStartCount, 'samples of silence at start =', silenceStartDuration.toFixed(3), 'seconds');
-              }
-              
-              // Check how many samples of silence at end
-              var silenceEndCount = 0;
-              for (var i = channelData.length - 1; i >= Math.max(0, channelData.length - 1000); i--) {
-                if (Math.abs(channelData[i]) < silenceThreshold) {
-                  silenceEndCount++;
-                } else {
-                  break;
-                }
-              }
-              if (silenceEndCount > 0) {
-                var silenceEndDuration = (silenceEndCount / buffer.sampleRate);
-                console.warn('[PROPELLER] ⚠️', silenceEndCount, 'samples of silence at end =', silenceEndDuration.toFixed(3), 'seconds');
-                console.warn('[PROPELLER] This matches the ~0.099s gap we detected!');
-              }
-            } catch (e) {
-              console.warn('[PROPELLER] Could not analyze buffer:', e);
-            }
-          }
-          
-          // Monitor source for ended event (shouldn't happen with loop=true, but check)
-          threeJSSound.source.onended = function() {
-            console.error('[PROPELLER] ⚠️⚠️⚠️ SOURCE ENDED EVENT FIRED - This should not happen with loop=true!');
-            console.error('[PROPELLER] Source ended at:', new Date().toISOString());
-            console.error('[PROPELLER] This is why you hear gaps - the source is ending despite loop=true!');
-          };
-          
-          // Monitor playback position to detect loop points
-          var lastPosition = 0;
-          var loopCount = 0;
-          var positionCheckInterval = setInterval(function() {
-            if (threeJSSound.source && threeJSSound.context) {
-              try {
-                // Try to get current playback time (if available)
-                var currentTime = threeJSSound.context.currentTime;
-                var bufferDuration = buffer.duration;
-                
-                // Calculate expected position based on time
-                // Note: This is approximate since we can't directly read BufferSource position
-                var expectedPosition = (currentTime % bufferDuration);
-                
-                // Detect if we've looped (position reset to near 0)
-                if (lastPosition > bufferDuration * 0.9 && expectedPosition < bufferDuration * 0.1) {
-                  loopCount++;
-                  console.log('[PROPELLER] 🔄 LOOP DETECTED #' + loopCount + ' at:', new Date().toISOString());
-                  console.log('[PROPELLER] Last position before loop:', lastPosition.toFixed(3), 's');
-                  console.log('[PROPELLER] New position after loop:', expectedPosition.toFixed(3), 's');
-                  console.log('[PROPELLER] Gap detected:', (bufferDuration - lastPosition + expectedPosition).toFixed(3), 's');
-                }
-                lastPosition = expectedPosition;
-              } catch (e) {
-                // Can't read position directly, that's OK
-              }
-            }
-          }, 100); // Check every 100ms to catch loop points
-          
-          // Monitor isPlaying state periodically to detect if it stops
-          var checkInterval = setInterval(function() {
-            if (!threeJSSound.isPlaying) {
-              console.error('[PROPELLER] ⚠️⚠️⚠️ Sound stopped playing! isPlaying = false');
-              console.error('[PROPELLER] This happened at:', new Date().toISOString());
-              clearInterval(checkInterval);
-              clearInterval(positionCheckInterval);
-            }
-          }, 1000); // Check every second
-          
-          // Check if source still exists and is connected
-          var sourceCheckInterval = setInterval(function() {
-            if (!threeJSSound.source) {
-              console.warn('[PROPELLER] Source is null/undefined');
-              clearInterval(sourceCheckInterval);
-            } else {
-              // Check if source is still in the audio graph
-              try {
-                var numberOfInputs = threeJSSound.source.numberOfInputs;
-                var numberOfOutputs = threeJSSound.source.numberOfOutputs;
-                // This is just to verify source still exists
-              } catch (e) {
-                console.warn('[PROPELLER] Cannot access source properties:', e);
-              }
-            }
-          }, 2000);
-        }
-        console.log('[PROPELLER] Three.js Audio instance created at:', new Date().toISOString());
-        console.log('[PROPELLER] Instance UUID:', threeJSSound.uuid);
-        
-        // Check audio context state
-        if (this.listener.context) {
-          console.log('[PROPELLER] Audio context state after play():', this.listener.context.state);
-          if (this.listener.context.state === 'suspended') {
-            console.error('[PROPELLER] ⚠️⚠️⚠️ Audio context is SUSPENDED - this will cause gaps!');
-          }
-          
-          // Monitor context state changes
-          this.listener.context.addEventListener('statechange', function() {
-            console.warn('[PROPELLER] ⚠️ Audio context state changed to:', this.listener.context.state);
-            if (this.listener.context.state === 'suspended') {
-              console.error('[PROPELLER] ⚠️⚠️⚠️ Context SUSPENDED - audio will stop!');
-            }
-          }.bind(this));
-        }
-      }
-      
-      return threeJSSound;
-    } else {
-      // Fallback to HTML5 Audio if Three.js Audio not available
-      if (soundId === 'propeller') {
-        console.warn('[PROPELLER] Using HTML5 Audio fallback - threeJSSupported =', this.threeJSSupported, 'listener =', !!this.listener, 'buffer =', !!this.buffers[soundId]);
-      }
-      
-      sound = audio;
-    sound.loop = true;
-      // Don't track HTML5 Audio for looping sounds (let multiple instances play)
-    }
-  } else {
-    // For one-shot sounds, reuse the original but reset currentTime to allow "restarting"
-    // HTML5 Audio can play multiple times if we reset currentTime to 0
-    sound = audio;
-    // Reset to beginning to allow overlapping playback of the same sound
-    sound.currentTime = 0;
-  }
-  
-  if (options.volume !== undefined) {
-    sound.volume = Math.max(0, Math.min(1, options.volume));
-  } else {
-    sound.volume = 1.0;
-  }
-  
-  var playPromise = sound.play();
-  if (playPromise !== undefined) {
-    playPromise.then(function() {
-      if (soundId === 'propeller') {
-        console.log('[PROPELLER] Airplane sound started successfully');
-      }
-    }.bind(this)).catch(function(err) {
-      if (soundId === 'propeller') {
-        console.error('[PROPELLER] Failed to start airplane sound:', err.name, err.message);
-      }
-    }.bind(this));
-  }
-  
-  return sound;
-};
-
-AudioManager.prototype.stop = function(soundId) {
-  if (soundId === 'propeller') {
-    console.log('[PROPELLER] ===== stop() CALLED =====');
-    console.log('[PROPELLER] Stack trace:', new Error().stack.split('\n').slice(1, 4).join('\n'));
-    console.warn('[PROPELLER] WARNING: stop() called on looping sound - this may cause gaps!');
-  }
-  
-  // For looping sounds, we don't track them (like Aviator2)
-  // So we can't stop them individually - they just play until page unload
-  // This is intentional to match Aviator2's behavior
-  
-  // Only stop HTML5 Audio one-shot sounds if needed
-  if (this.playingSounds[soundId] && !this.playingSounds[soundId].loop) {
-    this.playingSounds[soundId].pause();
-    this.playingSounds[soundId].currentTime = 0;
-    delete this.playingSounds[soundId];
-  } else if (soundId === 'propeller') {
-    console.log('[PROPELLER] No tracked sound to stop (Three.js Audio instances not tracked)');
+    console.log('[Aviator1Game] Clean architecture initialized successfully');
   }
 };
 
-var audioManager = new AudioManager();
+// Input class - tracks normalized mouse position (-1 to 1)
+class Input {
+  constructor() {
+    this.mouse = { x: 0, y: 0 }; // Normalized -1 to 1
+    this.windowSize = { width: window.innerWidth, height: window.innerHeight };
 
-//COLORS
-var Colors = {
-    red:0xf25346,
-    white:0xd8d0d1,
-    brown:0x59332e,
-    brownDark:0x23190f,
-    pink:0xF5986E,
-    yellow:0xf4ce93,
-    blue:0x68c3c0,
+    // Bind event handlers
+    this.handleMouseMove = this.handleMouseMove.bind(this);
+    this.handleResize = this.handleResize.bind(this);
 
-};
-
-///////////////
-
-// GAME VARIABLES
-var game;
-var deltaTime = 0;
-var newTime = new Date().getTime();
-var oldTime = new Date().getTime();
-var ennemiesPool = [];
-var particlesPool = [];
-var particlesInUse = [];
-
-function resetGame(){
-  game = {speed:0,
-          initSpeed:.00035,
-          baseSpeed:.00035,
-          targetBaseSpeed:.00035,
-          incrementSpeedByTime:.0000025,
-          incrementSpeedByLevel:.000005,
-          distanceForSpeedUpdate:100,
-          speedLastUpdate:0,
-
-          distance:0,
-          ratioSpeedDistance:50,
-          energy:100,
-          ratioSpeedEnergy:3,
-
-          level:1,
-          levelLastUpdate:0,
-          distanceForLevelUpdate:1000,
-
-          planeDefaultHeight:100,
-          planeAmpHeight:80,
-          planeAmpWidth:75,
-          planeMoveSensivity:0.005,
-          planeRotXSensivity:0.0008,
-          planeRotZSensivity:0.0004,
-          planeFallSpeed:.001,
-          planeMinSpeed:1.2,
-          planeMaxSpeed:1.6,
-          planeSpeed:0,
-          planeCollisionDisplacementX:0,
-          planeCollisionSpeedX:0,
-
-          planeCollisionDisplacementY:0,
-          planeCollisionSpeedY:0,
-
-          seaRadius:600,
-          seaLength:800,
-          //seaRotationSpeed:0.006,
-          wavesMinAmp : 5,
-          wavesMaxAmp : 20,
-          wavesMinSpeed : 0.001,
-          wavesMaxSpeed : 0.003,
-
-          cameraFarPos:500,
-          cameraNearPos:150,
-          cameraSensivity:0.002,
-
-          coinDistanceTolerance:15,
-          coinValue:3,
-          coinsSpeed:.5,
-          coinLastSpawn:0,
-          distanceForCoinsSpawn:100,
-
-          ennemyDistanceTolerance:10,
-          ennemyValue:10,
-          ennemiesSpeed:.6,
-          ennemyLastSpawn:0,
-          distanceForEnnemiesSpawn:50,
-
-          status : "playing",
-         };
-  fieldLevel.innerHTML = Math.floor(game.level);
-  
-  // Make ropes visible again when game resets
-  if (ropeLeft) ropeLeft.visible = true;
-  if (ropeRight) ropeRight.visible = true;
-
-  // Make airplane visible again when game resets
-  if (airplane && airplane.mesh) {
-    airplane.mesh.visible = true;
+    // Add event listeners
+    window.addEventListener('mousemove', this.handleMouseMove);
+    window.addEventListener('resize', this.handleResize);
   }
-  
-  // Restart background sounds when game resets (only if user has interacted)
-  if (audioManager.userInteracted) {
-    var propellerLoaded = audioManager.sounds['propeller'] || (audioManager.threeJSSupported && audioManager.buffers['propeller']);
-    var oceanLoaded = audioManager.sounds['ocean'] || (audioManager.threeJSSupported && audioManager.buffers['ocean']);
-    console.log('[PROPELLER] resetGame called - propellerLoaded =', propellerLoaded, 'oceanLoaded =', oceanLoaded);
-    if (propellerLoaded && oceanLoaded) {
-      if (audioManager.propellerGain) {
-        // Do NOT restart engine — just restore volume
-        audioManager.propellerGain.gain.value = 0.6;
-      }
 
-      audioManager.play('ocean', {loop: true, volume: 0.4});
-    } else {
-      console.warn('[PROPELLER] resetGame: Sounds not loaded, skipping');
+  handleMouseMove(event) {
+    // Normalize mouse position to -1 to 1 range
+    this.mouse.x = (event.clientX / this.windowSize.width) * 2 - 1;
+    this.mouse.y = -(event.clientY / this.windowSize.height) * 2 + 1; // Flip Y so positive is up
+  }
+
+  handleResize() {
+    this.windowSize.width = window.innerWidth;
+    this.windowSize.height = window.innerHeight;
+  }
+
+  getMouse() {
+    return { ...this.mouse }; // Return copy to prevent external mutation
+  }
+
+  destroy() {
+    window.removeEventListener('mousemove', this.handleMouseMove);
+    window.removeEventListener('resize', this.handleResize);
+  }
+}
+
+// World class - owns scene, camera, renderer
+class World {
+  constructor() {
+    this.scene = null;
+    this.camera = null;
+    this.renderer = null;
+    this.lights = [];
+
+    // Health check: ensure single initialization
+    this.hasInitialized = false;
+  }
+
+  init() {
+    // Health check: World must be initialized only once
+    console.assert(!this.hasInitialized, '[World] ERROR: init() called multiple times - only one renderer canvas allowed');
+    this.hasInitialized = true;
+
+    // Create scene
+    this.scene = new THREE.Scene();
+    // Adjust fog for better horizon feel - start closer to camera, extend much further
+    this.scene.fog = new THREE.Fog(0xf7d9aa, 300, 2000);
+
+    // Create camera
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    this.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 10000);
+    this.camera.position.set(0, 100, 200);
+
+    // Create renderer
+    this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    this.renderer.setSize(width, height);
+    this.renderer.shadowMap.enabled = true;
+
+    // Add to DOM
+    const container = document.getElementById('world-toprug1');
+    if (container) {
+      this.renderer.domElement.style.width = '100%';
+      this.renderer.domElement.style.height = '100%';
+      this.renderer.domElement.style.display = 'block';
+      container.appendChild(this.renderer.domElement);
     }
-  } else {
-    console.log('[PROPELLER] resetGame: User not interacted yet');
-  }
-}
 
-//THREEJS RELATED VARIABLES
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      this.renderer.setSize(width, height);
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+    });
 
-var scene,
-    camera, fieldOfView, aspectRatio, nearPlane, farPlane,
-    renderer,
-    container,
-    controls,
-    textureLoader,
-    bannerTexture,
-    banner,
-    ropeLeft,
-    ropeRight;
-
-//SCREEN & MOUSE VARIABLES
-
-var HEIGHT, WIDTH,
-    mousePos = { x: 0, y: 0 };
-
-//INIT THREE JS, SCREEN AND MOUSE EVENTS
-
-function createScene() {
-
-  HEIGHT = window.innerHeight;
-  WIDTH = window.innerWidth;
-
-  scene = new THREE.Scene();
-  aspectRatio = WIDTH / HEIGHT;
-  fieldOfView = 50;
-  nearPlane = .1;
-  farPlane = 10000;
-  camera = new THREE.PerspectiveCamera(
-    fieldOfView,
-    aspectRatio,
-    nearPlane,
-    farPlane
-    );
-  scene.fog = new THREE.Fog(0xf7d9aa, 100,950);
-  camera.position.x = 0;
-  camera.position.z = 200;
-  camera.position.y = game.planeDefaultHeight;
-  //camera.lookAt(new THREE.Vector3(0, 400, 0));
-
-  // Initialize audio manager (HTML5 Audio doesn't need camera)
-  audioManager.init(camera);
-
-  renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-  renderer.setSize(WIDTH, HEIGHT);
-
-  renderer.shadowMap.enabled = true;
-
-  container = document.getElementById('world-toprug1');
-  container.appendChild(renderer.domElement);
-
-  // Texture loader for banner
-  textureLoader = new THREE.TextureLoader();
-
-  // Set crossOrigin to handle CORS issues (though file:// will still have WebGL tainted canvas restrictions)
-  textureLoader.crossOrigin = 'anonymous';
-
-  // Determine correct path based on protocol (file:// vs http://)
-  var texturePath = 'shared/assets/icons/onchainrugs.png';
-  if (window.location.protocol === 'file:') {
-    // For file:// protocol, use absolute path from current directory
-    texturePath = './shared/assets/icons/onchainrugs.png';
-    console.log('Using file:// protocol, texture path:', texturePath);
-    console.warn('Note: file:// protocol has WebGL security restrictions. Use a local server for best results.');
+    // Create basic lights
+    this.createLights();
   }
 
-  bannerTexture = textureLoader.load(
-    texturePath,
-    function(texture) {
-      // Texture loaded successfully
-      console.log('Banner texture loaded successfully');
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.flipY = false;
-      texture.format = THREE.RGBAFormat;
-      
-      // High-definition texture settings for sharp, crisp rendering
-      texture.minFilter = THREE.LinearMipmapLinearFilter; // Best quality mipmap filtering
-      texture.magFilter = THREE.LinearFilter; // Best quality when texture is magnified
-      texture.generateMipmaps = true; // Generate mipmaps for better quality
-      // Maximum anisotropy for sharp textures at angles (16 is maximum, fallback to 8 for older GPUs)
-      var maxAnisotropy = 16;
-      if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-        maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-      } else if (renderer.getMaxAnisotropy) {
-        maxAnisotropy = renderer.getMaxAnisotropy();
-      }
-      texture.anisotropy = maxAnisotropy;
-      
-      // Rotate texture 180 degrees - check if center exists (older Three.js versions)
-      if (texture.center) {
-        texture.center.set(0.5, 0.5); // Set rotation center to middle of texture
-        texture.rotation = Math.PI; // Rotate 180 degrees
-      } else {
-        // Alternative: use offset and repeat to flip texture 180 degrees
-        texture.offset.set(1, 1);
-        texture.repeat.set(-1, -1);
-        console.log('Using offset/repeat method for 180 degree rotation');
-      }
-      texture.needsUpdate = true;
+  createLights() {
+    // Hemisphere light
+    const hemisphereLight = new THREE.HemisphereLight(0xaaaaaa, 0x000000, 0.9);
+    this.scene.add(hemisphereLight);
+    this.lights.push(hemisphereLight);
 
-      // Update banner material if it exists
-      if (banner && banner.material) {
-        // Apply rotation to texture
-        banner.material.map = texture;
-        banner.material.emissiveMap = texture; // Set emissive map for self-illumination (bright, proper colors)
-        if (banner.material.map) {
-          // Apply rotation if center exists
-          if (banner.material.map.center) {
-            banner.material.map.center.set(0.5, 0.5);
-            banner.material.map.rotation = Math.PI; // 180 degree rotation
-          } else {
-            banner.material.map.offset.set(1, 1);
-            banner.material.map.repeat.set(-1, -1);
-          }
-        }
-        // Apply same rotation to emissive map
-        if (banner.material.emissiveMap) {
-          if (banner.material.emissiveMap.center) {
-            banner.material.emissiveMap.center.set(0.5, 0.5);
-            banner.material.emissiveMap.rotation = Math.PI;
-          } else {
-            banner.material.emissiveMap.offset.set(1, 1);
-            banner.material.emissiveMap.repeat.set(-1, -1);
-          }
-        }
-        // Apply high-definition settings to both maps
-        if (banner.material.map) {
-          banner.material.map.minFilter = THREE.LinearMipmapLinearFilter;
-          banner.material.map.magFilter = THREE.LinearFilter;
-          banner.material.map.generateMipmaps = true;
-          var maxAnisotropy = 16;
-          if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-            maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-          } else if (renderer.getMaxAnisotropy) {
-            maxAnisotropy = renderer.getMaxAnisotropy();
-          }
-          banner.material.map.anisotropy = maxAnisotropy;
-          banner.material.map.needsUpdate = true;
-        }
-        if (banner.material.emissiveMap) {
-          banner.material.emissiveMap.minFilter = THREE.LinearMipmapLinearFilter;
-          banner.material.emissiveMap.magFilter = THREE.LinearFilter;
-          banner.material.emissiveMap.generateMipmaps = true;
-          var maxAnisotropy = 16;
-          if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-            maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-          } else if (renderer.getMaxAnisotropy) {
-            maxAnisotropy = renderer.getMaxAnisotropy();
-          }
-          banner.material.emissiveMap.anisotropy = maxAnisotropy;
-          banner.material.emissiveMap.needsUpdate = true;
-        }
-        banner.material.emissive.setHex(0x999999); // Balanced emissive for natural colors (matches createBanner)
-        banner.material.needsUpdate = true;
-        banner.material.color.setHex(0xffffff); // Ensure white color so texture shows
-        console.log('Banner material updated with texture, image size:', texture.image.width, 'x', texture.image.height);
-      } else {
-        console.warn('Banner or material not found when texture loaded');
-      }
-    },
-    function(xhr) {
-      // Progress callback
-      console.log('Loading texture progress:', (xhr.loaded / xhr.total * 100) + '%');
-    },
-    function(error) {
-      // Error callback - provide more details
-      console.error('Error loading banner texture:', error);
-      console.error('Texture path attempted:', texturePath);
-      console.error('Current window location:', window.location.href);
-      console.error('Protocol:', window.location.protocol);
-      
-      // Try alternative loading method for file://
-      if (window.location.protocol === 'file:') {
-        console.error('File:// protocol detected. WebGL security restrictions prevent loading textures from file://');
-        console.error('This is a browser security feature - WebGL considers file:// images as "tainted"');
-        console.error('SOLUTION: Use a local server: python3 -m http.server 8080');
-        console.error('Then access via: http://localhost:8080');
-      }
+    // Ambient light
+    const ambientLight = new THREE.AmbientLight(0xdc8874, 0.5);
+    this.scene.add(ambientLight);
+    this.lights.push(ambientLight);
 
-      // Fallback: use a colored material if texture fails to load
-      if (banner && banner.material) {
-        banner.material.color.setHex(0xff0000); // Red fallback to indicate error
-        banner.material.needsUpdate = true;
-        console.warn('Using red fallback color due to texture load failure');
-      }
-    }
-  );
-
-  // Set initial texture properties
-  if (bannerTexture) {
-    bannerTexture.wrapS = THREE.ClampToEdgeWrapping;
-    bannerTexture.wrapT = THREE.ClampToEdgeWrapping;
-    bannerTexture.flipY = false;
-  }
-
-  window.addEventListener('resize', handleWindowResize, false);
-
-  /*
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.minPolarAngle = -Math.PI / 2;
-  controls.maxPolarAngle = Math.PI ;
-
-  //controls.noZoom = true;
-  //controls.noPan = true;
-  //*/
-}
-
-// MOUSE AND SCREEN EVENTS
-
-function handleWindowResize() {
-  HEIGHT = window.innerHeight;
-  WIDTH = window.innerWidth;
-  renderer.setSize(WIDTH, HEIGHT);
-  camera.aspect = WIDTH / HEIGHT;
-  camera.updateProjectionMatrix();
-}
-
-function handleMouseMove(event) {
-  // Note: mousemove is NOT a valid user interaction for audio autoplay policy
-  // Audio will be started on click/touch instead (handled in audioManager.init)
-  var tx = -1 + (event.clientX / WIDTH)*2;
-  var ty = 1 - (event.clientY / HEIGHT)*2;
-  mousePos = {x:tx, y:ty};
-}
-
-function handleTouchMove(event) {
-    event.preventDefault();
-    // Note: touchmove is NOT a valid user interaction for audio autoplay policy
-    // Audio will be started on touchstart instead (handled in audioManager.init)
-    var tx = -1 + (event.touches[0].pageX / WIDTH)*2;
-    var ty = 1 - (event.touches[0].pageY / HEIGHT)*2;
-    mousePos = {x:tx, y:ty};
-}
-
-function handleMouseUp(event){
-  if (game.status == "waitingReplay"){
-    resetGame();
-    hideReplay();
-  }
-}
-
-
-function handleTouchEnd(event){
-  if (game.status == "waitingReplay"){
-    resetGame();
-    hideReplay();
-  }
-}
-
-// LIGHTS
-
-var ambientLight, hemisphereLight, shadowLight;
-
-function createLights() {
-
-  hemisphereLight = new THREE.HemisphereLight(0xaaaaaa,0x000000, .9)
-
-  ambientLight = new THREE.AmbientLight(0xdc8874, .5);
-
-  shadowLight = new THREE.DirectionalLight(0xffffff, .9);
+    // Directional light (shadow)
+    const shadowLight = new THREE.DirectionalLight(0xffffff, 0.9);
   shadowLight.position.set(150, 350, 350);
   shadowLight.castShadow = true;
   shadowLight.shadow.camera.left = -400;
@@ -973,1505 +228,3324 @@ function createLights() {
   shadowLight.shadow.camera.far = 1000;
   shadowLight.shadow.mapSize.width = 4096;
   shadowLight.shadow.mapSize.height = 4096;
-
-  var ch = new THREE.CameraHelper(shadowLight.shadow.camera);
-
-  //scene.add(ch);
-  scene.add(hemisphereLight);
-  scene.add(shadowLight);
-  scene.add(ambientLight);
-
-}
-
-
-var Pilot = function(){
-  this.mesh = new THREE.Object3D();
-  this.mesh.name = "pilot";
-  this.angleHairs=0;
-
-  var bodyGeom = new THREE.BoxGeometry(15,15,15);
-  var bodyMat = new THREE.MeshPhongMaterial({color:Colors.brown, flatShading:true});
-  var body = new THREE.Mesh(bodyGeom, bodyMat);
-  body.position.set(2,-12,0);
-
-  this.mesh.add(body);
-
-  var faceGeom = new THREE.BoxGeometry(10,10,10);
-  var faceMat = new THREE.MeshLambertMaterial({color:Colors.pink});
-  var face = new THREE.Mesh(faceGeom, faceMat);
-  this.mesh.add(face);
-
-  var hairGeom = new THREE.BoxGeometry(4,4,4);
-  var hairMat = new THREE.MeshLambertMaterial({color:Colors.brown});
-  var hair = new THREE.Mesh(hairGeom, hairMat);
-  hair.geometry.applyMatrix4(new THREE.Matrix4().makeTranslation(0,2,0));
-  var hairs = new THREE.Object3D();
-
-  this.hairsTop = new THREE.Object3D();
-
-  for (var i=0; i<12; i++){
-    var h = hair.clone();
-    var col = i%3;
-    var row = Math.floor(i/3);
-    var startPosZ = -4;
-    var startPosX = -4;
-    h.position.set(startPosX + row*4, 0, startPosZ + col*4);
-    h.geometry.applyMatrix4(new THREE.Matrix4().makeScale(1,1,1));
-    this.hairsTop.add(h);
+    this.scene.add(shadowLight);
+    this.lights.push(shadowLight);
   }
-  hairs.add(this.hairsTop);
 
-  var hairSideGeom = new THREE.BoxGeometry(12,4,2);
-  hairSideGeom.applyMatrix4(new THREE.Matrix4().makeTranslation(-6,0,0));
-  var hairSideR = new THREE.Mesh(hairSideGeom, hairMat);
-  var hairSideL = hairSideR.clone();
-  hairSideR.position.set(8,-2,6);
-  hairSideL.position.set(8,-2,-6);
-  hairs.add(hairSideR);
-  hairs.add(hairSideL);
-
-  var hairBackGeom = new THREE.BoxGeometry(2,8,10);
-  var hairBack = new THREE.Mesh(hairBackGeom, hairMat);
-  hairBack.position.set(-1,-4,0)
-  hairs.add(hairBack);
-  hairs.position.set(-5,5,0);
-
-  this.mesh.add(hairs);
-
-  var glassGeom = new THREE.BoxGeometry(5,5,5);
-  var glassMat = new THREE.MeshLambertMaterial({color:Colors.brown});
-  var glassR = new THREE.Mesh(glassGeom,glassMat);
-  glassR.position.set(6,0,3);
-  var glassL = glassR.clone();
-  glassL.position.z = -glassR.position.z
-
-  var glassAGeom = new THREE.BoxGeometry(11,1,11);
-  var glassA = new THREE.Mesh(glassAGeom, glassMat);
-  this.mesh.add(glassR);
-  this.mesh.add(glassL);
-  this.mesh.add(glassA);
-
-  var earGeom = new THREE.BoxGeometry(2,3,2);
-  var earL = new THREE.Mesh(earGeom,faceMat);
-  earL.position.set(0,0,-6);
-  var earR = earL.clone();
-  earR.position.set(0,0,6);
-  this.mesh.add(earL);
-  this.mesh.add(earR);
-}
-
-Pilot.prototype.updateHairs = function(){
-  //*
-   var hairs = this.hairsTop.children;
-
-   var l = hairs.length;
-   for (var i=0; i<l; i++){
-      var h = hairs[i];
-      h.scale.y = .75 + Math.cos(this.angleHairs+i/3)*.25;
-   }
-  this.angleHairs += game.speed*deltaTime*40;
-  //*/
-}
-
-var AirPlane = function(){
-  this.mesh = new THREE.Object3D();
-  this.mesh.name = "airPlane";
-
-  // Cabin - using reference geometry approach
-  var matCabin = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true, side: THREE.DoubleSide});
-
-  // Define vertex positions for custom cabin shape
-  var frontUR = [ 40,  25, -25];
-  var frontUL = [ 40,  25,  25];
-  var frontLR = [ 40, -25, -25];
-  var frontLL = [ 40, -25,  25];
-  var backUR  = [-40,  15,  -5];
-  var backUL  = [-40,  15,   5];
-  var backLR  = [-40,   5,  -5];
-  var backLL  = [-40,   5,   5];
-
-  // Helper function to create two triangles from four points (makes a quad)
-  var makeTetrahedron = function(a, b, c, d) {
-    return [
-      a[0], a[1], a[2],
-      b[0], b[1], b[2],
-      c[0], c[1], c[2],
-      b[0], b[1], b[2],
-      c[0], c[1], c[2],
-      d[0], d[1], d[2],
-    ];
-  };
-
-  var vertices = new Float32Array(
-    [].concat(
-      makeTetrahedron(frontUL, frontUR, frontLL, frontLR),   // front
-      makeTetrahedron(backUL, backUR, backLL, backLR),       // back
-      makeTetrahedron(backUR, backLR, frontUR, frontLR),     // side
-      makeTetrahedron(backUL, backLL, frontUL, frontLL),     // side
-      makeTetrahedron(frontUL, backUL, frontUR, backUR),     // top
-      makeTetrahedron(frontLL, backLL, frontLR, backLR)      // bottom
-    )
-  );
-
-  var geomCabin = new THREE.BufferGeometry();
-  geomCabin.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-
-  var cabin = new THREE.Mesh(geomCabin, matCabin);
-  cabin.castShadow = true;
-  cabin.receiveShadow = true;
-  this.mesh.add(cabin);
-
-  // Engine
-
-  var geomEngine = new THREE.BoxGeometry(20,50,50,1,1,1);
-  var matEngine = new THREE.MeshPhongMaterial({color:Colors.white, flatShading:true});
-  var engine = new THREE.Mesh(geomEngine, matEngine);
-  engine.position.x = 50;
-  engine.castShadow = true;
-  engine.receiveShadow = true;
-  this.mesh.add(engine);
-
-  // Tail Plane
-
-  var geomTailPlane = new THREE.BoxGeometry(15,20,5,1,1,1);
-  var matTailPlane = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true});
-  var tailPlane = new THREE.Mesh(geomTailPlane, matTailPlane);
-  tailPlane.position.set(-40,20,0);
-  tailPlane.castShadow = true;
-  tailPlane.receiveShadow = true;
-  this.mesh.add(tailPlane);
-
-  // Wings
-
-  var geomSideWing = new THREE.BoxGeometry(30,5,120,1,1,1);
-  var matSideWing = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true});
-  var sideWing = new THREE.Mesh(geomSideWing, matSideWing);
-  sideWing.position.set(0,15,0);
-  sideWing.castShadow = true;
-  sideWing.receiveShadow = true;
-  this.mesh.add(sideWing);
-
-  var geomWindshield = new THREE.BoxGeometry(3,15,20,1,1,1);
-  var matWindshield = new THREE.MeshPhongMaterial({color:Colors.white,transparent:true, opacity:.3, flatShading:true});;
-  var windshield = new THREE.Mesh(geomWindshield, matWindshield);
-  windshield.position.set(20,27,0);
-
-  windshield.castShadow = true;
-  windshield.receiveShadow = true;
-
-  this.mesh.add(windshield);
-
-  var geomPropeller = new THREE.BoxGeometry(20,10,10,1,1,1);
-  // Modify propeller vertices - exactly as in reference
-  if (geomPropeller.attributes && geomPropeller.attributes.position) {
-    var pos = geomPropeller.attributes.position.array;
-    pos[4*3+1] -= 5;
-    pos[4*3+2] += 5;
-    pos[5*3+1] -= 5;
-    pos[5*3+2] -= 5;
-    pos[6*3+1] += 5;
-    pos[6*3+2] += 5;
-    pos[7*3+1] += 5;
-    pos[7*3+2] -= 5;
-    geomPropeller.attributes.position.needsUpdate = true;
+  add(object) {
+    this.scene.add(object);
   }
-  var matPropeller = new THREE.MeshPhongMaterial({color:Colors.brown, flatShading:true});
-  this.propeller = new THREE.Mesh(geomPropeller, matPropeller);
 
-  this.propeller.castShadow = true;
-  this.propeller.receiveShadow = true;
+  remove(object) {
+    this.scene.remove(object);
+  }
 
-  var geomBlade = new THREE.BoxGeometry(1,80,10,1,1,1);
-  var matBlade = new THREE.MeshPhongMaterial({color:Colors.brownDark, flatShading:true});
-  var blade1 = new THREE.Mesh(geomBlade, matBlade);
-  blade1.position.set(8,0,0);
+  render() {
+    this.renderer.render(this.scene, this.camera);
+  }
 
-  blade1.castShadow = true;
-  blade1.receiveShadow = true;
+  destroy() {
+    // Health check: ensure all scene objects are removed
+    const objectsToRemove = [];
+    this.scene.traverse((object) => {
+      if (object !== this.scene) {
+        objectsToRemove.push(object);
+      }
+    });
 
-  var blade2 = blade1.clone();
-  blade2.rotation.x = Math.PI/2;
+    objectsToRemove.forEach((object) => {
+      this.scene.remove(object);
+      // Dispose geometries and materials to prevent memory leaks
+      if (object.geometry) object.geometry.dispose();
+      if (object.material) {
+        if (Array.isArray(object.material)) {
+          object.material.forEach(material => material.dispose());
+    } else {
+          object.material.dispose();
+        }
+      }
+    });
 
-  blade2.castShadow = true;
-  blade2.receiveShadow = true;
+    // Clear lights array
+    this.lights.length = 0;
 
-  this.propeller.add(blade1);
-  this.propeller.add(blade2);
-  this.propeller.position.set(60,0,0);
-  this.mesh.add(this.propeller);
+    console.log(`[World] Destroyed - removed ${objectsToRemove.length} scene objects`);
+  }
+}
 
-  var wheelProtecGeom = new THREE.BoxGeometry(30,15,10,1,1,1);
-  var wheelProtecMat = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true});
-  var wheelProtecR = new THREE.Mesh(wheelProtecGeom,wheelProtecMat);
-  wheelProtecR.position.set(25,-20,25);
-  this.mesh.add(wheelProtecR);
-
-  var wheelTireGeom = new THREE.BoxGeometry(24,24,4);
-  var wheelTireMat = new THREE.MeshPhongMaterial({color:Colors.brownDark, flatShading:true});
-  var wheelTireR = new THREE.Mesh(wheelTireGeom,wheelTireMat);
-  wheelTireR.position.set(25,-28,25);
-
-  var wheelAxisGeom = new THREE.BoxGeometry(10,10,6);
-  var wheelAxisMat = new THREE.MeshPhongMaterial({color:Colors.brown, flatShading:true});
-  var wheelAxis = new THREE.Mesh(wheelAxisGeom,wheelAxisMat);
-  wheelTireR.add(wheelAxis);
-
-  this.mesh.add(wheelTireR);
-
-  var wheelProtecL = wheelProtecR.clone();
-  wheelProtecL.position.z = -wheelProtecR.position.z ;
-  this.mesh.add(wheelProtecL);
-
-  var wheelTireL = wheelTireR.clone();
-  wheelTireL.position.z = -wheelTireR.position.z;
-  this.mesh.add(wheelTireL);
-
-  var wheelTireB = wheelTireR.clone();
-  wheelTireB.scale.set(.5,.5,.5);
-  wheelTireB.position.set(-35,-5,0);
-  this.mesh.add(wheelTireB);
-
-  var suspensionGeom = new THREE.BoxGeometry(4,20,4);
-  suspensionGeom.applyMatrix4(new THREE.Matrix4().makeTranslation(0,10,0))
-  var suspensionMat = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true});
-  var suspension = new THREE.Mesh(suspensionGeom,suspensionMat);
-  suspension.position.set(-35,-5,0);
-  suspension.rotation.z = -.3;
-  this.mesh.add(suspension);
-
-  this.pilot = new Pilot();
-  this.pilot.mesh.position.set(-10,27,0);
-  this.mesh.add(this.pilot.mesh);
-
-
-  this.mesh.castShadow = true;
-  this.mesh.receiveShadow = true;
-
+// View profiles for different game genres
+const VIEW_PROFILES = {
+  SIDE_SCROLLER: {
+    name: 'SIDE_SCROLLER',
+    description: 'Endless flight - plane appears to fly horizontally',
+    planeVisualForwardAxis: 'X', // Plane visually faces right
+    cameraOffset: { x: -80, y: 30, z: 0 }, // Lateral camera position
+    cameraLookTarget: 'plane' // Look directly at plane
+  }
 };
 
-Sky = function(){
-  this.mesh = new THREE.Object3D();
-  this.nClouds = 20;
-  this.clouds = [];
-  var stepAngle = Math.PI*2 / this.nClouds;
-  for(var i=0; i<this.nClouds; i++){
-    var c = new Cloud();
-    this.clouds.push(c);
-    var a = stepAngle*i;
-    var h = game.seaRadius + 150 + Math.random()*200;
-    c.mesh.position.y = Math.sin(a)*h;
-    c.mesh.position.x = Math.cos(a)*h;
-    c.mesh.position.z = -300-Math.random()*500;
-    c.mesh.rotation.z = a + Math.PI/2;
-    var s = 1+Math.random()*2;
-    c.mesh.scale.set(s,s,s);
-    this.mesh.add(c.mesh);
+// ViewProfileSystem class - declarative view orientation for multi-genre support
+class ViewProfileSystem {
+  constructor() {
+    this.currentProfile = null;
+  }
+
+  setProfile(profile) {
+    this.currentProfile = profile;
+    console.log(`[ViewProfile] Active profile: ${profile.name} - ${profile.description}`);
+  }
+
+  getProfile() {
+    return this.currentProfile;
   }
 }
 
-Sky.prototype.moveClouds = function(){
-  for(var i=0; i<this.nClouds; i++){
-    var c = this.clouds[i];
-    c.rotate();
-  }
-  this.mesh.rotation.z += game.speed*deltaTime;
+// CameraRig class - manages camera follow behavior (Y only, Z locked)
+class CameraRig {
+  constructor(world, viewProfileSystem) {
+    this.world = world;
+    this.viewProfileSystem = viewProfileSystem;
+    this.targetEntity = null;
+    this.lerpSpeed = 0.02;
+    this.targetCameraY = 100;
 
-}
-
-Sea = function(){
-  var geom = new THREE.CylinderGeometry(game.seaRadius,game.seaRadius,game.seaLength,40,10);
-  geom.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI/2));
-  
-  // Handle BufferGeometry (newer Three.js) vs Geometry (older)
-  var l, vertices;
-  if (geom.attributes && geom.attributes.position) {
-    // BufferGeometry
-    l = geom.attributes.position.count;
-    vertices = [];
-    var pos = geom.attributes.position.array;
-    for (var i = 0; i < l; i++) {
-      vertices.push({
-        x: pos[i * 3],
-        y: pos[i * 3 + 1],
-        z: pos[i * 3 + 2]
-      });
-    }
-  } else if (geom.vertices) {
-    // Geometry (legacy)
-  geom.mergeVertices();
-    l = geom.vertices.length;
-    vertices = geom.vertices;
-  } else {
-    l = 0;
-    vertices = [];
+    // Z-axis lock assertion (deferred until camera exists)
+    this._initialCameraZ = null;
+    this._zViolationLogged = false; // Guard for one-time error logging
   }
 
-  this.waves = [];
-
-  for (var i=0;i<l;i++){
-    var v = vertices[i];
-    //v.y = Math.random()*30;
-    this.waves.push({y:v.y,
-                     x:v.x,
-                     z:v.z,
-                     ang:Math.random()*Math.PI*2,
-                     amp:game.wavesMinAmp + Math.random()*(game.wavesMaxAmp-game.wavesMinAmp),
-                     speed:game.wavesMinSpeed + Math.random()*(game.wavesMaxSpeed - game.wavesMinSpeed)
-                    });
-  };
-  var mat = new THREE.MeshPhongMaterial({
-    color:Colors.blue,
-    transparent:true,
-    opacity:.8,
-    flatShading:true,
-
-  });
-
-  this.mesh = new THREE.Mesh(geom, mat);
-  this.mesh.name = "waves";
-  this.mesh.receiveShadow = true;
-
-}
-
-Sea.prototype.moveWaves = function (){
-  // Handle both BufferGeometry and Geometry
-  var geom = this.mesh.geometry;
-  var l = this.waves.length;
-  
-  if (geom.attributes && geom.attributes.position) {
-    // BufferGeometry
-    var pos = geom.attributes.position.array;
-    for (var i=0; i<l; i++){
-      var vprops = this.waves[i];
-      pos[i * 3] = vprops.x + Math.cos(vprops.ang)*vprops.amp;
-      pos[i * 3 + 1] = vprops.y + Math.sin(vprops.ang)*vprops.amp;
-      pos[i * 3 + 2] = vprops.z;
-      vprops.ang += vprops.speed*deltaTime;
-    }
-    geom.attributes.position.needsUpdate = true;
-  } else if (geom.vertices) {
-    // Geometry (legacy)
-    var verts = geom.vertices;
-  for (var i=0; i<l; i++){
-    var v = verts[i];
-    var vprops = this.waves[i];
-      v.x = vprops.x + Math.cos(vprops.ang)*vprops.amp;
-    v.y = vprops.y + Math.sin(vprops.ang)*vprops.amp;
-      v.z = vprops.z;
-    vprops.ang += vprops.speed*deltaTime;
-    }
-    geom.verticesNeedUpdate = true;
+  follow(entity) {
+    this.targetEntity = entity;
+    console.log('[CameraRig] Now following entity - Z axis locked');
   }
-}
 
-Cloud = function(){
-  this.mesh = new THREE.Object3D();
-  this.mesh.name = "cloud";
-  var geom = new THREE.BoxGeometry(20,20,20);
-  var mat = new THREE.MeshPhongMaterial({
-    color:Colors.white,
+  update() {
+    if (!this.targetEntity || !this.viewProfileSystem) return;
 
-  });
+    const profile = this.viewProfileSystem.getProfile();
+    if (!profile) return;
 
-  //*
-  var nBlocs = 3+Math.floor(Math.random()*3);
-  for (var i=0; i<nBlocs; i++ ){
-    var m = new THREE.Mesh(geom.clone(), mat);
-    m.position.x = i*15;
-    m.position.y = Math.random()*10;
-    m.position.z = Math.random()*10;
-    m.rotation.z = Math.random()*Math.PI*2;
-    m.rotation.y = Math.random()*Math.PI*2;
-    var s = .1 + Math.random()*.9;
-    m.scale.set(s,s,s);
-    this.mesh.add(m);
-    m.castShadow = true;
-    m.receiveShadow = true;
-
-  }
-  //*/
-}
-
-Cloud.prototype.rotate = function(){
-  var l = this.mesh.children.length;
-  for(var i=0; i<l; i++){
-    var m = this.mesh.children[i];
-    m.rotation.z+= Math.random()*.005*(i+1);
-    m.rotation.y+= Math.random()*.002*(i+1);
-  }
-}
-
-Ennemy = function(){
-  var geom = new THREE.TetrahedronGeometry(8,2);
-  var mat = new THREE.MeshPhongMaterial({
-    color:Colors.red,
-    shininess:0,
-    specular:0xffffff,
-    flatShading:true
-  });
-  this.mesh = new THREE.Mesh(geom,mat);
-  this.mesh.castShadow = true;
-  this.angle = 0;
-  this.dist = 0;
-}
-
-EnnemiesHolder = function (){
-  this.mesh = new THREE.Object3D();
-  this.ennemiesInUse = [];
-}
-
-EnnemiesHolder.prototype.spawnEnnemies = function(){
-  var nEnnemies = game.level;
-
-  for (var i=0; i<nEnnemies; i++){
-    var ennemy;
-    if (ennemiesPool.length) {
-      ennemy = ennemiesPool.pop();
-    }else{
-      ennemy = new Ennemy();
+    // Initialize camera Z check on first use
+    if (this._initialCameraZ === null) {
+      this._initialCameraZ = this.world.camera.position.z;
     }
 
-    ennemy.angle = - (i*0.1);
-    ennemy.distance = game.seaRadius + game.planeDefaultHeight + (-1 + Math.random() * 2) * (game.planeAmpHeight-20);
-    ennemy.mesh.position.y = -game.seaRadius + Math.sin(ennemy.angle)*ennemy.distance;
-    ennemy.mesh.position.x = Math.cos(ennemy.angle)*ennemy.distance;
+    const entityPos = this.targetEntity.getPosition();
 
-    this.mesh.add(ennemy.mesh);
-    this.ennemiesInUse.push(ennemy);
+    // Apply profile-based camera behavior
+    if (profile.cameraOffset) {
+      // Base position from entity
+      this.world.camera.position.x = entityPos.x + profile.cameraOffset.x;
+      this.world.camera.position.y = entityPos.y + profile.cameraOffset.y;
+      // Z remains locked - never changes from initial value
+      this.world.camera.position.z = this._initialCameraZ;
+    }
+
+    // Camera Z position assertion - camera NEVER moves in Z
+    if (this.world.camera.position.z !== this._initialCameraZ) {
+      if (!this._zViolationLogged) {
+        console.error('[CameraRig] ERROR: Camera Z position changed - Z axis locked!');
+        this._zViolationLogged = true;
+      }
+      this.world.camera.position.z = this._initialCameraZ;
+    }
+
+    // Camera look target strategy
+    if (profile.cameraLookTarget === 'plane') {
+      this.world.camera.lookAt(entityPos.x, entityPos.y, entityPos.z);
+    }
+  }
+
+  clear() {
+    this.targetEntity = null;
+    console.log('[CameraRig] Cleared follow target');
   }
 }
 
-EnnemiesHolder.prototype.rotateEnnemies = function(){
-  for (var i=0; i<this.ennemiesInUse.length; i++){
-    var ennemy = this.ennemiesInUse[i];
-    ennemy.angle += game.speed*deltaTime*game.ennemiesSpeed;
+// SeaSystem class - animated sea visual system
+class SeaSystem {
+  constructor(world) {
+    this.world = world;
+    this.mesh = null;
+    this.material = null;
+    this.geometry = null;
+  }
 
-    if (ennemy.angle > Math.PI*2) ennemy.angle -= Math.PI*2;
+  init() {
+    // Create large circular geometry for the sea
+    this.geometry = new THREE.CircleGeometry(1000, 32);
 
-    ennemy.mesh.position.y = -game.seaRadius + Math.sin(ennemy.angle)*ennemy.distance;
-    ennemy.mesh.position.x = Math.cos(ennemy.angle)*ennemy.distance;
-    ennemy.mesh.rotation.z += Math.random()*.1;
-    ennemy.mesh.rotation.y += Math.random()*.1;
+    // Simple blue material
+    this.material = new THREE.MeshLambertMaterial({
+      color: 0x006994,
+      transparent: true,
+      opacity: 0.8
+    });
 
-    // Only check collisions during gameplay - skip after game ends
-    if (game.status == "playing" && airplane && airplane.mesh) {
-    //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
-    var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
-    var d = diffPos.length();
-    if (d<game.ennemyDistanceTolerance){
-      particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
+    // Create mesh and position it
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
 
-      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
-      this.mesh.remove(ennemy.mesh);
-      game.planeCollisionSpeedX = 100 * diffPos.x / d;
-      game.planeCollisionSpeedY = 100 * diffPos.y / d;
-      ambientLight.intensity = 2;
+    // Rotate to lie flat on the ground (rotate around X axis)
+    this.mesh.rotation.x = -Math.PI / 2;
 
-      removeEnergy();
-        // Play collision sound
-        audioManager.play('airplane-crash', {volume: 0.8});
-        i--;
+    // Position at water level (below airplane baseline)
+    this.mesh.position.y = -20;
+
+    // Add to world
+    this.world.add(this.mesh);
+
+    console.log('[SeaSystem] Initialized - sea mesh added to world');
+  }
+
+  update(deltaTime, zoneZ) {
+    if (!this.mesh) return;
+
+    // Pure renderer: read Z offset from WorldScrollerSystem
+    // No movement logic here - WorldScrollerSystem owns all Z motion
+    this.mesh.position.z = zoneZ;
+  }
+
+  destroy() {
+    if (this.mesh) {
+      this.world.remove(this.mesh);
+      this.mesh = null;
+    }
+
+    if (this.geometry) {
+      this.geometry.dispose();
+      this.geometry = null;
+    }
+
+    if (this.material) {
+      this.material.dispose();
+      this.material = null;
+    }
+
+    console.log('[SeaSystem] Destroyed - sea mesh removed and resources disposed');
+  }
+}
+
+// DistanceSystem class - creates forward motion illusion
+class DistanceSystem {
+  constructor() {
+    this.distance = 0;
+    this.speed = 0.02; // Base speed for distance accumulation
+    this.lastDelta = 0;
+  }
+
+  reset() {
+    this.distance = 0;
+    this.lastDelta = 0;
+  }
+
+  update(deltaTime) {
+    this.lastDelta = this.speed * deltaTime;
+    this.distance += this.lastDelta;
+  }
+
+  getDistance() {
+    return this.distance;
+  }
+
+  getDelta() {
+    return this.lastDelta;
+  }
+}
+
+// DifficultyCurveSystem class - centralizes difficulty progression based on distance
+class DifficultyCurveSystem {
+  constructor() {
+    // Why difficulty is centralized: Ensures consistent progression across all systems
+    // Why systems query difficulty: Separation of concerns - systems focus on behavior, not progression rules
+    // How this enables multiple game modes: Different curves can be swapped for different experiences
+
+    this.currentLevel = 1;
+    this.difficultyScalar = 1.0; // Base difficulty multiplier
+    this.lastDistanceCheckpoint = 0;
+    this.distancePerLevel = 500; // Distance units needed for level increase
+
+    console.log('[DifficultyCurve] Centralized difficulty progression established');
+  }
+
+  // Update difficulty based on current distance traveled
+  update(distance) {
+    // Calculate which level we should be at
+    const targetLevel = Math.floor(distance / this.distancePerLevel) + 1;
+
+    // Update level if we've progressed
+    if (targetLevel > this.currentLevel) {
+      this.currentLevel = targetLevel;
+      console.log(`[DifficultyCurve] LEVEL UP! Reached level ${this.currentLevel} at distance ${distance.toFixed(0)}`);
+
+      // Update checkpoint for smooth progression
+      this.lastDistanceCheckpoint = (this.currentLevel - 1) * this.distancePerLevel;
+    }
+
+    // Calculate smooth difficulty scalar within current level
+    const progressInLevel = distance - this.lastDistanceCheckpoint;
+    const levelProgressRatio = Math.min(progressInLevel / this.distancePerLevel, 1.0);
+
+    // Smooth difficulty increase: base 1.0, increases by 0.1 per level, smoothed within level
+    this.difficultyScalar = 1.0 + ((this.currentLevel - 1) * 0.1) + (levelProgressRatio * 0.1);
+  }
+
+  // Get current difficulty state - read-only interface for other systems
+  getDifficultyState() {
+    return {
+      level: this.currentLevel,
+      difficultyScalar: this.difficultyScalar,
+
+      // Conservative multipliers for gameplay balance
+      spawnRateMultiplier: Math.min(1.0 + (this.difficultyScalar - 1.0) * 0.3, 2.0), // Max 2x spawn rate
+      speedMultiplier: Math.min(1.0 + (this.difficultyScalar - 1.0) * 0.2, 1.8),     // Max 1.8x speed
+      coinDensity: Math.max(1.0 - (this.difficultyScalar - 1.0) * 0.1, 0.5),       // Min 0.5x coin density
+      collisionSeverityMultiplier: 1.0 + (this.difficultyScalar - 1.0) * 0.2        // Gradual increase
+    };
+  }
+
+  // Reset difficulty for new game
+  reset() {
+    this.currentLevel = 1;
+    this.difficultyScalar = 1.0;
+    this.lastDistanceCheckpoint = 0;
+    console.log('[DifficultyCurve] Difficulty reset for new game');
+  }
+
+  // Get current level
+  getCurrentLevel() {
+    return this.currentLevel;
+  }
+
+  // Get difficulty scalar
+  getDifficultyScalar() {
+    return this.difficultyScalar;
+  }
+}
+
+// DepthLayerSystem class - manages parallax depth layers
+class DepthLayerSystem {
+  constructor() {
+    this.layers = {
+      SEA: { name: 'SEA', speedMultiplier: 1.0 },
+      CLOUDS: { name: 'CLOUDS', speedMultiplier: 0.5 }
+    };
+    console.log('[DepthLayer] Active layers:', Object.keys(this.layers).join(', '));
+  }
+
+  getLayer(layerName) {
+    return this.layers[layerName];
+  }
+
+  getMultiplier(layerName) {
+    const layer = this.layers[layerName];
+    return layer ? layer.speedMultiplier : 1.0;
+  }
+}
+
+// WorldLayoutSystem class - defines spatial semantics and zones
+class WorldLayoutSystem {
+  constructor() {
+    // Define world axes
+    this.axes = {
+      FORWARD: 'Z',      // Z is forward direction
+      VERTICAL: 'Y',     // Y is up/down
+      LATERAL: 'X'       // X is left/right
+    };
+
+    // Define spatial zones with rules
+    this.zones = {
+      GROUND_PLANE: {
+        name: 'GROUND_PLANE',
+        yRange: [-50, -10],      // Ground level range
+        zWrapLimit: 5000,       // When to wrap Z position
+        zWrapReset: 1000        // Where to reset to
+      },
+      MID_AIR: {
+        name: 'MID_AIR',
+        yBaseline: 100,         // Standard flight height
+        yRange: [40, 160],      // Flight envelope
+        zFixed: 0               // Plane never moves forward in Z
+      },
+      SKY_FAR: {
+        name: 'SKY_FAR',
+        yRange: [30, 80],       // Sky layer height range
+        zWrapLimit: 10000,      // Larger wrap for sky
+        zWrapReset: 2000        // Reset position
+      }
+    };
+
+    // Track system registrations
+    this.registeredSystems = {};
+
+    console.log('[WorldLayout] Active layout - Forward:Z, Vertical:Y, Lateral:X');
+    console.log('[WorldLayout] Zones:', Object.keys(this.zones).join(', '));
+  }
+
+  registerSystem(systemName, zoneName) {
+    if (this.zones[zoneName]) {
+      this.registeredSystems[systemName] = zoneName;
+      console.log(`[WorldLayout] ${systemName} registered as ${zoneName}`);
+    }
+  }
+
+  getZone(zoneName) {
+    return this.zones[zoneName];
+  }
+
+  getSystemZone(systemName) {
+    const zoneName = this.registeredSystems[systemName];
+    return zoneName ? this.zones[zoneName] : null;
+  }
+
+  getAxes() {
+    return { ...this.axes };
+  }
+}
+
+// WorldScrollerSystem class - single source of truth for forward motion
+class WorldScrollerSystem {
+  constructor(worldAxisSystem, worldLayoutSystem, depthLayerSystem) {
+    this.worldAxisSystem = worldAxisSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.depthLayerSystem = depthLayerSystem;
+
+    // Track scroll offsets per zone
+    this.scrollOffsets = {
+      GROUND_PLANE: 0,
+      SKY_FAR: 0
+    };
+
+    console.log('[WorldScroller] Single source of truth for forward motion established');
+  }
+
+  update(deltaTime) {
+    // Get base delta Z from WorldAxisSystem
+    const baseDeltaZ = this.worldAxisSystem.getBaseDeltaZ();
+
+    // Update scroll offsets for each zone
+    this.updateZoneOffset('GROUND_PLANE', baseDeltaZ);
+    this.updateZoneOffset('SKY_FAR', baseDeltaZ);
+
+    // Log current offsets for debugging (commented out to reduce console spam)
+    // console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}`);
+    // console.log(`[WorldScroller] SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
+  }
+
+  updateZoneOffset(zoneName, baseDeltaZ) {
+    const multiplier = this.depthLayerSystem.getMultiplier(
+      zoneName === 'GROUND_PLANE' ? 'SEA' : 'CLOUDS'
+    );
+
+    const deltaZ = baseDeltaZ * multiplier;
+    this.scrollOffsets[zoneName] += deltaZ;
+
+    // Apply layout wrapping rules
+    const zone = this.worldLayoutSystem.getZone(zoneName);
+    if (zone && Math.abs(this.scrollOffsets[zoneName]) > zone.zWrapLimit) {
+      this.scrollOffsets[zoneName] = this.scrollOffsets[zoneName] % zone.zWrapReset;
+      console.log(`[WorldScroller] ${zoneName} wrapped at limit ${zone.zWrapLimit}`);
+    }
+  }
+
+  getZoneZ(zoneName) {
+    return this.scrollOffsets[zoneName] || 0;
+  }
+}
+
+// LaneSystem class - defines discrete lateral gameplay space
+class LaneSystem {
+  constructor(laneCount = 3, laneWidth = 40) {
+    this.laneCount = laneCount;
+    this.laneWidth = laneWidth;
+
+    // Compute lane center positions
+    // Lane 0 = center, -1 = left, +1 = right for 3 lanes
+    this.laneCenters = [];
+    const totalWidth = (laneCount - 1) * laneWidth;
+    const startX = -totalWidth / 2;
+
+    for (let i = 0; i < laneCount; i++) {
+      this.laneCenters[i] = startX + (i * laneWidth);
+    }
+
+    console.log(`[LaneSystem] ${laneCount} lanes configured:`, this.laneCenters);
+  }
+
+  getLaneCenter(laneIndex) {
+    // Clamp lane index to valid range
+    const clampedIndex = Math.max(0, Math.min(this.laneCount - 1, laneIndex));
+    return this.laneCenters[clampedIndex];
+  }
+
+  getLaneIndexForX(x) {
+    // Find closest lane to given X position
+    let closestIndex = 0;
+    let minDistance = Math.abs(x - this.laneCenters[0]);
+
+    for (let i = 1; i < this.laneCount; i++) {
+      const distance = Math.abs(x - this.laneCenters[i]);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
       }
     }
-    
-    // Remove enemies that have passed behind (regardless of game status)
-    if (ennemy.angle > Math.PI){
-      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
-      this.mesh.remove(ennemy.mesh);
-      i--;
-    }
+
+    return closestIndex;
+  }
+
+  getLaneCount() {
+    return this.laneCount;
   }
 }
 
-Particle = function(){
-  var geom = new THREE.TetrahedronGeometry(3,0);
-  var mat = new THREE.MeshPhongMaterial({
-    color:0x009999,
-    shininess:0,
-    specular:0xffffff,
-    flatShading:true
-  });
-  this.mesh = new THREE.Mesh(geom,mat);
-}
+// PlayerIntentSystem class - converts raw input into semantic gameplay intents
+class PlayerIntentSystem {
+  constructor() {
+    // Why intent is separated from input: Enables combat, racing, and multiplayer modes
+    // How this enables different modes: Intents can be remapped, combined, or denied
+    // Why intent can be denied later: Lane switching, cooldowns, or game state restrictions
 
-Particle.prototype.explode = function(pos, color, scale){
-  var _this = this;
-  var _p = this.mesh.parent;
-  this.mesh.material.color = new THREE.Color( color);
-  this.mesh.material.needsUpdate = true;
-  this.mesh.scale.set(scale, scale, scale);
-  var targetX = pos.x + (-1 + Math.random()*2)*50;
-  var targetY = pos.y + (-1 + Math.random()*2)*50;
-  var speed = .6+Math.random()*.2;
-  TweenMax.to(this.mesh.rotation, speed, {x:Math.random()*12, y:Math.random()*12});
-  TweenMax.to(this.mesh.scale, speed, {x:.1, y:.1, z:.1});
-  TweenMax.to(this.mesh.position, speed, {x:targetX, y:targetY, delay:Math.random() *.1, ease:Power2.easeOut, onComplete:function(){
-      if(_p) _p.remove(_this.mesh);
-      _this.mesh.scale.set(1,1,1);
-      particlesPool.unshift(_this);
-    }});
-}
+    this.currentIntent = null;
 
-ParticlesHolder = function (){
-  this.mesh = new THREE.Object3D();
-  this.particlesInUse = [];
-}
-
-ParticlesHolder.prototype.spawnParticles = function(pos, density, color, scale){
-
-  var nPArticles = density;
-  for (var i=0; i<nPArticles; i++){
-    var particle;
-    if (particlesPool.length) {
-      particle = particlesPool.pop();
-    }else{
-      particle = new Particle();
-    }
-    this.mesh.add(particle.mesh);
-    particle.mesh.visible = true;
-    var _this = this;
-    particle.mesh.position.y = pos.y;
-    particle.mesh.position.x = pos.x;
-    particle.explode(pos,color, scale);
-  }
-}
-
-Coin = function(){
-  var geom = new THREE.TetrahedronGeometry(5,0);
-  var mat = new THREE.MeshPhongMaterial({
-    color:0x009999,
-    shininess:0,
-    specular:0xffffff,
-
-    flatShading:true
-  });
-  this.mesh = new THREE.Mesh(geom,mat);
-  this.mesh.castShadow = true;
-  this.angle = 0;
-  this.dist = 0;
-}
-
-CoinsHolder = function (nCoins){
-  this.mesh = new THREE.Object3D();
-  this.coinsInUse = [];
-  this.coinsPool = [];
-  for (var i=0; i<nCoins; i++){
-    var coin = new Coin();
-    this.coinsPool.push(coin);
-  }
-}
-
-CoinsHolder.prototype.spawnCoins = function(){
-
-  var nCoins = 1 + Math.floor(Math.random()*10);
-  var d = game.seaRadius + game.planeDefaultHeight + (-1 + Math.random() * 2) * (game.planeAmpHeight-20);
-  var amplitude = 10 + Math.round(Math.random()*10);
-  for (var i=0; i<nCoins; i++){
-    var coin;
-    if (this.coinsPool.length) {
-      coin = this.coinsPool.pop();
-    }else{
-      coin = new Coin();
-    }
-    this.mesh.add(coin.mesh);
-    this.coinsInUse.push(coin);
-    coin.angle = - (i*0.02);
-    coin.distance = d + Math.cos(i*.5)*amplitude;
-    coin.mesh.position.y = -game.seaRadius + Math.sin(coin.angle)*coin.distance;
-    coin.mesh.position.x = Math.cos(coin.angle)*coin.distance;
-  }
-}
-
-CoinsHolder.prototype.rotateCoins = function(){
-  for (var i=0; i<this.coinsInUse.length; i++){
-    var coin = this.coinsInUse[i];
-    if (coin.exploding) continue;
-    coin.angle += game.speed*deltaTime*game.coinsSpeed;
-    if (coin.angle>Math.PI*2) coin.angle -= Math.PI*2;
-    coin.mesh.position.y = -game.seaRadius + Math.sin(coin.angle)*coin.distance;
-    coin.mesh.position.x = Math.cos(coin.angle)*coin.distance;
-    coin.mesh.rotation.z += Math.random()*.1;
-    coin.mesh.rotation.y += Math.random()*.1;
-
-    //var globalCoinPosition =  coin.mesh.localToWorld(new THREE.Vector3());
-    var diffPos = airplane.mesh.position.clone().sub(coin.mesh.position.clone());
-    var d = diffPos.length();
-    if (d<game.coinDistanceTolerance){
-      this.coinsPool.unshift(this.coinsInUse.splice(i,1)[0]);
-      this.mesh.remove(coin.mesh);
-      particlesHolder.spawnParticles(coin.mesh.position.clone(), 5, 0x009999, .8);
-      addEnergy();
-      // Play coin collection sound
-      audioManager.play('coin', {volume: 0.5});
-      i--;
-    }else if (coin.angle > Math.PI){
-      this.coinsPool.unshift(this.coinsInUse.splice(i,1)[0]);
-      this.mesh.remove(coin.mesh);
-      i--;
-    }
-  }
-}
-
-
-// 3D Models
-var sea;
-var airplane;
-
-function createPlane(){
-  airplane = new AirPlane();
-  airplane.mesh.scale.set(.25,.25,.25);
-  airplane.mesh.position.y = game.planeDefaultHeight;
-  scene.add(airplane.mesh);
-}
-
-function createBanner(){
-  // NFT Banner - Create a larger banner to show the texture clearly
-  var geomBanner = new THREE.PlaneGeometry(50, 30, 10, 6); // More vertices for fluttering, larger size
-
-  // Create material with texture - use LambertMaterial to enable shadow casting while maintaining texture colors
-  // Use emissiveMap to make texture self-illuminated (bright and proper colored like original)
-  // This makes it less affected by ambient light tinting
-  var matBanner = new THREE.MeshLambertMaterial({
-    map: bannerTexture,
-    emissiveMap: bannerTexture, // Use texture as emissive map for self-illumination
-    emissive: 0x888888, // Balanced emissive for natural colors (was 0xffffff - too bright, 0x666666 - too dim/pink, now ~53% intensity)
-    transparent: false,
-    side: THREE.DoubleSide,
-    color: 0xffffff // White base color so texture shows properly without tinting
-  });
-  
-  // Set texture on material (will be null if not loaded yet, but will be set in callback)
-  matBanner.map = bannerTexture;
-  matBanner.emissiveMap = bannerTexture; // Set emissive map for self-illumination
-  
-  // If texture is already loaded, ensure it's properly set with rotation and high-definition settings
-  if (bannerTexture && bannerTexture.image && bannerTexture.image.complete) {
-    // Apply rotation - check if center exists
-    if (bannerTexture.center) {
-      bannerTexture.center.set(0.5, 0.5);
-      bannerTexture.rotation = Math.PI; // 180 degree rotation
-    } else {
-      bannerTexture.offset.set(1, 1);
-      bannerTexture.repeat.set(-1, -1);
-    }
-    // Apply high-definition texture settings
-    bannerTexture.minFilter = THREE.LinearMipmapLinearFilter;
-    bannerTexture.magFilter = THREE.LinearFilter;
-    bannerTexture.generateMipmaps = true;
-    var maxAnisotropy = 16;
-    if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-      maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-    } else if (renderer.getMaxAnisotropy) {
-      maxAnisotropy = renderer.getMaxAnisotropy();
-    }
-    bannerTexture.anisotropy = maxAnisotropy;
-    bannerTexture.needsUpdate = true;
-    matBanner.needsUpdate = true;
-    console.log('Banner texture already loaded when creating banner');
-  } else {
-    console.log('Banner texture not yet loaded, will update when loaded. Texture object:', bannerTexture);
+    console.log('[PlayerIntent] Semantic intent interpretation established');
   }
 
-  banner = new THREE.Mesh(geomBanner, matBanner);
-
-  // Enable shadow casting and receiving for the banner
-  banner.castShadow = true;
-  banner.receiveShadow = true;
-
-  // Initialize velocity for smooth, flowing ribbon-like movement
-  banner.userData.velocity = new THREE.Vector3(0, 0, 0);
-  banner.userData.lastTargetPos = new THREE.Vector3(0, 0, 0);
-  banner.userData.lastPlanePos = new THREE.Vector3(0, 0, 0);
-
-  // Store original vertices for fluttering animation
-  banner.userData.originalVertices = [];
-  if (geomBanner.vertices) {
-    for (var i = 0; i < geomBanner.vertices.length; i++) {
-      banner.userData.originalVertices.push(geomBanner.vertices[i].clone());
-    }
-  }
-
-  // Position behind the plane initially
-  banner.position.set(0, game.planeDefaultHeight, -80);
-  scene.add(banner);
-
-  // Two ropes connecting plane tail to banner top corners (edges closest to plane)
-  var ropeMaterial = new THREE.LineBasicMaterial({color: Colors.brownDark, linewidth: 4});
-
-  // Left rope (top-left corner from plane's perspective) - using BufferGeometry
-  var ropeLeftGeometry = new THREE.BufferGeometry();
-  var ropeLeftPositions = new Float32Array([
-    0, 0, 0,
-    0, 0, -20,
-    0, 0, -40,
-    0, 0, -60
-  ]);
-  ropeLeftGeometry.setAttribute('position', new THREE.BufferAttribute(ropeLeftPositions, 3));
-  ropeLeft = new THREE.Line(ropeLeftGeometry, ropeMaterial);
-  scene.add(ropeLeft);
-
-  // Right rope (top-right corner from plane's perspective) - using BufferGeometry
-  var ropeRightGeometry = new THREE.BufferGeometry();
-  var ropeRightPositions = new Float32Array([
-    0, 0, 0,
-    0, 0, -20,
-    0, 0, -40,
-    0, 0, -60
-  ]);
-  ropeRightGeometry.setAttribute('position', new THREE.BufferAttribute(ropeRightPositions, 3));
-  ropeRight = new THREE.Line(ropeRightGeometry, ropeMaterial);
-  scene.add(ropeRight);
-}
-
-function createSea(){
-  sea = new Sea();
-  sea.mesh.position.y = -game.seaRadius;
-  scene.add(sea.mesh);
-}
-
-function createSky(){
-  sky = new Sky();
-  sky.mesh.position.y = -game.seaRadius;
-  scene.add(sky.mesh);
-}
-
-function createCoins(){
-
-  coinsHolder = new CoinsHolder(20);
-  scene.add(coinsHolder.mesh)
-}
-
-function createEnnemies(){
-  for (var i=0; i<10; i++){
-    var ennemy = new Ennemy();
-    ennemiesPool.push(ennemy);
-  }
-  ennemiesHolder = new EnnemiesHolder();
-  //ennemiesHolder.mesh.position.y = -game.seaRadius;
-  scene.add(ennemiesHolder.mesh)
-}
-
-function createParticles(){
-  for (var i=0; i<10; i++){
-    var particle = new Particle();
-    particlesPool.push(particle);
-  }
-  particlesHolder = new ParticlesHolder();
-  //ennemiesHolder.mesh.position.y = -game.seaRadius;
-  scene.add(particlesHolder.mesh)
-}
-
-function loop(){
-
-  newTime = new Date().getTime();
-  deltaTime = newTime-oldTime;
-  oldTime = newTime;
-
-  if (game.status=="playing"){
-
-    // Add energy coins every 100m;
-    if (Math.floor(game.distance)%game.distanceForCoinsSpawn == 0 && Math.floor(game.distance) > game.coinLastSpawn){
-      game.coinLastSpawn = Math.floor(game.distance);
-      coinsHolder.spawnCoins();
-    }
-
-    if (Math.floor(game.distance)%game.distanceForSpeedUpdate == 0 && Math.floor(game.distance) > game.speedLastUpdate){
-      game.speedLastUpdate = Math.floor(game.distance);
-      game.targetBaseSpeed += game.incrementSpeedByTime*deltaTime;
-    }
-
-
-    if (Math.floor(game.distance)%game.distanceForEnnemiesSpawn == 0 && Math.floor(game.distance) > game.ennemyLastSpawn){
-      game.ennemyLastSpawn = Math.floor(game.distance);
-      ennemiesHolder.spawnEnnemies();
-    }
-
-    if (Math.floor(game.distance)%game.distanceForLevelUpdate == 0 && Math.floor(game.distance) > game.levelLastUpdate){
-      game.levelLastUpdate = Math.floor(game.distance);
-      game.level++;
-      fieldLevel.innerHTML = Math.floor(game.level);
-
-      game.targetBaseSpeed = game.initSpeed + game.incrementSpeedByLevel*game.level
-    }
-
-
-    updatePlane();
-    updateDistance();
-    updateEnergy();
-    game.baseSpeed += (game.targetBaseSpeed - game.baseSpeed) * deltaTime * 0.02;
-    game.speed = game.baseSpeed * game.planeSpeed;
-
-  }else if(game.status=="gameover"){
-    game.speed *= .99;
-    airplane.mesh.rotation.z += (-Math.PI/2 - airplane.mesh.rotation.z)*.0002*deltaTime;
-    airplane.mesh.rotation.x += 0.0003*deltaTime;
-    game.planeFallSpeed *= 1.05;
-    airplane.mesh.position.y -= game.planeFallSpeed*deltaTime;
-
-    // Hide ropes when game ends
-    if (ropeLeft) ropeLeft.visible = false;
-    if (ropeRight) ropeRight.visible = false;
-
-    // Update banner animation during gameover (it will animate to center)
-    updatePlane();
-
-    if (airplane.mesh.position.y <-200){
-      // Hide airplane when it falls below screen
-      airplane.mesh.visible = false;
-      showReplay();
-      game.status = "waitingReplay";
-
-    }
-  }else if (game.status=="waitingReplay"){
-    // Keep ropes hidden during replay wait
-    if (ropeLeft) ropeLeft.visible = false;
-    if (ropeRight) ropeRight.visible = false;
-    
-    // Keep airplane hidden during replay wait
-    if (airplane && airplane.mesh) {
-      airplane.mesh.visible = false;
-    }
-    
-    // Update banner animation during waiting replay (it will stay centered)
-    updatePlane();
-  }
-
-
-  airplane.propeller.rotation.x +=.2 + game.planeSpeed * deltaTime*.005;
-  sea.mesh.rotation.z += game.speed*deltaTime;//*game.seaRotationSpeed;
-
-  if ( sea.mesh.rotation.z > 2*Math.PI)  sea.mesh.rotation.z -= 2*Math.PI;
-
-  ambientLight.intensity += (.5 - ambientLight.intensity)*deltaTime*0.005;
-
-  coinsHolder.rotateCoins();
-  ennemiesHolder.rotateEnnemies();
-
-  sky.moveClouds();
-  sea.moveWaves();
-
-  renderer.render(scene, camera);
-  requestAnimationFrame(loop);
-}
-
-function updateDistance(){
-  game.distance += game.speed*deltaTime*game.ratioSpeedDistance;
-  fieldDistance.innerHTML = Math.floor(game.distance);
-  var d = 502*(1-(game.distance%game.distanceForLevelUpdate)/game.distanceForLevelUpdate);
-  levelCircle.setAttribute("stroke-dashoffset", d);
-
-}
-
-var blinkEnergy=false;
-
-function updateEnergy(){
-  game.energy -= game.speed*deltaTime*game.ratioSpeedEnergy;
-  game.energy = Math.max(0, game.energy);
-  energyBar.style.right = (100-game.energy)+"%";
-  energyBar.style.backgroundColor = (game.energy<50)? "#f25346" : "#68c3c0";
-
-
-  if (game.energy<30){
-    energyBar.style.animationName = "blinking";
-  }else{
-    energyBar.style.animationName = "none";
-  }
-
-  if (game.energy <1){
-    game.status = "gameover";
-    // Stop background sounds (but not propeller - it idles)
-    audioManager.stop('ocean');
-    // Play crash sound when game over
-    audioManager.play('airplane-crash', {volume: 1.0});
-  }
-}
-
-function addEnergy(){
-  game.energy += game.coinValue;
-  game.energy = Math.min(game.energy, 100);
-}
-
-function removeEnergy(){
-  game.energy -= game.ennemyValue;
-  game.energy = Math.max(0, game.energy);
-}
-
-
-
-function updatePlane(){
-
-  game.planeSpeed = normalize(mousePos.x,-.5,.5,game.planeMinSpeed, game.planeMaxSpeed);
-  var targetY = normalize(mousePos.y,-.75,.75,game.planeDefaultHeight-game.planeAmpHeight, game.planeDefaultHeight+game.planeAmpHeight);
-  var targetX = normalize(mousePos.x,-1,1,-game.planeAmpWidth*.7, -game.planeAmpWidth);
-
-  game.planeCollisionDisplacementX += game.planeCollisionSpeedX;
-  targetX += game.planeCollisionDisplacementX;
-
-
-  game.planeCollisionDisplacementY += game.planeCollisionSpeedY;
-  targetY += game.planeCollisionDisplacementY;
-
-  airplane.mesh.position.y += (targetY-airplane.mesh.position.y)*deltaTime*game.planeMoveSensivity;
-  airplane.mesh.position.x += (targetX-airplane.mesh.position.x)*deltaTime*game.planeMoveSensivity;
-
-  airplane.mesh.rotation.z = (targetY-airplane.mesh.position.y)*deltaTime*game.planeRotXSensivity;
-  airplane.mesh.rotation.x = (airplane.mesh.position.y-targetY)*deltaTime*game.planeRotZSensivity;
-  var targetCameraZ = normalize(game.planeSpeed, game.planeMinSpeed, game.planeMaxSpeed, game.cameraNearPos, game.cameraFarPos);
-  camera.fov = normalize(mousePos.x,-1,1,40, 80);
-  camera.updateProjectionMatrix ()
-  camera.position.y += (airplane.mesh.position.y - camera.position.y)*deltaTime*game.cameraSensivity;
-
-  game.planeCollisionSpeedX += (0-game.planeCollisionSpeedX)*deltaTime * 0.03;
-  game.planeCollisionDisplacementX += (0-game.planeCollisionDisplacementX)*deltaTime *0.01;
-  game.planeCollisionSpeedY += (0-game.planeCollisionSpeedY)*deltaTime * 0.03;
-  game.planeCollisionDisplacementY += (0-game.planeCollisionDisplacementY)*deltaTime *0.01;
-
-  airplane.pilot.updateHairs();
-
-  // Update banner position to follow the plane (only if banner exists)
-  if (banner && airplane) {
-    // When game is over or waiting for replay, animate banner to center screen above replay message
-    if (game.status == "gameover" || game.status == "waitingReplay") {
-      // Target position: center of screen, above replay message, closer to camera
-      // Replay message is at bottom center, so banner should be above center
-      var bannerTargetX = 0; // Center horizontally
-      var bannerTargetY = 150; // Above center, above replay message
-      var bannerTargetZ = 100; // Closer to camera (normally camera is at z=200, plane at z=0)
-      
-      // Smoothly animate banner to target position (slow smooth animation)
-      var animationSpeed = 0.05; // Animation speed - adjust for faster/slower movement
-      banner.position.x += (bannerTargetX - banner.position.x) * deltaTime * animationSpeed;
-      banner.position.y += (bannerTargetY - banner.position.y) * deltaTime * animationSpeed;
-      banner.position.z += (bannerTargetZ - banner.position.z) * deltaTime * animationSpeed;
-      
-      // Rotate banner to face camera (but keep it facing forward, not backward/mirrored)
-      // During gameplay banner faces backward (rotation.y = plane.rotation.y + PI)
-      // When centered, we want it facing the camera (rotation.y = PI to face backward toward camera)
-      var targetRotationY = Math.PI; // Face backward toward camera (180 degrees from forward)
-      var rotationSpeed = 0.05; // Rotation speed
-      banner.rotation.y += (targetRotationY - banner.rotation.y) * deltaTime * rotationSpeed;
-      banner.rotation.x += (0 - banner.rotation.x) * deltaTime * rotationSpeed; // Level out
-      banner.rotation.z += (0 - banner.rotation.z) * deltaTime * rotationSpeed; // Level out
-    } else {
-      // Normal gameplay: banner follows plane
-      // Calculate attachment point at the tail of the plane
-      // Create a helper vector for tail position in plane's local space
-      // Tail is at (-40, 20, 0) before scaling, so (-10, 5, 0) after 0.25 scale
-      var tailLocalPos = new THREE.Vector3(-10, 5, 0);
-      
-      // Transform tail position to world space
-      var worldTailPos = new THREE.Vector3();
-      worldTailPos.copy(tailLocalPos);
-      worldTailPos.applyMatrix4(airplane.mesh.matrixWorld);
-      
-      // Banner offset behind the tail (move in negative local X direction)
-      var bannerOffset = 55; // Distance behind the tail in world space
-      var backwardDir = new THREE.Vector3(-1, 0, 0); // Negative X is backward
-      backwardDir.applyQuaternion(airplane.mesh.quaternion);
-      
-      var bannerTargetPos = worldTailPos.clone().add(backwardDir.clone().multiplyScalar(bannerOffset));
-
-      // Smooth, flowing ribbon-like movement using physics-based spring-damper system
-      // This creates natural overshoot and settling, like a ribbon flowing in the wind
-      if (!banner.userData.velocity) {
-        banner.userData.velocity = new THREE.Vector3(0, 0, 0);
-      }
-      
-      // Ensure deltaTime is valid and reasonable
-      var safeDeltaTime = deltaTime;
-      if (!deltaTime || deltaTime <= 0 || !isFinite(deltaTime) || deltaTime > 0.1) {
-        safeDeltaTime = 0.016; // Default to 60fps if invalid
-      }
-      
-      // Smooth, flowing movement that closely follows plane's path
-      // Hybrid approach: fast following with subtle physics for natural flow
-      var followSpeed = 0.6; // Fast following speed for close path tracking
-      var physicsStrength = 0.8; // Small physics component for natural flow (0-1, how much physics vs direct follow)
-      
-      // Direct following component (keeps banner close to plane's path)
-      var directFollow = new THREE.Vector3();
-      directFollow.subVectors(bannerTargetPos, banner.position);
-      directFollow.multiplyScalar(followSpeed * safeDeltaTime * 60); // Scale for frame-rate independence
-      
-      // Physics component for natural flow and momentum (subtle)
-      if (!banner.userData.velocity) {
-        banner.userData.velocity = new THREE.Vector3(0, 0, 0);
-      }
-      
-      // Add velocity from plane's movement direction for momentum
-  var planeVelocity = new THREE.Vector3();
-      if (banner.userData.lastTargetPos) {
-        planeVelocity.subVectors(bannerTargetPos, banner.userData.lastTargetPos);
-        planeVelocity.multiplyScalar(0.5); // Capture some of plane's movement direction
-      }
-      // Store current position for next frame (used for rotation calculation before updating)
-      var currentTargetPos = bannerTargetPos.clone();
-      
-      // Blend physics velocity with plane's velocity
-      banner.userData.velocity.lerp(planeVelocity, 0.2);
-      
-      // Apply damping for smooth flow
-      banner.userData.velocity.multiplyScalar(0.92);
-      
-      // Combine direct following (80%) with physics flow (20%) for best of both
-      var physicsComponent = banner.userData.velocity.clone().multiplyScalar(physicsStrength * safeDeltaTime * 60);
-      var totalMovement = directFollow.clone().multiplyScalar(1 - physicsStrength).add(physicsComponent);
-      
-      // Validate and apply movement
-      if (isFinite(totalMovement.x) && isFinite(totalMovement.y) && isFinite(totalMovement.z)) {
-        banner.position.add(totalMovement);
-        
-        // Safety check: ensure banner position is valid
-        if (!isFinite(banner.position.x) || !isFinite(banner.position.y) || !isFinite(banner.position.z)) {
-          // Reset to target if position becomes invalid
-          banner.position.copy(bannerTargetPos);
-          banner.userData.velocity.set(0, 0, 0);
-        }
-      } else {
-        // Fallback: if movement is invalid, use direct interpolation
-        banner.position.lerp(bannerTargetPos, followSpeed * safeDeltaTime * 60);
-        banner.userData.velocity.set(0, 0, 0);
-      }
-      
-      // Ensure banner stays visible
-      if (banner) banner.visible = true;
-
-      // Cloth-like tilt: banner tilts naturally based on plane's movement direction
-      // Calculate plane's current world position for movement direction
-      var currentPlanePos = airplane.mesh.position.clone();
-      var planeMovementDir = new THREE.Vector3();
-      
-      if (banner.userData.lastPlanePos && banner.userData.lastPlanePos.length() > 0) {
-        planeMovementDir.subVectors(currentPlanePos, banner.userData.lastPlanePos);
-      }
-      banner.userData.lastPlanePos = currentPlanePos.clone();
-      
-      // Base yaw: follow plane's yaw (but face backward toward camera)
-      var targetYaw = airplane.mesh.rotation.y + Math.PI;
-      
-      // Cloth-like tilt on Z axis (roll): roll based on vertical movement velocity (rate of change)
-      // When plane moves up quickly, banner tilts more on Z axis (roll)
-      // When plane moves down quickly, banner tilts more in opposite direction
-      // Gradual movements create smaller tilt, fast movements create larger tilt
-      var verticalVelocity = planeMovementDir.y / safeDeltaTime; // Vertical movement velocity (rate of change)
-      
-      // Direct velocity-based tilt: matches the rate of movement
-      // Fast movement = more tilt, gradual movement = less tilt
-      // Use a smooth scaling function that works for both fast and gradual movements
-      var velocityMagnitude = Math.abs(verticalVelocity);
-      
-      // Scale factor: makes velocity directly proportional to tilt
-      // Fast movements (high velocity) → larger tilt
-      // Gradual movements (low velocity) → smaller tilt
-      // The multiplier determines sensitivity (tune this for desired response)
-      var velocityToTiltScale = 0.008; // Tune this: higher = more sensitive, lower = less sensitive
-      
-      // Calculate tilt directly from velocity (matches rate of movement)
-      var rollTilt = verticalVelocity * velocityToTiltScale * -1; // Negative for correct direction
-      
-      var targetRoll = rollTilt; // Simple roll based on vertical movement only
-      
-      // X-axis pitch tilt: banner tilts on X-axis based on vertical movement (like plane does)
-      // When plane moves up/down, banner should pitch forward/backward slightly for natural look
-      var pitchTiltFromMovement = verticalVelocity * velocityToTiltScale * 0.15; // Pitch tilt based on vertical movement (15% of roll tilt - very subtle)
-      var targetPitch = airplane.mesh.rotation.x * 0.08 + pitchTiltFromMovement; // Combine plane pitch with movement-based pitch (very minimal plane influence)
-      
-      // Minimal roll from plane (just follow plane's orientation slightly)
-      var targetRollFromPlane = airplane.mesh.rotation.z * 0.15; // Very slight roll following
-      targetRoll += targetRollFromPlane; // Combine movement-based roll with plane's roll
-      
-      // Clamp roll to maximum 45 degrees (Math.PI / 4) to prevent spinning
-      var maxRoll = Math.PI / 4; // 45 degrees
-      if (targetRoll > maxRoll) targetRoll = maxRoll;
-      if (targetRoll < -maxRoll) targetRoll = -maxRoll;
-      
-      // Smoothly interpolate rotations (cloth-like lag) - no spinning!
-      var rotationLerpSpeed = 0.15; // How quickly rotation follows (lower = more lag, more cloth-like)
-      
-      // Smooth yaw following
-      var yawDiff = targetYaw - banner.rotation.y;
-      // Normalize yaw difference (handle wrap-around)
-      while (yawDiff > Math.PI) yawDiff -= 2 * Math.PI;
-      while (yawDiff < -Math.PI) yawDiff += 2 * Math.PI;
-      banner.rotation.y += yawDiff * rotationLerpSpeed;
-      
-      // Smooth pitch tilt (minimal, just slight following)
-      // Rotate around right edge (X = -22 in local space, where ropes attach)
-      // To rotate around a pivot point, we need to adjust position offset
-      var previousPitch = banner.userData.lastPitch || banner.rotation.x;
-      banner.rotation.x += (targetPitch - banner.rotation.x) * rotationLerpSpeed;
-      var pitchDelta = banner.rotation.x - previousPitch;
-      banner.userData.lastPitch = banner.rotation.x;
-      
-      // Pivot point is at right edge: X = -22 in local banner space (where ropes attach)
-      // Banner geometry: width 50 (X: -25 to +25), height 30 (Y: -15 to +15)
-      var pivotLocalX = -22; // Local X position of pivot point (right edge)
-      
-      // Calculate world-space offset to rotate around pivot
-      // When rotating around pivot: position needs to be adjusted
-      // Offset = pivot point rotated around itself
-      if (Math.abs(pitchDelta) > 0.0001) { // Only adjust if there's significant rotation
-        // Calculate offset vector from banner center to pivot in local space
-        var pivotOffset = new THREE.Vector3(pivotLocalX, 0, 0);
-        
-        // Rotate the offset vector by the pitch delta
-        var rotatedOffset = pivotOffset.clone();
-        rotatedOffset.applyAxisAngle(new THREE.Vector3(1, 0, 0), pitchDelta);
-        
-        // Calculate position adjustment (difference between rotated and original offset)
-        var positionAdjust = rotatedOffset.sub(pivotOffset);
-        
-        // Transform to world space (considering banner's current rotation)
-        positionAdjust.applyAxisAngle(new THREE.Vector3(0, 1, 0), banner.rotation.y);
-        positionAdjust.applyAxisAngle(new THREE.Vector3(0, 0, 1), banner.rotation.z);
-        
-        // Apply position adjustment
-        banner.position.add(positionAdjust);
-      }
-      
-      // Smooth roll tilt on Z axis based on vertical movement (cloth flowing effect)
-      banner.rotation.z += (targetRoll - banner.rotation.z) * rotationLerpSpeed;
-      
-      // Update lastTargetPos for next frame
-      banner.userData.lastTargetPos = currentTargetPos;
-    }
-
-    // Banner fluttering animation (like a flag in wind) - continues even during game over
-    var time = Date.now() * 0.001; // Convert to seconds
-    // Base flutter intensity, increases with speed during gameplay
-    var flutterIntensity = game.status == "playing" ? (2 + game.planeSpeed * 0.5) : 2.5; // Constant flutter when game over
-    
-    // Map flutter speed to world speed: faster world = faster flutter, slower world = slower flutter
-    // Normal playing: flutter speed 11.0 (perfect at game start)
-    // Game over (slow world): flutter speed 5.5 (perfect when world is slow)
-    var maxGameSpeed = game.initSpeed * game.planeMaxSpeed; // Maximum expected game speed during normal play
-    var currentGameSpeed = game.speed || 0.001; // Current game speed (fallback to small value if 0)
-    var speedRatio = Math.min(currentGameSpeed / maxGameSpeed, 1.0); // Normalize to 0-1 range
-    var minFlutterSpeed = 5.5; // Slow flutter when world is slow (game over)
-    var maxFlutterSpeed = 11.0; // Fast flutter when world is fast (normal play)
-    var baseFlutterSpeed = minFlutterSpeed + (speedRatio * (maxFlutterSpeed - minFlutterSpeed)); // Linear mapping
-    
-    // Increase flutter speed during vertical maneuvers (up/down movement) - ONLY during gameplay
-    // More airflow from maneuvers = faster flutter (more realistic)
-    var maneuverBoost = 1.0; // Default: no boost
-    if (game.status == "playing") { // Only apply during gameplay, not after game over
-      var verticalVelocity = 0;
-      var safeDeltaTimeForFlutter = deltaTime;
-      if (!safeDeltaTimeForFlutter || safeDeltaTimeForFlutter <= 0 || !isFinite(safeDeltaTimeForFlutter) || safeDeltaTimeForFlutter > 0.1) {
-        safeDeltaTimeForFlutter = 0.016; // Default to 60fps if invalid
-      }
-      if (banner.userData.lastPlanePos && banner.userData.lastPlanePos.length() > 0 && airplane && airplane.mesh) {
-        var currentPlanePos = airplane.mesh.position.clone();
-        var planeMovementDir = new THREE.Vector3();
-        planeMovementDir.subVectors(currentPlanePos, banner.userData.lastPlanePos);
-        verticalVelocity = Math.abs(planeMovementDir.y / safeDeltaTimeForFlutter); // Vertical movement velocity
-      }
-      
-      // Calculate maneuver boost: more vertical movement = faster flutter
-      // Scale vertical velocity to a reasonable range and apply as multiplier
-      var maxVerticalVelocity = 50; // Expected max vertical velocity during maneuvers (tune this if needed)
-      var verticalVelocityRatio = Math.min(verticalVelocity / maxVerticalVelocity, 1.0); // Normalize to 0-1
-      maneuverBoost = 1.0 + (verticalVelocityRatio * 1.0); // Up to 200% boost (2x speed) during maneuvers
-    }
-    var flutterSpeedMultiplier = baseFlutterSpeed * maneuverBoost; // Apply maneuver boost to base flutter speed (only during gameplay)
-
-    // Apply wave-like deformation to banner vertices using stored originals
-    var geometry = banner.geometry;
-    if (geometry.vertices && banner.userData.originalVertices) {
-      // Old Three.js Geometry API
-      var vertices = geometry.vertices;
-      var originals = banner.userData.originalVertices;
-      for (var i = 0; i < vertices.length && i < originals.length; i++) {
-        var original = originals[i];
-        var vertex = vertices[i];
-
-        // ========== FLUTTER ORIENTATION CONTROLS ==========
-        // Banner coordinate system (PlaneGeometry 50x30):
-        //   - X axis: left-right (width), ranges from -25 to +25
-        //   - Y axis: up-down (height), ranges from -15 to +15
-        //   - Z axis: depth (forward-backward), normally 0 for a plane
-        //
-        // Banner is rotated to face backward: rotation.y = plane.rotation.y + PI
-        // From camera view (looking at banner from behind plane):
-        //   - Changing X creates LEFT-RIGHT waving (horizontal)
-        //   - Changing Y creates UP-DOWN waving (vertical)
-        //   - Changing Z creates FORWARD-BACKWARD waving (depth/in-out)
-        //
-        // Wave amplitude calculation:
-        // During gameplay: zero at right edge (where ropes attach at X = -22), increasing toward left edge
-        // During gameover/waitingReplay: full flutter across entire banner (ropes are detached)
-        var waveAmplitude;
-    if (game.status == "playing") {
-          // Ropes attached - zero flutter at attachment point
-          var normalizedX = Math.max(0, (original.x + 22) / 47); // Clamp to prevent negative values
-          waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
-        } else {
-          // Ropes detached - full flutter everywhere
-          waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
-        }
-        
-        // ========== FLUTTER SPEED CONTROLS - TWEAK THESE VALUES ==========
-        // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
-        //   - For LEFT-RIGHT flutter: modify X based on Y position
-        //   - For UP-DOWN flutter: modify Y based on X position (CURRENT - 90 degree rotation)
-        //   - For DEPTH flutter: modify Z based on Y position
-        // Note: Using negative phase (-original.x) to reverse wave direction from right-to-left instead of left-to-right
-        
-        // MAIN WAVE SPEED: Mapped to world speed (calculated above)
-        // Automatically scales: 11.0 at normal speed, 5.5 when world is slow
-        // You can still tweak minFlutterSpeed and maxFlutterSpeed above if needed
-        var mainWaveSpeed = flutterSpeedMultiplier; // Speed scales with world speed
-        var waveY = Math.sin(time * mainWaveSpeed - original.x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
-        // Wave frequency: time * mainWaveSpeed controls speed, original.x * 0.2 controls wave spacing (X-based for vertical wave)
-        
-        // SECONDARY WAVE VARIATIONS (for 3D effect):
-        // SECONDARY WAVE SPEEDS: Scaled proportionally to main wave speed
-        var secondaryWaveSpeedX = flutterSpeedMultiplier * 0.7; // Horizontal wave speed (70% of main speed, scales with world)
-        var secondaryWaveSpeedZ = flutterSpeedMultiplier * 0.32; // Depth wave speed (32% of main speed, scales with world)
-        var waveX = Math.cos(time * secondaryWaveSpeedX + original.y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
-        var waveZ = Math.sin(time * secondaryWaveSpeedZ + original.y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
-
-        // Apply the wave deformation to vertices
-        vertex.x = original.x + waveX; // Add horizontal wave component (secondary)
-        vertex.y = original.y + waveY; // Add main vertical wave component (rotated 90 degrees from horizontal)
-        vertex.z = original.z + waveZ; // Add depth wave component (secondary)
-      }
-      geometry.verticesNeedUpdate = true;
-      geometry.computeFaceNormals();
-      geometry.computeVertexNormals();
-    } else if (geometry.attributes && geometry.attributes.position) {
-      // Modern BufferGeometry API - store original positions if not already stored
-      if (!banner.userData.originalPositions) {
-        banner.userData.originalPositions = new Float32Array(geometry.attributes.position.array.length);
-        for (var i = 0; i < geometry.attributes.position.array.length; i++) {
-          banner.userData.originalPositions[i] = geometry.attributes.position.array[i];
-        }
-      }
-      
-      var positions = geometry.attributes.position.array;
-      var originals = banner.userData.originalPositions;
-      for (var i = 0; i < positions.length; i += 3) {
-        var x = originals[i];
-        var y = originals[i + 1];
-        var z = originals[i + 2];
-
-        // ========== FLUTTER ORIENTATION CONTROLS ==========
-        // Banner coordinate system (PlaneGeometry 50x30):
-        //   - X axis: left-right (width), ranges from -25 to +25
-        //   - Y axis: up-down (height), ranges from -15 to +15
-        //   - Z axis: depth (forward-backward), normally 0 for a plane
-        //
-        // Banner is rotated to face backward: rotation.y = plane.rotation.y + PI
-        // From camera view (looking at banner from behind plane):
-        //   - Changing X creates LEFT-RIGHT waving (horizontal)
-        //   - Changing Y creates UP-DOWN waving (vertical)
-        //   - Changing Z creates FORWARD-BACKWARD waving (depth/in-out)
-        //
-        // Wave amplitude calculation:
-        // During gameplay: zero at right edge (where ropes attach at X = -22), increasing toward left edge
-        // During gameover/waitingReplay: full flutter across entire banner (ropes are detached)
-        var waveAmplitude;
-        if (game.status == "playing") {
-          // Ropes attached - zero flutter at attachment point
-          var normalizedX = Math.max(0, (x + 22) / 47); // Clamp to prevent negative values
-          waveAmplitude = normalizedX * flutterIntensity; // Zero flutter at right edge (ropes), full flutter at left edge
-    } else {
-          // Ropes detached - full flutter everywhere
-          waveAmplitude = flutterIntensity; // Constant amplitude across entire banner
-        }
-        
-        // ========== FLUTTER SPEED CONTROLS - TWEAK THESE VALUES ==========
-        // MAIN WAVE DIRECTION - Rotated 90 degrees to VERTICAL (UP-DOWN):
-        //   - For LEFT-RIGHT flutter: modify X based on Y position
-        //   - For UP-DOWN flutter: modify Y based on X position (CURRENT - 90 degree rotation)
-        //   - For DEPTH flutter: modify Z based on Y position
-        // Note: Using negative phase (-x) to reverse wave direction from right-to-left instead of left-to-right
-        
-        // MAIN WAVE SPEED: Mapped to world speed (calculated above)
-        // Automatically scales: 11.0 at normal speed, 5.5 when world is slow
-        // You can still tweak minFlutterSpeed and maxFlutterSpeed above if needed
-        var mainWaveSpeed = flutterSpeedMultiplier; // Speed scales with world speed
-        var waveY = Math.sin(time * mainWaveSpeed - x * 0.2) * waveAmplitude; // Main wave - vertical (up-down) based on horizontal position (reversed direction)
-        // Wave frequency: time * mainWaveSpeed controls speed, x * 0.2 controls wave spacing (X-based for vertical wave)
-        
-        // SECONDARY WAVE VARIATIONS (for 3D effect):
-        // SECONDARY WAVE SPEEDS: Scaled proportionally to main wave speed
-        var secondaryWaveSpeedX = flutterSpeedMultiplier * 0.7; // Horizontal wave speed (70% of main speed, scales with world)
-        var secondaryWaveSpeedZ = flutterSpeedMultiplier * 0.32; // Depth wave speed (32% of main speed, scales with world)
-        var waveX = Math.cos(time * secondaryWaveSpeedX + y * 0.15) * flutterIntensity * 0.2; // Horizontal variation - adjust multiplier to change intensity
-        var waveZ = Math.sin(time * secondaryWaveSpeedZ + y * 0.1) * flutterIntensity * 0.1; // Depth variation - adjust multiplier to change intensity
-
-        // Apply the wave deformation to positions
-        positions[i] = x + waveX; // Add horizontal wave component (secondary, index 0 = X)
-        positions[i + 1] = y + waveY; // Add main vertical wave component (rotated 90 degrees, index 1 = Y)
-        positions[i + 2] = z + waveZ; // Add depth wave component (secondary, index 2 = Z)
-      }
-      geometry.attributes.position.needsUpdate = true;
-      geometry.computeVertexNormals();
-    }
-
-    // Calculate banner corner positions in world space
-    // Banner is 50 units wide (X), 30 units tall (Y)
-    // Top-left corner in local space: (-25, 15, 0) - these are the edges closest to the plane
-    // Top-right corner in local space: (25, 15, 0)
-    var topLeftLocal = new THREE.Vector3(-22, 13, 0);
-    var topRightLocal = new THREE.Vector3(-22, -13, 0);
-    
-    // Transform to world space using banner's matrix
-    var topLeftWorld = new THREE.Vector3();
-    var topRightWorld = new THREE.Vector3();
-    topLeftWorld.copy(topLeftLocal);
-    topRightWorld.copy(topRightLocal);
-    topLeftWorld.applyMatrix4(banner.matrixWorld);
-    topRightWorld.applyMatrix4(banner.matrixWorld);
-
-    // Update ropes only during normal gameplay (not during gameover/waitingReplay)
-    if (game.status == "playing" && ropeLeft && ropeRight) {
-      // Ensure ropes are visible during gameplay
-      ropeLeft.visible = true;
-      ropeRight.visible = true;
-      
-      // Update left rope to connect plane tail to banner top-left corner
-      var segments = 4;
-      var leftPositions = ropeLeft.geometry.attributes.position.array;
-      for (var i = 0; i < segments; i++) {
-        var t = i / (segments - 1);
-        var point = new THREE.Vector3().lerpVectors(worldTailPos, topLeftWorld, t);
-
-        // Add some sag to the middle of the rope
-        if (i > 0 && i < segments - 1) {
-          var sagAmount = Math.sin(t * Math.PI) * 2; // Sag in the middle
-          point.y -= sagAmount;
-        }
-
-        leftPositions[i * 3] = point.x;
-        leftPositions[i * 3 + 1] = point.y;
-        leftPositions[i * 3 + 2] = point.z;
-      }
-      ropeLeft.geometry.attributes.position.needsUpdate = true;
-
-      // Update right rope to connect plane tail to banner top-right corner
-      var rightPositions = ropeRight.geometry.attributes.position.array;
-      for (var i = 0; i < segments; i++) {
-        var t = i / (segments - 1);
-        var point = new THREE.Vector3().lerpVectors(worldTailPos, topRightWorld, t);
-
-        // Add some sag to the middle of the rope
-        if (i > 0 && i < segments - 1) {
-          var sagAmount = Math.sin(t * Math.PI) * 2; // Sag in the middle
-          point.y -= sagAmount;
-        }
-
-        rightPositions[i * 3] = point.x;
-        rightPositions[i * 3 + 1] = point.y;
-        rightPositions[i * 3 + 2] = point.z;
-      }
-      ropeRight.geometry.attributes.position.needsUpdate = true;
-    }
-  }
-}
-
-function showReplay(){
-  replayMessage.style.display="block";
-}
-
-function hideReplay(){
-  replayMessage.style.display="none";
-}
-
-function normalize(v,vmin,vmax,tmin, tmax){
-  var nv = Math.max(Math.min(v,vmax), vmin);
-  var dv = vmax-vmin;
-  var pc = (nv-vmin)/dv;
-  var dt = tmax-tmin;
-  var tv = tmin + (pc*dt);
-  return tv;
-}
-
-var fieldDistance, energyBar, replayMessage, fieldLevel, levelCircle;
-
-function init(event){
-
-  // UI
-  console.log('[Top Rug] Initializing UI elements...');
-
-  fieldDistance = document.getElementById("distValue-toprug1");
-  energyBar = document.getElementById("energyBar-toprug1");
-  replayMessage = document.getElementById("replayMessage-toprug1");
-  fieldLevel = document.getElementById("levelValue-toprug1");
-  levelCircle = document.getElementById("levelCircleStroke-toprug1");
-
-  console.log('[Top Rug] UI elements found:', {
-    fieldDistance: !!fieldDistance,
-    energyBar: !!energyBar,
-    replayMessage: !!replayMessage,
-    fieldLevel: !!fieldLevel,
-    levelCircle: !!levelCircle
-  });
-
-
-  resetGame();
-  createScene();
-
-  createLights();
-  createPlane();
-  createBanner();
-  createSea();
-  createSky();
-  createCoins();
-  createEnnemies();
-  createParticles();
-
-  // Load audio files
-  audioManager.load('ocean', null, 'games/top-rug/assets/audio/ocean.mp3');
-  audioManager.load('propeller', null, 'games/top-rug/assets/audio/propeller.mp3');
-
-  audioManager.load('coin-1', 'coin', 'games/top-rug/assets/audio/coin-1.mp3');
-  audioManager.load('coin-2', 'coin', 'games/top-rug/assets/audio/coin-2.mp3');
-  audioManager.load('coin-3', 'coin', 'games/top-rug/assets/audio/coin-3.mp3');
-  audioManager.load('jar-1', 'coin', 'games/top-rug/assets/audio/jar-1.mp3');
-  audioManager.load('jar-2', 'coin', 'games/top-rug/assets/audio/jar-2.mp3');
-  audioManager.load('jar-3', 'coin', 'games/top-rug/assets/audio/jar-3.mp3');
-  audioManager.load('jar-4', 'coin', 'games/top-rug/assets/audio/jar-4.mp3');
-  audioManager.load('jar-5', 'coin', 'games/top-rug/assets/audio/jar-5.mp3');
-  audioManager.load('jar-6', 'coin', 'games/top-rug/assets/audio/jar-6.mp3');
-  audioManager.load('jar-7', 'coin', 'games/top-rug/assets/audio/jar-7.mp3');
-
-  audioManager.load('airplane-crash-1', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-1.mp3');
-  audioManager.load('airplane-crash-2', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-2.mp3');
-  audioManager.load('airplane-crash-3', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-3.mp3');
-  audioManager.load('airplane-crash-4', 'airplane-crash', 'games/top-rug/assets/audio/airplane-crash-4.mp3');
-
-  // Background sounds will start after user interaction (handled in audioManager.init)
-
-    document.addEventListener('mousemove', handleMouseMove, false);
-    document.addEventListener('touchmove', handleTouchMove, false);
-    document.addEventListener('mouseup', handleMouseUp, false);
-    document.addEventListener('touchend', handleTouchEnd, false);
-
-    loop();
-}
-
-// Wrap in Aviator1Game namespace for modular loading
-window.Aviator1Game = {
-  init: function() {
-    // Only initialize if not already initialized
-    if (window.Aviator1Game._initialized) {
+  // Convert raw input into semantic gameplay intent
+  update(input, deltaTime) {
+    if (!input) {
+      this.currentIntent = {
+        type: 'HOLD',
+        strength: 0,
+        timestamp: performance.now()
+      };
       return;
     }
-    window.Aviator1Game._initialized = true;
-    init();
-  },
-  show: function() {
-    // Show the game container if needed
-    var container = document.getElementById('gameHolderAviator1');
-    if (container) {
-      container.style.display = 'block';
+
+    const mouseX = input.mouseX;
+
+    // Determine intent based on mouse position
+    let intentType;
+    const strength = Math.abs(mouseX); // Strength based on how far from center
+
+    if (mouseX < -0.33) {
+      intentType = 'MOVE_LEFT';
+    } else if (mouseX > 0.33) {
+      intentType = 'MOVE_RIGHT';
+    } else {
+      intentType = 'HOLD';
+    }
+
+    // Create intent (at most one per frame)
+    this.currentIntent = {
+      type: intentType,
+      strength: Math.min(strength, 1.0), // Clamp to 0-1
+      timestamp: performance.now()
+    };
+  }
+
+  // Get current frame's intent
+  getIntents() {
+    return this.currentIntent ? [this.currentIntent] : [];
+  }
+
+  // Clear intent for next frame
+  clear() {
+    this.currentIntent = null;
+  }
+
+  // Get current intent (for immediate access)
+  getCurrentIntent() {
+    return this.currentIntent;
+  }
+}
+
+// PlayerActionStateSystem class - manages player action states and cooldowns
+class PlayerActionStateSystem {
+  constructor(laneSwitchCooldownMs = 200) {
+    this.laneSwitchCooldownMs = laneSwitchCooldownMs;
+
+    // States: 'READY', 'LANE_SWITCH_COOLDOWN', 'STUNNED'
+    this.currentState = 'READY';
+
+    // Timers in milliseconds
+    this.cooldownRemaining = 0;
+    this.stunRemaining = 0;
+
+    // Logging guards (one-time per state transition)
+    this._recoveryLogged = false;
+    this._cooldownLogged = false;
+    this._laneSwitchLogged = false;
+    this._stunLogged = false;
+
+    console.log('[PlayerActionState] Action state management established');
+  }
+
+  // Update timers and state transitions
+  update(deltaTime) {
+    const deltaMs = deltaTime * 1000; // Convert to milliseconds
+
+    // Update timers
+    if (this.cooldownRemaining > 0) {
+      this.cooldownRemaining -= deltaMs;
+    }
+
+    if (this.stunRemaining > 0) {
+      this.stunRemaining -= deltaMs;
+    }
+
+    // State transitions
+    if (this.currentState === 'STUNNED' && this.stunRemaining <= 0) {
+      this.currentState = 'READY';
+      if (!this._recoveryLogged) {
+        console.log('[PlayerActionState] Recovered from stun');
+        this._recoveryLogged = true;
+      }
+    } else if (this.currentState === 'LANE_SWITCH_COOLDOWN' && this.cooldownRemaining <= 0) {
+      this.currentState = 'READY';
+      if (!this._cooldownLogged) {
+        console.log('[PlayerActionState] Lane switch cooldown ended');
+        this._cooldownLogged = true;
+      }
+    } else {
+      // Reset flags when not in these states
+      this._recoveryLogged = false;
+      this._cooldownLogged = false;
+      this._laneSwitchLogged = false;
+      this._stunLogged = false;
     }
   }
-};
 
-// Auto-initialize only if game mode selector is not present (backward compatibility)
-if (!document.getElementById('gameModeSelector')) {
-window.addEventListener('load', init, false);
+  // Check if an intent type can be executed in current state
+  canExecute(intentType) {
+    switch (this.currentState) {
+      case 'READY':
+        return true; // All intents allowed in ready state
+
+      case 'LANE_SWITCH_COOLDOWN':
+        // Only non-lane-change intents allowed during cooldown
+        return intentType !== 'MOVE_LEFT' && intentType !== 'MOVE_RIGHT';
+
+      case 'STUNNED':
+        return false; // No intents allowed while stunned
+
+      default:
+        return false;
+    }
+  }
+
+  // Called when an intent is successfully executed
+  onIntentExecuted(intentType) {
+    if (intentType === 'MOVE_LEFT' || intentType === 'MOVE_RIGHT') {
+      // Enter lane switch cooldown
+      this.currentState = 'LANE_SWITCH_COOLDOWN';
+      this.cooldownRemaining = this.laneSwitchCooldownMs;
+      if (!this._laneSwitchLogged) {
+        console.log(`[PlayerActionState] Lane switch executed - cooldown ${this.laneSwitchCooldownMs}ms`);
+        this._laneSwitchLogged = true;
+      }
+    }
+  }
+
+  // Apply stun state (for future use)
+  applyStun(durationMs) {
+    this.currentState = 'STUNNED';
+    this.stunRemaining = durationMs;
+    if (!this._stunLogged) {
+      console.log(`[PlayerActionState] Stunned for ${durationMs}ms`);
+      this._stunLogged = true;
+    }
+  }
+
+  // Get current state for debugging
+  getCurrentState() {
+    return {
+      state: this.currentState,
+      cooldownRemaining: Math.max(0, this.cooldownRemaining),
+      stunRemaining: Math.max(0, this.stunRemaining)
+    };
+  }
+
+  // Reset to ready state
+  reset() {
+    this.currentState = 'READY';
+    this.cooldownRemaining = 0;
+    this.stunRemaining = 0;
+  }
+}
+
+// CollisionImpactSystem class - processes collision consequences without mutating game state
+class CollisionImpactSystem {
+  constructor(playerActionStateSystem) {
+    // Observer-only system: processes domain events into player consequences
+    // Never emits events, never renders, never mutates entities
+    // Converts COLLISION domain events into player state changes
+
+    this.playerActionStateSystem = playerActionStateSystem;
+    this.lastStunLog = 0;
+
+    console.log('[CollisionImpact] Collision consequence processing established');
+  }
+
+  // Process domain events and apply collision consequences
+  process(domainEvents) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return; // Safety check
+    }
+
+    // Find all COLLISION events
+    const collisionEvents = domainEvents.filter(event => event.type === 'COLLISION');
+
+    if (collisionEvents.length === 0) {
+      return; // No collisions this frame
+    }
+
+    // Calculate maximum stun duration from all collisions
+    let maxStunDuration = 0;
+
+    for (const event of collisionEvents) {
+      // Compute stun duration based on collision intensity
+      const baseStunMs = 200; // Base stun duration
+      const intensityFactor = Math.max(0.5, Math.min(2.0, event.value / 50)); // Clamp 0.5-2.0
+      const stunDuration = baseStunMs * intensityFactor;
+
+      maxStunDuration = Math.max(maxStunDuration, stunDuration);
+    }
+
+    // Apply the maximum stun duration (multiple collisions = worst one wins)
+    if (maxStunDuration > 0) {
+      this.playerActionStateSystem.applyStun(maxStunDuration);
+
+      // Log stun application (throttled to avoid spam)
+      const now = performance.now();
+      if (now - this.lastStunLog > 1000) { // Log at most once per second
+        console.log(`[CollisionImpact] Player stunned for ${maxStunDuration.toFixed(0)}ms (${collisionEvents.length} collision(s))`);
+        this.lastStunLog = now;
+      }
+    }
+  }
+}
+
+// HealthSystem class - authoritative player health and survival management
+class HealthSystem {
+  constructor(initialLives = 3) {
+    this.initialLives = initialLives;
+    this.currentLives = initialLives;
+    this.isAlive = true;
+
+    console.log(`[Health] Player starts with ${initialLives} lives`);
+  }
+
+  // Apply damage to player health
+  applyDamage(amount = 1) {
+    if (!this.isAlive) return 0; // No damage if already dead
+
+    const damageApplied = Math.min(amount, this.currentLives);
+    this.currentLives -= damageApplied;
+
+    if (this.currentLives <= 0) {
+      this.isAlive = false;
+      console.log('[Health] Player died');
+    } else {
+      console.log(`[Health] Life lost, remaining: ${this.currentLives}`);
+    }
+
+    return damageApplied;
+  }
+
+  // Get current number of lives
+  getLives() {
+    return this.currentLives;
+  }
+
+  // Check if player is dead
+  isDead() {
+    return !this.isAlive;
+  }
+
+  // Reset health to initial state
+  reset() {
+    this.currentLives = this.initialLives;
+    this.isAlive = true;
+    console.log(`[Health] Health reset to ${this.initialLives} lives`);
+  }
+
+  // Get health state for debugging
+  getState() {
+    return {
+      currentLives: this.currentLives,
+      initialLives: this.initialLives,
+      isAlive: this.isAlive
+    };
+  }
+}
+
+// CollisionDamageSystem class - processes collision events into health damage
+class CollisionDamageSystem {
+  constructor(healthSystem) {
+    // Observer-only system: converts COLLISION domain events into health damage
+    // Never emits events, never renders, never mutates entities
+    // Throttles damage to prevent stun-stacking abuse
+
+    this.healthSystem = healthSystem;
+    this.lastDamageFrame = -1; // Track frame-based damage throttling
+
+    console.log('[CollisionDamage] Collision damage processing established');
+  }
+
+  // Process domain events and apply damage for collisions
+  process(domainEvents, playerActionStateSystem) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return; // Safety check
+    }
+
+    // Check if player is currently stunned (damage throttling)
+    const playerState = playerActionStateSystem.getCurrentState();
+    const isStunned = playerState.state === 'STUNNED';
+
+    if (isStunned) {
+      // Player is stunned - no additional damage this frame
+      // This prevents stun-stacking abuse where multiple collisions
+      // in the same frame would kill the player instantly
+      return;
+    }
+
+    // Count COLLISION events (one collision = one damage)
+    const collisionCount = domainEvents.filter(event => event.type === 'COLLISION').length;
+
+    if (collisionCount > 0) {
+      // Apply damage for each collision
+      for (let i = 0; i < collisionCount; i++) {
+        this.healthSystem.applyDamage(1);
+      }
+    }
+  }
+}
+
+// LaneController class - converts input intent into lane change requests
+class LaneController {
+  constructor(laneSystem) {
+    this.laneSystem = laneSystem;
+    this.currentLaneIndex = 1; // Start in middle lane for 3-lane setup
+    this.targetLaneIndex = 1;
+    console.log(`[LaneController] Initialized on lane ${this.currentLaneIndex}`);
+  }
+
+  processIntents(intents) {
+    // LaneController assumes intents are pre-approved by PlayerActionStateSystem
+    // Separation of concerns: Action state gates intents, LaneController executes them
+
+    if (!intents || intents.length === 0) {
+      return { targetLaneIndex: this.currentLaneIndex };
+    }
+
+    // Process the first (and typically only) intent
+    const intent = intents[0];
+
+    let targetLaneDelta = 0;
+    switch (intent.type) {
+      case 'MOVE_LEFT':
+        targetLaneDelta = -1;
+        break;
+      case 'MOVE_RIGHT':
+        targetLaneDelta = 1;
+        break;
+      case 'HOLD':
+      default:
+        targetLaneDelta = 0;
+        break;
+    }
+
+    // Compute absolute target lane index (no rejection logic - assume intent is approved)
+    this.targetLaneIndex = Math.max(0, Math.min(this.laneSystem.getLaneCount() - 1,
+      this.currentLaneIndex + targetLaneDelta));
+
+    return {
+      targetLaneIndex: this.targetLaneIndex,
+      currentLaneIndex: this.currentLaneIndex
+    };
+  }
+
+  setCurrentLane(laneIndex) {
+    this.currentLaneIndex = laneIndex;
+    this.targetLaneIndex = laneIndex;
+  }
+
+  getCurrentLaneIndex() {
+    return this.currentLaneIndex;
+  }
+
+  getTargetLaneIndex() {
+    return this.targetLaneIndex;
+  }
+}
+
+// SpawnBandSystem class - defines spatial spawn rules along Z axis
+class SpawnBandSystem {
+  constructor() {
+    // Band definitions relative to player Z = 0
+    // All Z values are offsets from player's current position
+    this.bands = {
+      BEHIND_CLEANUP: {
+        name: 'BEHIND_CLEANUP',
+        minZ: -200,    // Behind player, recycle objects here
+        maxZ: -50,     // Up to 50 units behind
+        description: 'Recycle zone - objects too far behind'
+      },
+      ACTIVE_WINDOW: {
+        name: 'ACTIVE_WINDOW',
+        minZ: -50,     // Slightly behind player
+        maxZ: 150,     // Ahead of player (camera view + buffer)
+        description: 'Active gameplay zone - objects can interact'
+      },
+      AHEAD_SPAWN: {
+        name: 'AHEAD_SPAWN',
+        minZ: 150,     // Beyond active window
+        maxZ: 300,     // Far ahead for spawning
+        description: 'Spawn zone - create new objects here'
+      },
+      FAR_BUFFER: {
+        name: 'FAR_BUFFER',
+        minZ: 300,     // Very far ahead
+        maxZ: 500,     // Buffer zone
+        description: 'Buffer zone - prepare for future spawning'
+      }
+    };
+
+    // Track virtual world progress for procedural generation
+    this.worldProgress = 0;
+    this.lastBandCrossings = {};
+
+    // Logging guard for periodic progress updates
+    this._lastProgressLog = 0;
+
+    console.log('[SpawnBandSystem] Spatial spawn rules established');
+    console.log('[SpawnBandSystem] Bands relative to player Z=0:');
+    Object.values(this.bands).forEach(band => {
+      console.log(`  ${band.name}: Z[${band.minZ}, ${band.maxZ}] - ${band.description}`);
+    });
+  }
+
+  update(deltaTime, worldZ) {
+    // Update virtual world progress based on forward motion
+    this.worldProgress += Math.abs(worldZ) * deltaTime;
+
+    // Check for band threshold crossings
+    Object.values(this.bands).forEach(band => {
+      const bandKey = band.name;
+      const wasInBand = this.lastBandCrossings[bandKey] || false;
+      const isInBand = this.isInBand(worldZ, bandKey);
+
+      if (!wasInBand && isInBand) {
+        console.log(`[SpawnBandSystem] Entered ${bandKey} at world progress ${this.worldProgress.toFixed(0)}`);
+      } else if (wasInBand && !isInBand) {
+        console.log(`[SpawnBandSystem] Exited ${bandKey} at world progress ${this.worldProgress.toFixed(0)}`);
+      }
+
+      this.lastBandCrossings[bandKey] = isInBand;
+    });
+
+    // Log world progress periodically (not every frame)
+    const now = performance.now();
+    if (!this._lastProgressLog || now - this._lastProgressLog > 5000) { // Log every 5 seconds
+      console.log(`[SpawnBandSystem] World progress: ${this.worldProgress.toFixed(0)}, Player Z: ${worldZ.toFixed(2)}`);
+      this._lastProgressLog = now;
+    }
+  }
+
+  isInBand(z, bandName) {
+    const band = this.bands[bandName];
+    console.assert(band, `[SpawnBandSystem] ERROR: Unknown band '${bandName}'`);
+    return z >= band.minZ && z <= band.maxZ;
+  }
+
+  getSpawnZ(bandName) {
+    const band = this.bands[bandName];
+    console.assert(band, `[SpawnBandSystem] ERROR: Unknown band '${bandName}'`);
+    // Return center of the band as default spawn point
+    return (band.minZ + band.maxZ) / 2;
+  }
+
+  shouldRecycle(z) {
+    return this.isInBand(z, 'BEHIND_CLEANUP');
+  }
+
+  getBandInfo(bandName) {
+    return this.bands[bandName];
+  }
+
+  getAllBands() {
+    return { ...this.bands };
+  }
+
+  getWorldProgress() {
+    return this.worldProgress;
+  }
+}
+
+// EntityRegistrySystem class - authoritative source of truth for world entities
+class EntityRegistrySystem {
+  constructor() {
+    this.entities = new Map(); // id -> entity
+    this.entitiesByType = new Map(); // type -> Set of entities
+    this.nextId = 1;
+    this.lastLogTime = 0;
+
+    console.log('[EntityRegistry] Authoritative entity registry established');
+  }
+
+  // Register an entity in the registry
+  register(entity) {
+    console.assert(entity, '[EntityRegistry] ERROR: Cannot register null/undefined entity');
+    console.assert(entity.id, '[EntityRegistry] ERROR: Entity must have id property');
+    console.assert(entity.type, '[EntityRegistry] ERROR: Entity must have type property');
+    console.assert(typeof entity.z === 'number', '[EntityRegistry] ERROR: Entity must have numeric z property');
+
+    if (this.entities.has(entity.id)) {
+      console.warn(`[EntityRegistry] WARNING: Entity ${entity.id} already registered, updating`);
+    }
+
+    this.entities.set(entity.id, entity);
+
+    // Add to type index
+    if (!this.entitiesByType.has(entity.type)) {
+      this.entitiesByType.set(entity.type, new Set());
+    }
+    this.entitiesByType.get(entity.type).add(entity);
+
+    console.log(`[EntityRegistry] Registered ${entity.type} entity ${entity.id} at Z=${entity.z.toFixed(2)}`);
+    return entity.id;
+  }
+
+  // Unregister an entity from the registry
+  unregister(entityOrId) {
+    const id = typeof entityOrId === 'object' ? entityOrId.id : entityOrId;
+    const entity = this.entities.get(id);
+
+    if (!entity) {
+      console.warn(`[EntityRegistry] WARNING: Entity ${id} not found for unregister`);
+      return false;
+    }
+
+    // Remove from type index
+    const typeSet = this.entitiesByType.get(entity.type);
+    if (typeSet) {
+      typeSet.delete(entity);
+      if (typeSet.size === 0) {
+        this.entitiesByType.delete(entity.type);
+      }
+    }
+
+    this.entities.delete(id);
+    console.log(`[EntityRegistry] Unregistered ${entity.type} entity ${id}`);
+    return true;
+  }
+
+  // Get all registered entities
+  getAll() {
+    return Array.from(this.entities.values());
+  }
+
+  // Get entities by type
+  getByType(type) {
+    const typeSet = this.entitiesByType.get(type);
+    return typeSet ? Array.from(typeSet) : [];
+  }
+
+  // Get entities in a specific spawn band
+  getByBand(spawnBandSystem, bandName) {
+    console.assert(spawnBandSystem, '[EntityRegistry] ERROR: spawnBandSystem required');
+    const allEntities = this.getAll();
+    return allEntities.filter(entity => spawnBandSystem.isInBand(entity.z, bandName));
+  }
+
+  // Clean up entities that should be recycled
+  cleanup(spawnBandSystem) {
+    console.assert(spawnBandSystem, '[EntityRegistry] ERROR: spawnBandSystem required');
+
+    const entitiesToRemove = [];
+    const allEntities = this.getAll();
+
+    for (const entity of allEntities) {
+      if (spawnBandSystem.shouldRecycle(entity.z)) {
+        entitiesToRemove.push(entity);
+      }
+    }
+
+    // Remove entities that need recycling
+    for (const entity of entitiesToRemove) {
+      this.unregister(entity);
+      if (entity.destroy) {
+        entity.destroy(); // Call entity's destroy method if it exists
+      }
+    }
+
+    if (entitiesToRemove.length > 0) {
+      console.log(`[EntityRegistry] Cleaned up ${entitiesToRemove.length} entities`);
+    }
+
+    return entitiesToRemove.length;
+  }
+
+  // Update all registered entities (if they have update methods)
+  update(deltaTime) {
+    const allEntities = this.getAll();
+    let updatedCount = 0;
+
+    for (const entity of allEntities) {
+      if (entity.update) {
+        entity.update(deltaTime);
+        updatedCount++;
+      }
+    }
+
+    // Periodic logging (not every frame)
+    const now = performance.now();
+    if (now - this.lastLogTime > 5000) { // Log every 5 seconds
+      const countsByType = {};
+      for (const [type, entities] of this.entitiesByType) {
+        countsByType[type] = entities.size;
+      }
+
+      console.log(`[EntityRegistry] Registry size: ${this.entities.size} entities`, countsByType);
+      this.lastLogTime = now;
+    }
+
+    return updatedCount;
+  }
+
+  // Generate unique entity ID
+  generateId() {
+    return this.nextId++;
+  }
+
+  // Get registry statistics
+  getStats() {
+    const stats = {
+      totalEntities: this.entities.size,
+      entitiesByType: {},
+      averageZ: 0
+    };
+
+    let totalZ = 0;
+    for (const [type, entities] of this.entitiesByType) {
+      stats.entitiesByType[type] = entities.size;
+    }
+
+    for (const entity of this.entities.values()) {
+      totalZ += entity.z;
+    }
+
+    if (this.entities.size > 0) {
+      stats.averageZ = totalZ / this.entities.size;
+    }
+
+    return stats;
+  }
+
+  // Clear all entities (useful for mode transitions)
+  clear() {
+    const count = this.entities.size;
+    for (const entity of this.entities.values()) {
+      if (entity.destroy) {
+        entity.destroy();
+      }
+    }
+
+    this.entities.clear();
+    this.entitiesByType.clear();
+    this.nextId = 1;
+
+    if (count > 0) {
+      console.log(`[EntityRegistry] Cleared ${count} entities`);
+    }
+
+    return count;
+  }
+}
+
+// CollisionIntentSystem class - deterministic collision detection layer
+class CollisionIntentSystem {
+  constructor(zCollisionThreshold = 10) {
+    this.zCollisionThreshold = zCollisionThreshold; // Configurable Z distance for collision
+    this.currentFrameIntents = []; // Intents for current frame only
+
+    console.log(`[CollisionIntent] Deterministic collision detection layer established (Z threshold: ${zCollisionThreshold})`);
+  }
+
+  // Process collision detection for current frame
+  process(planeEntity, entityRegistry, spawnBandSystem) {
+    console.assert(planeEntity, '[CollisionIntent] ERROR: planeEntity required');
+    console.assert(entityRegistry, '[CollisionIntent] ERROR: entityRegistry required');
+    console.assert(spawnBandSystem, '[CollisionIntent] ERROR: spawnBandSystem required');
+
+    // Clear previous frame's intents
+    this.currentFrameIntents = [];
+
+    // Only check entities in ACTIVE_WINDOW band (near player)
+    const activeEntities = entityRegistry.getByBand(spawnBandSystem, 'ACTIVE_WINDOW');
+
+    // Get plane's current lane (from PlaneEntity)
+    const planeLaneIndex = planeEntity.currentLaneIndex;
+    const planeZ = planeEntity.position.z; // Always 0 for plane
+
+    // Check each active entity for collision
+    for (const entity of activeEntities) {
+      // Skip if entity doesn't have laneIndex (not lane-aware)
+      if (typeof entity.laneIndex !== 'number') continue;
+
+      // Only check entities in the same lane as plane
+      if (entity.laneIndex !== planeLaneIndex) continue;
+
+      // Calculate Z distance (plane is always at Z=0)
+      const zDistance = Math.abs(entity.z - planeZ);
+
+      // Check if within collision threshold
+      if (zDistance <= this.zCollisionThreshold) {
+        // Create collision intent
+        const intent = {
+          type: 'COLLISION',
+          source: planeEntity,
+          target: entity,
+          laneIndex: planeLaneIndex,
+          zDistance: zDistance
+        };
+
+        this.currentFrameIntents.push(intent);
+
+        // Log collision intent
+        console.log(`[CollisionIntent] COLLISION: Plane vs ${entity.type} entity ${entity.id} (lane ${planeLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
+      }
+    }
+
+    return this.currentFrameIntents;
+  }
+
+  // Get intents for current frame
+  getCurrentIntents() {
+    return [...this.currentFrameIntents]; // Return copy
+  }
+
+  // Get intents filtered by type
+  getIntentsByType(intentType) {
+    return this.currentFrameIntents.filter(intent => intent.type === intentType);
+  }
+
+  // Get collision intents specifically
+  getCollisionIntents() {
+    return this.getIntentsByType('COLLISION');
+  }
+
+  // Check if plane has any collisions this frame
+  hasCollisions() {
+    return this.currentFrameIntents.length > 0;
+  }
+
+  // Get statistics for current frame
+  getFrameStats() {
+    const stats = {
+      totalIntents: this.currentFrameIntents.length,
+      intentsByType: {},
+      collisionCount: 0,
+      averageZDistance: 0
+    };
+
+    let totalZDistance = 0;
+
+    for (const intent of this.currentFrameIntents) {
+      // Count by type
+      stats.intentsByType[intent.type] = (stats.intentsByType[intent.type] || 0) + 1;
+
+      // Collision-specific stats
+      if (intent.type === 'COLLISION') {
+        stats.collisionCount++;
+        totalZDistance += intent.zDistance;
+      }
+    }
+
+    if (stats.collisionCount > 0) {
+      stats.averageZDistance = totalZDistance / stats.collisionCount;
+    }
+
+    return stats;
+  }
+
+  // Clear intents (called at end of frame)
+  clear() {
+    const clearedCount = this.currentFrameIntents.length;
+    this.currentFrameIntents = [];
+
+    if (clearedCount > 0) {
+      console.log(`[CollisionIntent] Cleared ${clearedCount} intents for next frame`);
+    }
+
+    return clearedCount;
+  }
+
+  // Configuration methods
+  setZCollisionThreshold(threshold) {
+    console.assert(threshold > 0, '[CollisionIntent] ERROR: Z threshold must be positive');
+    this.zCollisionThreshold = threshold;
+    console.log(`[CollisionIntent] Z collision threshold updated to ${threshold}`);
+  }
+
+  getZCollisionThreshold() {
+    return this.zCollisionThreshold;
+  }
+}
+
+// CoinEntity class - minimal entity for testing spawn system
+class CoinEntity {
+  constructor(id, laneIndex, z) {
+    this.id = id;
+    this.type = 'coin';
+    this.laneIndex = laneIndex;
+    this.z = z;
+    this.visualOffsetZ = 0; // Default visual offset for coordination between visual systems
+
+    console.log(`[CoinEntity] Created coin ${id} at lane ${laneIndex}, Z=${z.toFixed(2)}`);
+  }
+
+  // Optional update method (does nothing for now)
+  update(deltaTime) {
+    // No behavior for minimal coin entity
+  }
+
+  // Cleanup method
+  destroy() {
+    console.log(`[CoinEntity] Destroyed coin ${this.id}`);
+  }
+}
+
+// SpawnSystem class - rule-driven world population
+class SpawnSystem {
+  constructor(spawnBandSystem, entityRegistry, laneSystem, spawnInterval = 50) {
+    this.spawnBandSystem = spawnBandSystem;
+    this.entityRegistry = entityRegistry;
+    this.laneSystem = laneSystem;
+    this.spawnInterval = spawnInterval; // World units between spawns
+
+    this.lastSpawnProgress = 0;
+
+    console.log(`[SpawnSystem] Rule-driven spawning established (interval: ${spawnInterval} world units)`);
+  }
+
+  update() {
+    const currentProgress = this.spawnBandSystem.getWorldProgress();
+
+    // Check if we've moved far enough to spawn something new
+    if (currentProgress - this.lastSpawnProgress >= this.spawnInterval) {
+      this.spawnEntity();
+      this.lastSpawnProgress = currentProgress;
+    }
+  }
+
+  spawnEntity() {
+    // Choose random lane
+    const laneIndex = Math.floor(Math.random() * this.laneSystem.getLaneCount());
+
+    // Get spawn Z from spawn band system
+    const spawnZ = this.spawnBandSystem.getSpawnZ('AHEAD_SPAWN');
+
+    // Generate unique ID
+    const entityId = this.entityRegistry.generateId();
+
+    // Create coin entity
+    const coinEntity = new CoinEntity(entityId, laneIndex, spawnZ);
+
+    // Register with entity registry
+    this.entityRegistry.register(coinEntity);
+
+    console.log(`[SpawnSystem] SPAWNED: Coin ${entityId} in lane ${laneIndex} at Z=${spawnZ.toFixed(2)} (progress: ${this.spawnBandSystem.getWorldProgress().toFixed(0)})`);
+  }
+
+  // Configuration methods
+  setSpawnInterval(interval) {
+    console.assert(interval > 0, '[SpawnSystem] ERROR: Spawn interval must be positive');
+    this.spawnInterval = interval;
+    console.log(`[SpawnSystem] Spawn interval updated to ${interval} world units`);
+  }
+
+  getSpawnInterval() {
+    return this.spawnInterval;
+  }
+
+  getLastSpawnProgress() {
+    return this.lastSpawnProgress;
+  }
+
+  getEntitiesSpawned() {
+    // Count entities created by this spawn system (simple approximation)
+    return Math.floor(this.lastSpawnProgress / this.spawnInterval);
+  }
+}
+
+// CollisionConsumptionSystem class - processes collision intents into domain events
+class CollisionConsumptionSystem {
+  constructor(entityRegistry) {
+    this.entityRegistry = entityRegistry;
+    this.domainEvents = []; // Domain events for current frame
+
+    console.log('[CollisionConsumption] Intent consumption system established');
+  }
+
+  // Process collision intents and emit domain events
+  process(intents) {
+    console.assert(Array.isArray(intents), '[CollisionConsumption] ERROR: intents must be an array');
+
+    // Clear previous frame's domain events
+    this.domainEvents = [];
+
+    // Process each collision intent
+    for (const intent of intents) {
+      if (intent.type === 'COLLISION') {
+        this.processCollisionIntent(intent);
+      }
+    }
+
+    return this.domainEvents;
+  }
+
+  processCollisionIntent(intent) {
+    const { source, target, laneIndex, zDistance } = intent;
+
+    // Emit COLLISION domain event (metadata-rich, reusable across modes)
+    const collisionEvent = {
+      type: 'COLLISION',
+      entityId: target.id,
+      laneIndex: laneIndex,
+      position: { x: target.position?.x || 0, y: target.position?.y || 0, z: target.z || 0 },
+      value: zDistance, // Z distance as collision severity/intensity
+      timestamp: performance.now()
+    };
+
+    this.domainEvents.push(collisionEvent);
+
+    // Handle different entity types
+    if (target.type === 'coin') {
+      this.processCoinCollection(target, laneIndex, intent);
+    }
+    // Future: Add other entity type handlers here
+  }
+
+  processCoinCollection(coinEntity, laneIndex, intent) {
+    const entityId = coinEntity.id;
+    const { source } = intent; // Plane entity
+
+    // Unregister the coin from the entity registry
+    const unregistered = this.entityRegistry.unregister(coinEntity);
+    if (unregistered) {
+      // Emit standardized COIN_COLLECTED domain event (metadata-rich, reusable)
+      const domainEvent = {
+        type: 'COIN_COLLECTED',
+        value: 1, // Coin value
+        entityId: entityId,
+        laneIndex: laneIndex,
+        position: { x: source.position?.x || 0, y: source.position?.y || 0, z: source.position?.z || 0 }, // Plane position
+        timestamp: performance.now()
+      };
+
+      this.domainEvents.push(domainEvent);
+
+      console.log(`[CollisionConsumption] COIN_COLLECTED: Entity ${entityId} in lane ${laneIndex}`);
+    } else {
+      console.warn(`[CollisionConsumption] WARNING: Failed to unregister coin entity ${entityId}`);
+    }
+  }
+
+  // Get domain events for current frame
+  getDomainEvents() {
+    return [...this.domainEvents]; // Return copy
+  }
+
+  // Get domain events filtered by type
+  getDomainEventsByType(eventType) {
+    return this.domainEvents.filter(event => event.type === eventType);
+  }
+
+  // Get coin collection events specifically
+  getCoinCollectedEvents() {
+    return this.getDomainEventsByType('COIN_COLLECTED');
+  }
+
+  // Get statistics for current frame
+  getFrameStats() {
+    const stats = {
+      totalDomainEvents: this.domainEvents.length,
+      eventsByType: {},
+      coinCollections: 0
+    };
+
+    for (const event of this.domainEvents) {
+      // Count by type
+      stats.eventsByType[event.type] = (stats.eventsByType[event.type] || 0) + 1;
+
+      // Specific counters
+      if (event.type === 'COIN_COLLECTED') {
+        stats.coinCollections++;
+      }
+    }
+
+    return stats;
+  }
+
+  // Clear domain events (called at end of frame)
+  clear() {
+    const clearedCount = this.domainEvents.length;
+    this.domainEvents = [];
+
+    if (clearedCount > 0) {
+      console.log(`[CollisionConsumption] Cleared ${clearedCount} domain events for next frame`);
+    }
+
+    return clearedCount;
+  }
+}
+
+// ScoreSystem class - authoritative scoring state management
+class ScoreSystem {
+  constructor() {
+    this.coinsCollected = 0;
+
+    console.log('[ScoreSystem] Authoritative scoring system established');
+  }
+
+  // Consume domain events and update score state
+  consume(domainEvents) {
+    console.assert(Array.isArray(domainEvents), '[ScoreSystem] ERROR: domainEvents must be an array');
+
+    let coinsBefore = this.coinsCollected;
+
+    // Process each domain event
+    for (const event of domainEvents) {
+      if (event.type === 'COIN_COLLECTED') {
+        this.processCoinCollected(event);
+      }
+      // Future: Add other event type handlers here
+    }
+
+    // Log score changes
+    const coinsGained = this.coinsCollected - coinsBefore;
+    if (coinsGained > 0) {
+      console.log(`[ScoreSystem] SCORE: +${coinsGained} coins (Total: ${this.coinsCollected})`);
+    }
+
+    return coinsGained;
+  }
+
+  processCoinCollected(event) {
+    // Increment coins collected
+    this.coinsCollected += 1;
+
+    console.log(`[ScoreSystem] Coin collected in lane ${event.laneIndex} (Entity ${event.entityId})`);
+  }
+
+  // Get current score state
+  getCoinsCollected() {
+    return this.coinsCollected;
+  }
+
+  // Get complete score state
+  getScoreState() {
+    return {
+      coinsCollected: this.coinsCollected,
+      // Future: Add more score metrics here
+    };
+  }
+
+  // Reset score (useful for new game)
+  reset() {
+    const previousScore = this.coinsCollected;
+    this.coinsCollected = 0;
+
+    if (previousScore > 0) {
+      console.log(`[ScoreSystem] Score reset from ${previousScore} to 0`);
+    }
+
+    return previousScore;
+  }
+
+  // Get statistics
+  getStats() {
+    return {
+      coinsCollected: this.coinsCollected,
+      scoreState: this.getScoreState()
+    };
+  }
+}
+
+// PresentationSystem class - observer-only DOM updates for Endless mode
+class PresentationSystem {
+  constructor() {
+    this.lastRenderedCoins = -1; // Cache to avoid unnecessary DOM updates
+    this.coinsElement = null;
+
+    // Cache DOM element reference
+    this.initializeDomReferences();
+
+    console.log('[PresentationSystem] Observer-only presentation system established');
+  }
+
+  initializeDomReferences() {
+    // Target the existing element for Endless mode
+    this.coinsElement = document.getElementById('coinsValue-toprug1');
+  }
+
+  // Observer-only update method
+  update(scoreSystem, domainEvents) {
+    if (!scoreSystem) return;
+
+    // Get current coin count
+    const currentCoins = scoreSystem.getCoinsCollected();
+
+    // Update DOM only if value changed
+    if (currentCoins !== this.lastRenderedCoins) {
+      this.updateCoinsDisplay(currentCoins);
+      this.lastRenderedCoins = currentCoins;
+    }
+
+    // Observe domain events for potential future enhancements
+    // Currently not used but available for animations, sounds, etc.
+    this.observeDomainEvents(domainEvents);
+  }
+
+  updateCoinsDisplay(coins) {
+    if (this.coinsElement) {
+      this.coinsElement.textContent = coins.toString();
+    }
+  }
+
+  observeDomainEvents(domainEvents) {
+    // Observer-only: just observe events, don't process them
+    // Future: Could trigger animations, sounds, etc. based on events
+    // For now, this method exists for architectural completeness
+  }
+
+  // Optional cleanup method
+  cleanup() {
+    this.coinsElement = null;
+    this.lastRenderedCoins = -1;
+  }
+}
+
+// DebugWorldOverlaySystem class - real-time engine state display
+class DebugWorldOverlaySystem {
+  constructor(viewProfileSystem, distanceSystem, worldScrollerSystem, playerProxy, playerActionStateSystem) {
+    // Read-only observer: never mutates game state or influences gameplay
+    // Provides real-time engine state visibility for debugging
+
+    this.viewProfileSystem = viewProfileSystem;
+    this.distanceSystem = distanceSystem;
+    this.worldScrollerSystem = worldScrollerSystem;
+    this.playerProxy = playerProxy;
+    this.playerActionStateSystem = playerActionStateSystem;
+
+    this.overlayElement = null;
+    this.initializeOverlay();
+
+    console.log('[DebugOverlay] Real-time engine state overlay initialized');
+  }
+
+  initializeOverlay() {
+    // Create overlay container
+    this.overlayElement = document.createElement('div');
+    this.overlayElement.id = 'debug-world-overlay';
+    this.overlayElement.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #00ff00;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 9999;
+      pointer-events: none;
+      white-space: pre-line;
+      max-width: 300px;
+    `;
+
+    document.body.appendChild(this.overlayElement);
+  }
+
+  update(deltaTime) {
+    if (!this.overlayElement) return;
+
+    // Gather current engine state
+    const state = this.gatherEngineState();
+
+    // Format and display
+    this.overlayElement.textContent = this.formatStateDisplay(state);
+  }
+
+  gatherEngineState() {
+    return {
+      viewProfile: this.viewProfileSystem ? this.viewProfileSystem.currentProfile : 'unknown',
+      distance: this.distanceSystem ? Math.round(this.distanceSystem.getDistance()) : 0,
+      worldScroller: {
+        groundPlaneZ: this.worldScrollerSystem ? Math.round(this.worldScrollerSystem.getZoneZ('GROUND_PLANE')) : 0,
+        skyFarZ: this.worldScrollerSystem ? Math.round(this.worldScrollerSystem.getZoneZ('SKY_FAR')) : 0
+      },
+      playerProxy: {
+        x: this.playerProxy ? Math.round(this.playerProxy.getPosition().x) : 0,
+        y: this.playerProxy ? Math.round(this.playerProxy.getPosition().y) : 0,
+        z: this.playerProxy ? Math.round(this.playerProxy.getPosition().z) : 0
+      },
+      playerActionState: this.playerActionStateSystem ? this.playerActionStateSystem.getCurrentState() : {}
+    };
+  }
+
+  formatStateDisplay(state) {
+    return `VIEW: ${state.viewProfile}
+DIST: ${state.distance} units
+
+WORLD SCROLLER:
+  GROUND_PLANE Z: ${state.worldScroller.groundPlaneZ}
+  SKY_FAR Z: ${state.worldScroller.skyFarZ}
+
+PLAYER PROXY:
+  POS: (${state.playerProxy.x}, ${state.playerProxy.y}, ${state.playerProxy.z})
+
+ACTION STATE:
+  STATE: ${state.playerActionState.state || 'unknown'}
+  COOLDOWN: ${Math.max(0, Math.round(state.playerActionState.cooldownRemaining || 0))}ms
+  STUN: ${Math.max(0, Math.round(state.playerActionState.stunRemaining || 0))}ms`;
+  }
+
+  // Cleanup method
+  cleanup() {
+    if (this.overlayElement && this.overlayElement.parentNode) {
+      this.overlayElement.parentNode.removeChild(this.overlayElement);
+      this.overlayElement = null;
+    }
+  }
+}
+
+// PlayerVisualMovementSystem class - presentation-only lane-based visual movement
+class PlayerVisualMovementSystem {
+  constructor(laneController, laneSystem, playerActionStateSystem, playerProxy) {
+    // Presentation-only system: observes gameplay state, drives visual movement
+    // Never mutates gameplay logic, only affects visual representation
+    // Connects lane controller decisions to visual player movement
+
+    this.laneController = laneController;
+    this.laneSystem = laneSystem;
+    this.playerActionStateSystem = playerActionStateSystem;
+    this.playerProxy = playerProxy;
+
+    // Movement smoothing
+    this.lerpSpeed = 0.1; // How quickly player moves to target lane
+
+    console.log('[PlayerVisualMovement] Lane-based visual movement system established');
+  }
+
+  update(deltaTime) {
+    if (!this.playerProxy || !this.laneController || !this.laneSystem) {
+      return; // Safety check
+    }
+
+    // Check if player is stunned - if so, stop all lateral movement
+    const actionState = this.playerActionStateSystem.getCurrentState();
+    if (actionState.state === 'STUNNED') {
+      // Player is stunned - no lateral movement allowed
+      return;
+    }
+
+    // Get the target lane index from lane controller
+    const targetLaneIndex = this.laneController.targetLaneIndex;
+
+    // Get the X position of the target lane center
+    const targetLaneX = this.laneSystem.getLaneCenter(targetLaneIndex);
+
+    // Get current player X position
+    const currentPosition = this.playerProxy.getPosition();
+    const currentX = currentPosition.x;
+
+    // Smoothly interpolate toward target lane X position
+    const newX = currentX + (targetLaneX - currentX) * this.lerpSpeed;
+
+    // Update player proxy position (only X, preserve Y and Z)
+    this.playerProxy.setPosition(newX, currentPosition.y, currentPosition.z);
+  }
+}
+
+// PlayerVerticalConstraintSystem class - enforces vertical positioning constraints
+class PlayerVerticalConstraintSystem {
+  constructor(worldLayoutSystem, playerProxy) {
+    // Presentation-only system: enforces visual vertical constraints
+    // Never mutates gameplay logic, only corrects visual drift
+    // Ensures player stays in correct vertical band for camera framing
+
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.playerProxy = playerProxy;
+
+    // Movement smoothing for constraint corrections
+    this.constraintLerpSpeed = 0.05; // Gentle correction to avoid jarring
+
+    // Debug logging guard
+    this.driftLogged = false;
+
+    console.log('[PlayerVerticalConstraint] Vertical constraint system established');
+  }
+
+  update(deltaTime) {
+    if (!this.worldLayoutSystem || !this.playerProxy) {
+      return; // Safety check
+    }
+
+    // Get the target Y position from world layout
+    const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+    if (!midAirZone || typeof midAirZone.yBaseline !== 'number') {
+      return; // Cannot enforce constraint without valid baseline
+    }
+
+    const targetY = midAirZone.yBaseline;
+    const currentPosition = this.playerProxy.getPosition();
+    const currentY = currentPosition.y;
+
+    // Check for significant drift
+    const yDeviation = Math.abs(currentY - targetY);
+    if (yDeviation > 5) {
+      if (!this.driftLogged) {
+        console.log(`[VerticalConstraint] Correcting Y drift of ${yDeviation.toFixed(1)} units`);
+        this.driftLogged = true;
+      }
+    } else {
+      // Reset logging flag when back in tolerance
+      this.driftLogged = false;
+    }
+
+    // Smoothly constrain Y position to baseline
+    const newY = currentY + (targetY - currentY) * this.constraintLerpSpeed;
+
+    // Update player proxy position (only Y, preserve X and Z)
+    this.playerProxy.setPosition(currentPosition.x, newY, currentPosition.z);
+  }
+}
+
+// LaneEntitySpawnSystem class - gameplay system for spawning lane-based entities
+class LaneEntitySpawnSystem {
+  constructor(laneSystem, worldLayoutSystem, difficultyCurveSystem, entityRegistrySystem, world, distanceSystem) {
+    // Gameplay system: spawns entities that participate in game logic
+    // Uses difficulty scaling and lane system for placement
+    // Registers entities for collision detection and other systems
+
+    this.laneSystem = laneSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.difficultyCurveSystem = difficultyCurveSystem;
+    this.entityRegistrySystem = entityRegistrySystem;
+    this.world = world;
+    this.distanceSystem = distanceSystem;
+
+    // Spawn timing
+    this.baseSpawnInterval = 2000; // Base 2 seconds between spawns
+    this.lastSpawnTime = 0;
+
+    console.log('[LaneEntitySpawn] Lane-based entity spawning system established');
+  }
+
+  update(currentTime) {
+    // Defensive guard - exit if required dependencies are missing
+    if (!this.difficultyCurveSystem) {
+      console.warn('[LaneEntitySpawn] WARNING: difficultyCurveSystem missing, skipping update');
+      return;
+    }
+
+    // Check if it's time to spawn a new entity
+    let difficultyState;
+    try {
+      difficultyState = this.difficultyCurveSystem.getDifficultyState();
+      if (!difficultyState || typeof difficultyState.spawnRateMultiplier !== 'number') {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid difficulty state, skipping spawn check');
+        return;
+      }
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to get difficulty state, skipping update');
+      return;
+    }
+
+    const adjustedInterval = this.baseSpawnInterval / difficultyState.spawnRateMultiplier;
+
+    if (currentTime - this.lastSpawnTime >= adjustedInterval) {
+      this.spawnEntity();
+      this.lastSpawnTime = currentTime;
+    }
+  }
+
+  spawnEntity() {
+    // Defensive guards - exit early if required dependencies are missing
+    if (!this.laneSystem || !this.worldLayoutSystem || !this.entityRegistrySystem || !this.world) {
+      console.warn('[LaneEntitySpawn] WARNING: Missing required dependencies, skipping spawn');
+      return;
+    }
+
+    // Choose random lane
+    let laneIndex;
+    try {
+      const laneCount = this.laneSystem.getLaneCount();
+      if (typeof laneCount !== 'number' || laneCount <= 0) {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid lane count, skipping spawn');
+        return;
+      }
+      laneIndex = Math.floor(Math.random() * laneCount);
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to get lane count, skipping spawn');
+      return;
+    }
+
+    // Get lane center X position
+    let laneCenterX;
+    try {
+      laneCenterX = this.laneSystem.getLaneCenter(laneIndex);
+      if (typeof laneCenterX !== 'number') {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid lane center X, skipping spawn');
+        return;
+      }
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to get lane center, skipping spawn');
+      return;
+    }
+
+    // Get MID_AIR baseline Y position
+    let spawnY;
+    try {
+      const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+      if (!midAirZone || typeof midAirZone.baselineY !== 'number') {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid MID_AIR zone or baselineY, skipping spawn');
+        return;
+      }
+      spawnY = midAirZone.baselineY;
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to get MID_AIR zone, skipping spawn');
+      return;
+    }
+
+    // Spawn ahead of player (positive Z)
+    const spawnDistance = 200; // Units ahead of player
+    const spawnZ = spawnDistance;
+
+    // Create entity data
+    let entityId;
+    try {
+      entityId = this.entityRegistrySystem.generateId();
+      if (typeof entityId !== 'number') {
+        console.warn('[LaneEntitySpawn] WARNING: Invalid entity ID generated, skipping spawn');
+        return;
+      }
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to generate entity ID, skipping spawn');
+      return;
+    }
+
+    const coinEntity = new CoinEntity(entityId, laneIndex, spawnZ);
+
+    // TEMPORARY: Override spawnDistance to make coins visible immediately for debugging
+    coinEntity.spawnDistance = this.distanceSystem.getDistance() + 150;
+
+    // Set position
+    coinEntity.position = { x: laneCenterX, y: spawnY, z: spawnZ };
+
+    // Create simple visual mesh (placeholder)
+    try {
+      const geometry = new THREE.SphereGeometry(3, 8, 6);
+      const material = new THREE.MeshLambertMaterial({ color: 0xffd700 }); // Gold color
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(laneCenterX, spawnY, spawnZ);
+      this.world.add(mesh);
+
+      // Store mesh reference for cleanup
+      coinEntity.mesh = mesh;
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to create visual mesh, continuing without visuals');
+      // Continue without mesh - entity can still participate in collisions
+    }
+
+    // Register entity for collision detection and other systems
+    try {
+      this.entityRegistrySystem.register(coinEntity);
+    } catch (error) {
+      console.warn('[LaneEntitySpawn] WARNING: Failed to register entity, skipping spawn');
+      return;
+    }
+
+    // Safe logging with defensive .toFixed() calls
+    const laneCenterXStr = (typeof laneCenterX === 'number') ? laneCenterX.toFixed(1) : 'undefined';
+    const spawnYStr = (typeof spawnY === 'number') ? spawnY.toFixed(1) : 'undefined';
+
+    console.log(`[LaneEntitySpawn] SPAWNED: Coin ${entityId} in lane ${laneIndex} at (${laneCenterXStr}, ${spawnYStr}, ${spawnZ})`);
+  }
+}
+
+// LaneEntityVisualSystem class - presentation-only visual management for lane entities
+class LaneEntityVisualSystem {
+  constructor(entityRegistrySystem, laneSystem, worldLayoutSystem, world) {
+    // Presentation-only system: observes entities and manages their visual representation
+    // Never mutates game state, entities, or influences gameplay
+    // Only creates, positions, and removes THREE.js meshes for lane entities
+
+    this.entityRegistrySystem = entityRegistrySystem;
+    this.laneSystem = laneSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.world = world;
+
+    // Track which entities we've created visuals for
+    this.visualEntities = new Map(); // entityId -> { entity, mesh }
+
+    // Debug sphere for testing visual system
+    this.debugSphereCreated = false;
+
+    console.log('[LaneEntityVisual] Lane entity visual system established');
+  }
+
+  update() {
+    if (!this.entityRegistrySystem || !this.laneSystem || !this.worldLayoutSystem || !this.world) {
+      return; // Safety check
+    }
+
+    // TEMPORARY DEBUG: Create a test sphere to verify visual system works
+    if (!this.debugSphereCreated) {
+      try {
+        const geometry = new THREE.SphereGeometry(10, 16, 12);
+        const material = new THREE.MeshLambertMaterial({ color: 0xff00ff }); // Bright magenta
+        const debugSphere = new THREE.Mesh(geometry, material);
+        debugSphere.position.set(0, 100, -200); // In front of plane
+        this.world.add(debugSphere);
+        this.debugSphereCreated = true;
+        console.log('[LaneEntityVisual] DEBUG: Magenta test sphere created at (0, 100, -200)');
+      } catch (error) {
+        console.warn('[LaneEntityVisual] WARNING: Failed to create debug sphere');
+      }
+    }
+
+    // Get all current entities
+    const currentEntities = this.entityRegistrySystem.getAll();
+
+    // Track which entities we still have
+    const currentEntityIds = new Set();
+
+    // Update or create visuals for current entities
+    for (const entity of currentEntities) {
+      if (entity.type === 'coin') { // Only handle coin entities for now
+        currentEntityIds.add(entity.id);
+        this.ensureVisualForEntity(entity);
+        this.updateVisualPosition(entity);
+      }
+    }
+
+    // Remove visuals for entities that no longer exist
+    for (const [entityId, visualData] of this.visualEntities) {
+      if (!currentEntityIds.has(entityId)) {
+        this.removeVisualForEntity(entityId, visualData);
+      }
+    }
+  }
+
+  ensureVisualForEntity(entity) {
+    if (this.visualEntities.has(entity.id)) {
+      return; // Already have visual
+    }
+
+    // Create visual mesh for entity
+    try {
+      const geometry = new THREE.SphereGeometry(3, 8, 6);
+      const material = new THREE.MeshLambertMaterial({ color: 0xffd700 }); // Gold color
+      const mesh = new THREE.Mesh(geometry, material);
+
+      // Add to world
+      this.world.add(mesh);
+
+      // Store visual data
+      this.visualEntities.set(entity.id, {
+        entity: entity,
+        mesh: mesh
+      });
+
+    } catch (error) {
+      console.warn(`[LaneEntityVisual] WARNING: Failed to create visual for entity ${entity.id}`);
+    }
+  }
+
+  updateVisualPosition(entity) {
+    const visualData = this.visualEntities.get(entity.id);
+    if (!visualData || !visualData.mesh) {
+      return;
+    }
+
+    const mesh = visualData.mesh;
+
+    // Update position based on entity data with visual offset coordination
+    if (entity.position) {
+      const baseZ = entity.position.z || 0;
+      const offsetZ = entity.visualOffsetZ || 0;
+
+      // Explicitly set Y position using world layout system for MID_AIR zone
+      const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+      const yPosition = midAirZone && midAirZone.baselineY ? midAirZone.baselineY : (entity.position.y || 0);
+
+      mesh.position.set(
+        entity.position.x || 0,
+        yPosition,
+        baseZ + offsetZ
+      );
+    }
+  }
+
+  removeVisualForEntity(entityId, visualData) {
+    try {
+      if (visualData.mesh && this.world) {
+        // Dispose geometry and material
+        if (visualData.mesh.geometry) {
+          visualData.mesh.geometry.dispose();
+        }
+        if (visualData.mesh.material) {
+          if (Array.isArray(visualData.mesh.material)) {
+            visualData.mesh.material.forEach(mat => mat.dispose());
+          } else {
+            visualData.mesh.material.dispose();
+          }
+        }
+
+        // Remove from world
+        this.world.remove(visualData.mesh);
+      }
+    } catch (error) {
+      console.warn(`[LaneEntityVisual] WARNING: Failed to clean up visual for entity ${entityId}`);
+    }
+
+    // Remove from our tracking
+    this.visualEntities.delete(entityId);
+  }
+
+  // Cleanup all visuals (useful for mode transitions)
+  cleanup() {
+    for (const [entityId, visualData] of this.visualEntities) {
+      this.removeVisualForEntity(entityId, visualData);
+    }
+    this.visualEntities.clear();
+  }
+}
+
+// LaneEntityApproachSystem class - presentation-only visual approach effect
+class LaneEntityApproachSystem {
+  constructor(entityRegistrySystem, distanceSystem, worldLayoutSystem, laneEntityVisualSystem) {
+    // Presentation-only system: creates illusion of entities approaching player
+    // Never mutates game state, entities, or influences gameplay
+    // Only modifies mesh Z positions for visual approach effect
+
+    this.entityRegistrySystem = entityRegistrySystem;
+    this.distanceSystem = distanceSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.laneEntityVisualSystem = laneEntityVisualSystem;
+
+    // Player plane is always at Z = 0
+    this.PLAYER_PLANE_Z = 0;
+
+    console.log('[LaneEntityApproach] Visual approach effect system established');
+  }
+
+  update() {
+    if (!this.entityRegistrySystem || !this.distanceSystem || !this.laneEntityVisualSystem) {
+      return; // Safety check
+    }
+
+    // Get current distance traveled
+    const currentDistance = this.distanceSystem.getDistance();
+
+    // Get all coin entities
+    const coinEntities = this.entityRegistrySystem.getByType('coin');
+
+    // Process each entity
+    for (const entity of coinEntities) {
+      if (!entity.spawnDistance) {
+        // Entity doesn't have spawn distance recorded, skip
+        continue;
+      }
+
+      // Calculate approach Z position
+      // As distance increases, entities appear to move toward player
+      const approachZ = -(currentDistance - entity.spawnDistance);
+
+      // Set visual offset for coordination with LaneEntityVisualSystem
+      entity.visualOffsetZ = approachZ;
+
+      // Check if entity has crossed the player plane
+      if (approachZ > this.PLAYER_PLANE_Z + 10) {
+        // Entity has passed the player, unregister it
+        console.log('[Approach] Entity crossed player plane');
+        this.entityRegistrySystem.unregister(entity);
+      }
+    }
+  }
+}
+
+// AudioPresentationSystem class - observer-only audio feedback system
+class AudioPresentationSystem {
+  constructor() {
+    // Observer-only system: never mutates game state or influences gameplay
+    // Listens to domain events to provide audio feedback
+    // Must never mutate state - only observes and plays sounds
+
+    // Initialize audio context and load sound references
+    this.initializeAudio();
+
+    console.log('[AudioPresentation] Observer-only audio feedback system established');
+  }
+
+  initializeAudio() {
+    // In a real implementation, this would load audio assets
+    // For now, we reference them by name and handle gracefully if missing
+    this.audioAssets = {
+      coinCollect: 'coin_collect.wav',
+      collision: 'collision.wav'
+    };
+  }
+
+  // Observer-only update method - reads domain events, plays sounds
+  update(domainEvents) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return; // Safety check
+    }
+
+    // Process each domain event
+    for (const event of domainEvents) {
+      this.processDomainEvent(event);
+    }
+  }
+
+  processDomainEvent(event) {
+    // Switch on event type to determine audio response
+    switch (event.type) {
+      case 'COIN_COLLECTED':
+        this.playCoinCollectSound(event);
+        break;
+
+      case 'COLLISION':
+        this.playCollisionSound(event);
+        break;
+
+      default:
+        // Gracefully ignore unknown events
+        break;
+    }
+  }
+
+  playCoinCollectSound(event) {
+      // Play coin collection sound
+    // In a real implementation, this would play the audio asset
+    try {
+      // Placeholder for audio playback
+      // this.playSound(this.audioAssets.coinCollect, event.value || 1);
+      console.log(`[AudioPresentation] 🎵 Coin collected sound (value: ${event.value || 1})`);
+    } catch (error) {
+      // Gracefully handle missing audio assets
+      console.warn('[AudioPresentation] Coin collect audio not available');
+    }
+  }
+
+  playCollisionSound(event) {
+    // Play collision sound
+    try {
+      // Placeholder for audio playback
+      // this.playSound(this.audioAssets.collision, event.value || 1);
+      console.log(`[AudioPresentation] 💥 Collision sound (intensity: ${event.value || 1})`);
+    } catch (error) {
+      // Gracefully handle missing audio assets
+      console.warn('[AudioPresentation] Collision audio not available');
+    }
+  }
+
+  // Placeholder for actual audio playback (would integrate with Web Audio API or Howler.js)
+  playSound(assetName, volume = 1) {
+    // This would be implemented with actual audio playback
+    // For now, it's a placeholder that does nothing but could be extended
+  }
+
+  // Optional cleanup method
+  cleanup() {
+    // Stop any playing sounds, release audio resources
+  }
+}
+
+// VFXPresentationSystem class - observer-only visual effects system
+class VFXPresentationSystem {
+  constructor(world) {
+    // Observer-only system: never mutates game state or influences gameplay
+    // Listens to domain events to provide spatial visual feedback
+    // Must never mutate state - only observes and creates temporary visuals
+
+    this.world = world;
+    this.activeEffects = []; // Track active visual effects for cleanup
+
+    console.log('[VFXPresentation] Observer-only visual effects system established');
+  }
+
+  // Observer-only update method - reads domain events, spawns temporary visuals
+  update(domainEvents) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return; // Safety check
+    }
+
+    // Clean up expired effects first
+    this.cleanupExpiredEffects();
+
+    // Process each domain event
+    for (const event of domainEvents) {
+      this.processDomainEvent(event);
+    }
+  }
+
+  processDomainEvent(event) {
+    // Switch on event type to determine visual response
+    switch (event.type) {
+      case 'COIN_COLLECTED':
+        this.createCoinCollectEffect(event);
+        break;
+
+      case 'COLLISION':
+        this.createCollisionEffect(event);
+        break;
+
+      default:
+        // Gracefully ignore unknown events
+        break;
+    }
+  }
+
+  createCoinCollectEffect(event) {
+    if (!event.position) return; // Skip if no position data
+
+    // Create a small burst of gold/yellow particles or planes
+    const effectGroup = new THREE.Group();
+
+    // Create 4-6 small planes/particles in a small burst
+    const particleCount = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < particleCount; i++) {
+      const particle = this.createCoinParticle();
+      // Random spread around the event position
+      particle.position.set(
+        (Math.random() - 0.5) * 4,
+        Math.random() * 3,
+        (Math.random() - 0.5) * 4
+      );
+      effectGroup.add(particle);
+    }
+
+    // Position the effect group at event location
+    effectGroup.position.copy(event.position);
+
+    // Add to world
+    this.world.add(effectGroup);
+
+    // Track for cleanup
+    const effect = {
+      object: effectGroup,
+      startTime: performance.now(),
+      lifetime: 400 + Math.random() * 200, // 400-600ms
+      update: (currentTime) => this.updateCoinEffect(effectGroup, currentTime)
+    };
+
+    this.activeEffects.push(effect);
+  }
+
+  createCoinParticle() {
+    // Create a small plane with gold material
+    const geometry = new THREE.PlaneGeometry(0.5, 0.5);
+    const material = new THREE.MeshLambertMaterial({
+      color: 0xffd700, // Gold
+      transparent: true,
+      opacity: 0.8
+    });
+
+    const particle = new THREE.Mesh(geometry, material);
+
+    // Random rotation
+    particle.rotation.set(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI
+    );
+
+    return particle;
+  }
+
+  updateCoinEffect(effectGroup, currentTime) {
+    const elapsed = currentTime - this.activeEffects.find(e => e.object === effectGroup).startTime;
+    const lifetime = this.activeEffects.find(e => e.object === effectGroup).lifetime;
+
+    if (elapsed > lifetime) return; // Effect will be cleaned up
+
+    // Fade out over time
+    const fadeProgress = elapsed / lifetime;
+    effectGroup.children.forEach(particle => {
+      if (particle.material) {
+        particle.material.opacity = 0.8 * (1 - fadeProgress);
+      }
+      // Gentle upward movement
+      particle.position.y += 0.01;
+    });
+  }
+
+  createCollisionEffect(event) {
+    if (!event.position) return; // Skip if no position data
+
+    // Create a brief flash/ring effect
+    const geometry = new THREE.RingGeometry(0.5, 1.5, 8);
+    const material = new THREE.MeshLambertMaterial({
+      color: event.value > 5 ? 0xff0000 : 0xffffff, // Red for hard hits, white for soft
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide
+    });
+
+    const ring = new THREE.Mesh(geometry, material);
+
+    // Position at event location, slight Y offset
+    ring.position.copy(event.position);
+    ring.position.y += 1;
+
+    // Orient horizontally
+    ring.rotation.x = -Math.PI / 2;
+
+    // Add to world
+    this.world.add(ring);
+
+    // Track for cleanup
+    const effect = {
+      object: ring,
+      startTime: performance.now(),
+      lifetime: 200 + Math.random() * 100, // 200-300ms
+      update: (currentTime) => this.updateCollisionEffect(ring, currentTime)
+    };
+
+    this.activeEffects.push(effect);
+  }
+
+  updateCollisionEffect(ring, currentTime) {
+    const elapsed = currentTime - this.activeEffects.find(e => e.object === ring).startTime;
+    const lifetime = this.activeEffects.find(e => e.object === ring).lifetime;
+
+    if (elapsed > lifetime) return; // Effect will be cleaned up
+
+    // Expand and fade
+    const expandProgress = elapsed / lifetime;
+    const scale = 1 + expandProgress * 2;
+    ring.scale.setScalar(scale);
+
+    if (ring.material) {
+      ring.material.opacity = 0.7 * (1 - expandProgress);
+    }
+  }
+
+  cleanupExpiredEffects() {
+    const currentTime = performance.now();
+    const expiredEffects = [];
+
+    // Find expired effects
+    for (let i = this.activeEffects.length - 1; i >= 0; i--) {
+      const effect = this.activeEffects[i];
+      if (currentTime - effect.startTime > effect.lifetime) {
+        expiredEffects.push(effect);
+        this.activeEffects.splice(i, 1);
+      }
+    }
+
+    // Clean up expired effects
+    for (const effect of expiredEffects) {
+      if (effect.object) {
+        // Dispose geometries and materials
+        effect.object.traverse((child) => {
+          if (child.geometry) {
+            child.geometry.dispose();
+          }
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => mat.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+
+        // Remove from world
+        this.world.remove(effect.object);
+      }
+    }
+  }
+
+  // Optional cleanup method
+  cleanup() {
+    // Clean up all active effects
+    for (const effect of this.activeEffects) {
+      if (effect.object) {
+        this.world.remove(effect.object);
+      }
+    }
+    this.activeEffects = [];
+  }
+}
+
+// WorldAxisSystem class - manages world forward motion on Z axis only
+class WorldAxisSystem {
+  constructor(distanceSystem) {
+    console.assert(distanceSystem, '[WorldAxisSystem] ERROR: distanceSystem required');
+    this.distanceSystem = distanceSystem;
+    this.forwardSpeed = 0.02; // Matches DistanceSystem speed
+  }
+
+  reset() {
+    this.distanceSystem.reset();
+  }
+
+  update(deltaTime) {
+    this.distanceSystem.update(deltaTime);
+  }
+
+  getBaseDeltaZ() {
+    // Return negative Z movement to create forward illusion
+    return -this.distanceSystem.getDelta();
+  }
+
+  getDistance() {
+    return this.distanceSystem.getDistance();
+  }
+}
+
+// SkySystem class - parallax cloud layer visual system
+class SkySystem {
+  constructor(world) {
+    this.world = world;
+    this.cloudGroup = null;
+    this.clouds = [];
+    this.cloudCount = 20; // Number of clouds
+  }
+
+  init() {
+    // Create group to hold all clouds
+    this.cloudGroup = new THREE.Group();
+
+    // Create clouds distributed in a wide area
+    for (let i = 0; i < this.cloudCount; i++) {
+      this.createCloud();
+    }
+
+    // Position the entire group using layout rules (SKY_FAR zone)
+    if (this.worldLayout) {
+      const zone = this.worldLayout.getSystemZone('SkySystem');
+      if (zone) {
+        // Position within SKY_FAR yRange
+        const yCenter = (zone.yRange[0] + zone.yRange[1]) / 2;
+        this.cloudGroup.position.y = yCenter;
+      }
+    } else {
+      // Fallback if no layout
+      this.cloudGroup.position.y = 50;
+    }
+
+    // Add group to world
+    this.world.add(this.cloudGroup);
+
+    console.log(`[SkySystem] Initialized - ${this.cloudCount} clouds added to world`);
+  }
+
+  setWorldLayout(worldLayout) {
+    this.worldLayout = worldLayout;
+  }
+
+  createCloud() {
+    // Simple cloud using multiple spheres or boxes
+    const cloudGroup = new THREE.Group();
+
+    // Create 3-5 spheres per cloud for fluffy look
+    const sphereCount = 3 + Math.floor(Math.random() * 3);
+    const cloudGeometry = new THREE.SphereGeometry(8 + Math.random() * 4, 8, 6);
+    const cloudMaterial = new THREE.MeshLambertMaterial({
+      color: 0xffffff - Math.floor(Math.random() * 0x222222), // Vary white shades
+    transparent: true,
+      opacity: 0.7 + Math.random() * 0.3
+    });
+
+    for (let i = 0; i < sphereCount; i++) {
+      const sphere = new THREE.Mesh(cloudGeometry, cloudMaterial);
+      sphere.position.set(
+        (Math.random() - 0.5) * 20, // Spread horizontally
+        (Math.random() - 0.5) * 10, // Spread vertically
+        (Math.random() - 0.5) * 20  // Spread depth
+      );
+      sphere.scale.setScalar(0.8 + Math.random() * 0.4); // Vary sizes
+      cloudGroup.add(sphere);
+    }
+
+    // Position cloud in wide arc around the scene
+    const angle = (Math.PI * 2 * this.clouds.length) / this.cloudCount;
+    const distance = 200 + Math.random() * 300; // Vary distance from center
+    const height = 20 + Math.random() * 40; // Vary height
+
+    // Position cloud using layout rules (SKY_FAR zone)
+    if (this.worldLayout) {
+      const zone = this.worldLayout.getSystemZone('SkySystem');
+      if (zone) {
+        // Use SKY_FAR yRange for height variation
+        height = zone.yRange[0] + Math.random() * (zone.yRange[1] - zone.yRange[0]);
+      }
+    }
+
+    cloudGroup.position.set(
+      Math.cos(angle) * distance,
+      height,
+      Math.sin(angle) * distance
+    );
+
+    // Store cloud for cleanup
+    const cloudData = {
+      group: cloudGroup,
+      geometry: cloudGeometry,
+      material: cloudMaterial
+    };
+    this.clouds.push(cloudData);
+
+    // Add to main group
+    this.cloudGroup.add(cloudGroup);
+  }
+
+  update(deltaTime, zoneZ) {
+    if (!this.cloudGroup) return;
+
+    // Pure renderer: read Z offset from WorldScrollerSystem
+    // No movement logic here - WorldScrollerSystem owns all Z motion
+    this.cloudGroup.position.z = zoneZ;
+  }
+
+  destroy() {
+    if (this.cloudGroup) {
+      this.world.remove(this.cloudGroup);
+      this.cloudGroup = null;
+    }
+
+    // Dispose all cloud resources
+    this.clouds.forEach(cloud => {
+      cloud.geometry.dispose();
+      cloud.material.dispose();
+    });
+
+    this.clouds.length = 0;
+
+    console.log('[SkySystem] Destroyed - cloud group removed and resources disposed');
+  }
+}
+
+// PlaneEntity - state and transform only (X and Y only, Z locked to 0)
+class PlaneEntity {
+  constructor(laneSystem = null) {
+    this.laneSystem = laneSystem;
+
+    // State
+    this.position = { x: 0, y: 100, z: 0 };
+    this.rotation = { z: 0 }; // roll only for now
+
+    // Movement targets and smoothing
+    this.targetY = 100;
+    this.targetX = 0; // Lane-based X target
+    this.targetRoll = 0;
+    this.moveLerpSpeed = 0.1;
+    this.rollLerpSpeed = 0.1;
+
+    // Z-axis lock assertion
+    this._lastZ = 0;
+
+    // Logging guards for one-time error reporting
+    this._zViolationLogged = false;
+    this._laneDriftLogged = false;
+    this._laneErrorLogged = false;
+
+    // Lane tracking
+    this.currentLaneIndex = 1; // Start in middle lane
+  }
+
+  setTargetY(y) {
+    this.targetY = Math.max(40, Math.min(160, y)); // Clamp bounds
+  }
+
+  setTargetLane(laneIndex) {
+    if (!this.laneSystem) return;
+
+    this.currentLaneIndex = laneIndex;
+    this.targetX = this.laneSystem.getLaneCenter(laneIndex);
+
+    // Lane targeting is silent - no logging
+  }
+
+  setTargetRoll(roll) {
+    this.targetRoll = Math.max(-0.3, Math.min(0.3, roll)); // Clamp roll
+  }
+
+  update(deltaTime) {
+    // Smooth movement towards targets
+    this.position.x += (this.targetX - this.position.x) * this.moveLerpSpeed;
+    this.position.y += (this.targetY - this.position.y) * this.moveLerpSpeed;
+    this.rotation.z += (this.targetRoll - this.rotation.z) * this.rollLerpSpeed;
+
+    // Z-axis lock assertion - plane NEVER moves in Z
+    if (this.position.z !== 0) {
+      if (!this._zViolationLogged) {
+        console.error('[PlaneEntity] ERROR: Plane Z position changed - Z axis locked!');
+        this._zViolationLogged = true;
+      }
+      this.position.z = 0; // Force reset
+    }
+    this._lastZ = this.position.z;
+
+    // Lane system assertions - X must always be near a lane center
+    if (this.laneSystem) {
+      const currentLaneIndex = this.laneSystem.getLaneIndexForX(this.position.x);
+      const laneCenter = this.laneSystem.getLaneCenter(currentLaneIndex);
+      const distanceFromLane = Math.abs(this.position.x - laneCenter);
+
+      // Assert that plane is within reasonable distance of a lane center
+      if (distanceFromLane >= this.laneSystem.laneWidth * 0.6) {
+        if (!this._laneErrorLogged) {
+          console.error(`[PlaneEntity] ERROR: Plane X=${this.position.x.toFixed(2)} too far from lane center ${laneCenter.toFixed(2)}`);
+          this._laneErrorLogged = true;
+        }
+      }
+
+      if (distanceFromLane > this.laneSystem.laneWidth * 0.4) {
+        if (!this._laneDriftLogged) {
+          console.warn(`[PlaneEntity] WARNING: Plane drifting from lane center (distance: ${distanceFromLane.toFixed(2)})`);
+          this._laneDriftLogged = true;
+        }
+      } else {
+        // Reset drift warning when back in lane
+        this._laneDriftLogged = false;
+      }
+
+      // Lane position logging is silent - no per-frame logs
+    }
+  }
+
+  getPosition() {
+    return { ...this.position };
+  }
+
+  getRotation() {
+    return { ...this.rotation };
+  }
+}
+
+// PlaneController - input to intent only
+class PlaneController {
+  constructor() {
+    this.verticalRange = 60; // ±60 units from baseline
+    this.rollRange = 0.3; // ±0.3 radians
+  }
+
+  processInput(input) {
+    const mouse = input.getMouse();
+
+    // Convert mouse position to plane intents
+    const targetY = 100 + mouse.y * this.verticalRange;
+    const targetRoll = mouse.x * this.rollRange;
+
+    return {
+      targetY: targetY,
+      targetRoll: targetRoll
+    };
+  }
+}
+
+// PlaneView - visuals only
+class PlaneView {
+  constructor(world) {
+    this.world = world;
+    this.airplane = null;
+    this.propeller = null;
+    this.propellerSpeed = 0.2;
+    this.worldLayout = null;
+  }
+
+  setWorldLayout(worldLayout) {
+    this.worldLayout = worldLayout;
+  }
+
+  createMeshes() {
+    // Create airplane group with simple placeholder geometry
+    this.airplane = new THREE.Group();
+
+    // Simple fuselage (box placeholder)
+    const fuselageGeometry = new THREE.BoxGeometry(25, 3, 3);
+    const fuselageMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+    const fuselage = new THREE.Mesh(fuselageGeometry, fuselageMaterial);
+    fuselage.position.x = 2;
+    this.airplane.add(fuselage);
+
+    // Simple wings (box placeholder)
+    const wingGeometry = new THREE.BoxGeometry(28, 1, 6);
+    const wingMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+    const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+    wings.position.set(2, 1.5, 0);
+    this.airplane.add(wings);
+
+    // Simple tail (box placeholder)
+    const tailGeometry = new THREE.BoxGeometry(6, 1, 3);
+    const tailMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+    const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+    tail.position.set(-10, 3, 0);
+    this.airplane.add(tail);
+
+    // Simple propeller (single box placeholder)
+    const propellerGeometry = new THREE.BoxGeometry(1, 12, 1);
+    const propellerMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+    this.propeller = new THREE.Mesh(propellerGeometry, propellerMaterial);
+    this.propeller.position.set(12, 0, 0);
+    this.airplane.add(this.propeller);
+
+    // Position airplane using layout rules (MID_AIR zone)
+    let baselineY = 100; // Default fallback
+    if (this.worldLayout) {
+      const zone = this.worldLayout.getSystemZone('PlaneView');
+      if (zone && zone.yBaseline) {
+        baselineY = zone.yBaseline;
+      }
+    }
+
+    this.airplane.position.set(0, baselineY, 0);
+
+    // Add to world
+    this.world.add(this.airplane);
+  }
+
+  updateFromEntity(entity) {
+    if (!this.airplane) return;
+
+    // Update position and rotation from entity state
+    const position = entity.getPosition();
+    const rotation = entity.getRotation();
+
+    // For SIDE_SCROLLER profile: freeze X and Z position, only allow Y movement
+    this.airplane.position.x = 0; // Fixed X position
+    this.airplane.position.y = position.y; // Only Y movement allowed
+    this.airplane.position.z = 0; // Fixed Z position (plane never moves forward)
+    this.airplane.rotation.z = rotation.z; // Roll animation only
+
+    // Animate propeller
+    if (this.propeller) {
+      this.propeller.rotation.x += this.propellerSpeed;
+    }
+  }
+
+  destroy() {
+    if (this.airplane && this.world) {
+      this.world.remove(this.airplane);
+    }
+  }
+}
+
+// PlayerProxy class - minimal visual representation for endless mode
+class PlayerProxy {
+  constructor(world, worldLayoutSystem) {
+    this.world = world;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.mesh = null;
+
+    this.createMesh();
+  }
+
+  createMesh() {
+    // Simple box geometry for player representation
+    const geometry = new THREE.BoxGeometry(4, 4, 4);
+    const material = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // Red box
+
+    this.mesh = new THREE.Mesh(geometry, material);
+
+    // Position in MID_AIR zone
+    if (this.worldLayoutSystem) {
+      const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+      if (midAirZone && midAirZone.baselineY) {
+        this.mesh.position.set(0, midAirZone.baselineY, 0);
+      }
+    }
+
+    // Add to world
+    this.world.add(this.mesh);
+
+    console.log('[PlayerProxy] Visual player representation created');
+  }
+
+  getPosition() {
+    return this.mesh ? this.mesh.position.clone() : new THREE.Vector3();
+  }
+
+  setPosition(x, y, z) {
+    if (this.mesh) {
+      this.mesh.position.set(x, y, z);
+    }
+  }
+
+  update(deltaTime) {
+    // Simple rotation for visual feedback
+    if (this.mesh) {
+      this.mesh.rotation.y += deltaTime * 0.5; // Slow Y rotation
+    }
+  }
+
+  destroy() {
+    if (this.mesh && this.world) {
+      this.world.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      this.mesh.material.dispose();
+      this.mesh = null;
+    }
+  }
+}
+
+// EndlessMode class - orchestrates the components
+class EndlessMode {
+  constructor() {
+    // Lifecycle state
+    this.isActive = false;
+    this.isPaused = false;
+
+    // Health checks
+    this.hasInitialized = false;
+    this.hasStarted = false;
+
+    // Logging guards
+    this.lastDistanceLog = null;
+
+    // Dependencies
+    this.gameState = null;
+    this.world = null;
+    this.input = null;
+    this.cameraRig = null;
+    this.viewProfileSystem = null;
+
+    // Components
+    this.planeEntity = null;
+    this.planeController = null;
+    this.planeView = null;
+    this.playerProxy = null;
+    this.seaSystem = null;
+    this.skySystem = null;
+    this.distanceSystem = null;
+    this.worldAxisSystem = null;
+    this.depthLayerSystem = null;
+    this.worldLayoutSystem = null;
+    this.difficultyCurveSystem = null;
+    this.worldScrollerSystem = null;
+    this.laneSystem = null;
+    this.playerIntentSystem = null;
+    this.playerActionStateSystem = null;
+    this.collisionImpactSystem = null;
+    this.healthSystem = null;
+    this.collisionDamageSystem = null;
+    this.laneController = null;
+    this.spawnBandSystem = null;
+    this.entityRegistrySystem = null;
+    this.collisionIntentSystem = null;
+    this.spawnSystem = null;
+    this.collisionConsumptionSystem = null;
+    this.scoreSystem = null;
+    this.presentationSystem = null;
+    this.audioPresentationSystem = null;
+    this.vfxPresentationSystem = null;
+    this.debugWorldOverlaySystem = null;
+    this.playerVisualMovementSystem = null;
+    this.laneEntitySpawnSystem = null;
+    this.laneEntityVisualSystem = null;
+    this.laneEntityApproachSystem = null;
+  }
+
+  init(gameState, world, input, cameraRig, viewProfileSystem) {
+    // Lifecycle guard: init must run only once
+    console.assert(!this.hasInitialized, '[EndlessMode] ERROR: init() called multiple times');
+    this.hasInitialized = true;
+
+    // Store dependencies - no side effects
+    this.gameState = gameState;
+    this.world = world;
+    this.input = input;
+    this.cameraRig = cameraRig;
+    this.viewProfileSystem = viewProfileSystem;
+
+    // Set view profile for endless flight mode
+    this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
+
+    // Create components - no initialization
+    this.planeEntity = new PlaneEntity(this.laneSystem);
+    this.planeController = new PlaneController();
+    this.planeView = new PlaneView(world);
+    this.seaSystem = new SeaSystem(world);
+    this.skySystem = new SkySystem(world);
+    this.playerProxy = new PlayerProxy(world, this.worldLayoutSystem);
+    this.distanceSystem = new DistanceSystem();
+    this.worldAxisSystem = new WorldAxisSystem(this.distanceSystem);
+    this.depthLayerSystem = new DepthLayerSystem();
+    this.worldLayoutSystem = new WorldLayoutSystem();
+    this.difficultyCurveSystem = new DifficultyCurveSystem();
+    this.worldScrollerSystem = new WorldScrollerSystem(
+      this.worldAxisSystem,
+      this.worldLayoutSystem,
+      this.depthLayerSystem
+    );
+
+    // Create lane system - 3 lanes, 40 units wide
+    this.laneSystem = new LaneSystem(3, 40);
+    this.playerIntentSystem = new PlayerIntentSystem();
+    this.playerActionStateSystem = new PlayerActionStateSystem();
+    this.collisionImpactSystem = new CollisionImpactSystem(this.playerActionStateSystem);
+    this.healthSystem = new HealthSystem(3); // Start with 3 lives
+    this.collisionDamageSystem = new CollisionDamageSystem(this.healthSystem);
+    this.laneController = new LaneController(this.laneSystem);
+
+    // Create spawn band system - defines spatial spawn rules
+    this.spawnBandSystem = new SpawnBandSystem();
+
+    // Create entity registry system - authoritative source of truth for entities
+    this.entityRegistrySystem = new EntityRegistrySystem();
+
+    // Create collision intent system - deterministic collision detection layer
+    this.collisionIntentSystem = new CollisionIntentSystem(15); // 15 unit Z threshold
+
+    // Create spawn system - rule-driven world population
+    this.spawnSystem = new SpawnSystem(
+      this.spawnBandSystem,
+      this.entityRegistrySystem,
+      this.laneSystem,
+      50 // Spawn every 50 world units
+    );
+
+    // Create collision consumption system - processes intents into domain events
+    this.collisionConsumptionSystem = new CollisionConsumptionSystem(this.entityRegistrySystem);
+
+    // Create score system - authoritative scoring state management
+    this.scoreSystem = new ScoreSystem();
+
+    // Create presentation system - observer-only DOM updates for Endless mode
+    this.presentationSystem = new PresentationSystem();
+
+    // Create audio presentation system - observer-only audio feedback
+    this.audioPresentationSystem = new AudioPresentationSystem();
+
+    // Create VFX presentation system - observer-only visual effects
+    this.vfxPresentationSystem = new VFXPresentationSystem(world);
+
+    // Create debug world overlay system - real-time engine state display
+    this.debugWorldOverlaySystem = new DebugWorldOverlaySystem(
+      this.viewProfileSystem,
+      this.distanceSystem,
+      this.worldScrollerSystem,
+      this.playerProxy,
+      this.playerActionStateSystem
+    );
+
+    // Create player visual movement system - presentation-only lane movement
+    this.playerVisualMovementSystem = new PlayerVisualMovementSystem(
+      this.laneController,
+      this.laneSystem,
+      this.playerActionStateSystem,
+      this.playerProxy
+    );
+
+    // Create player vertical constraint system - enforces Y positioning for camera framing
+    this.playerVerticalConstraintSystem = new PlayerVerticalConstraintSystem(
+      this.worldLayoutSystem,
+      this.playerProxy
+    );
+
+    // Create lane entity spawn system - gameplay entity spawning
+    this.laneEntitySpawnSystem = new LaneEntitySpawnSystem(
+      this.laneSystem,
+      this.worldLayoutSystem,
+      this.difficultyCurveSystem,
+      this.entityRegistrySystem,
+      world,
+      this.distanceSystem
+    );
+
+    // Create lane entity visual system - presentation-only visual management
+    this.laneEntityVisualSystem = new LaneEntityVisualSystem(
+      this.entityRegistrySystem,
+      this.laneSystem,
+      this.worldLayoutSystem,
+      world
+    );
+
+    // Create lane entity approach system - presentation-only approach effect
+    this.laneEntityApproachSystem = new LaneEntityApproachSystem(
+      this.entityRegistrySystem,
+      this.distanceSystem,
+      this.worldLayoutSystem,
+      this.laneEntityVisualSystem
+    );
+
+    console.log('[EndlessMode] Initialized - objects created, ready for start()');
+    console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
+  }
+
+  start() {
+    // Lifecycle guard: start must not run twice without destroy
+    console.assert(!this.hasStarted || !this.isActive, '[EndlessMode] ERROR: start() called twice without destroy()');
+    this.hasStarted = true;
+
+    // Reset state
+    this.isActive = true;
+    this.isPaused = false;
+
+    // Initialize view (create meshes)
+    this.planeView.createMeshes();
+
+    // Initialize sea system
+    this.seaSystem.init();
+
+    // Initialize sky system
+    this.skySystem.init();
+
+    // Initialize plane view layout
+    this.planeView.setWorldLayout(this.worldLayoutSystem);
+
+    // Register systems with world layout zones
+    this.worldLayoutSystem.registerSystem('SeaSystem', 'GROUND_PLANE');
+    this.worldLayoutSystem.registerSystem('SkySystem', 'SKY_FAR');
+    this.worldLayoutSystem.registerSystem('PlaneView', 'MID_AIR');
+
+    // Reset world axis system
+    this.worldAxisSystem.reset();
+
+    // Reset entity to initial state
+    this.planeEntity = new PlaneEntity(this.laneSystem); // Fresh entity
+
+    // Initialize lane controller to middle lane
+    this.laneController.setCurrentLane(1); // Middle lane for 3-lane setup
+    this.planeEntity.setTargetLane(1); // Sync entity with lane controller
+
+    // Force SIDE_SCROLLER view profile for endless mode
+    this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
+    console.log('[EndlessMode] View profile forced to SIDE_SCROLLER');
+
+    // Add debug coordinate axes
+    const axesHelper = new THREE.AxesHelper(200);
+    this.world.add(axesHelper);
+    console.log('[EndlessMode] Debug coordinate axes added (X=red, Y=green, Z=blue)');
+
+    // Start camera following PlayerProxy
+    this.cameraRig.follow(this.playerProxy);
+
+    console.log('[EndlessMode] Started - input active, state reset');
+  }
+
+  update(deltaTime) {
+    // Silent health check - core systems are validated at init/start time
+    if (!this.isActive) {
+      return;
+    }
+
+    // Only run when active and not paused
+    if (this.isPaused) return;
+    if (!this.planeEntity || !this.planeController || !this.planeView || !this.input) return;
+
+    // Check for game over - skip gameplay logic if player is dead
+    if (this.gameState.status === 'GAME_OVER') {
+      // Still allow presentation systems to run (for UI updates)
+      // But skip all gameplay logic
+      this.presentationSystem.update(this.scoreSystem, []);
+      this.audioPresentationSystem.update([]);
+      this.vfxPresentationSystem.update([]);
+      return;
+    }
+
+    // 1. Player action state system manages cooldowns and state
+    this.playerActionStateSystem.update(deltaTime);
+
+    // 2. Player intent system converts raw input into semantic intents
+    this.playerIntentSystem.update(this.input, deltaTime);
+    const rawPlayerIntents = this.playerIntentSystem.getIntents();
+
+    // 3. Filter intents through action state system (gate based on cooldowns)
+    const approvedIntents = rawPlayerIntents.filter(intent =>
+      this.playerActionStateSystem.canExecute(intent.type)
+    );
+
+    // 4. Lane controller processes approved player intents into lane changes
+    const laneIntent = this.laneController.processIntents(approvedIntents);
+
+    // 5. Notify action state system of executed intents
+    if (approvedIntents.length > 0 && laneIntent.targetLaneIndex !== laneIntent.currentLaneIndex) {
+      // Lane change was executed - notify action state system
+      const executedIntent = approvedIntents.find(intent =>
+        intent.type === 'MOVE_LEFT' || intent.type === 'MOVE_RIGHT'
+      );
+      if (executedIntent) {
+        this.playerActionStateSystem.onIntentExecuted(executedIntent.type);
+      }
+    }
+
+    // 3. Controller processes input into intent
+    const intent = this.planeController.processInput(this.input);
+
+    // 3. Entity updates state based on intent
+    this.planeEntity.setTargetLane(laneIntent.targetLaneIndex);
+    this.planeEntity.setTargetY(intent.targetY);
+    this.planeEntity.setTargetRoll(intent.targetRoll);
+    this.planeEntity.update(deltaTime);
+
+    // 3. View updates visuals from entity state
+    this.planeView.updateFromEntity(this.planeEntity);
+
+    // 4. World axis system updates
+    this.worldAxisSystem.update(deltaTime);
+
+    // 4.5. Difficulty curve system updates (centralized difficulty progression)
+    const currentDistance = this.distanceSystem.getDistance();
+    this.difficultyCurveSystem.update(currentDistance);
+
+    // Log distance every ~500 units (skip initial 0)
+    if (this.lastDistanceLog === null && currentDistance >= 500) {
+      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
+    } else if (this.lastDistanceLog !== null && currentDistance - this.lastDistanceLog >= 500) {
+      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
+    }
+
+    // 5. World scroller system updates (single source of truth for forward motion)
+    this.worldScrollerSystem.update(deltaTime);
+
+    // 6. Spawn band system updates (defines spatial spawn rules)
+    // Player is always at Z=0, so pass current world scroll offset
+    this.spawnBandSystem.update(deltaTime, 0);
+
+    // 7. Entity registry system updates (manages all world entities)
+    this.entityRegistrySystem.update(deltaTime);
+    this.entityRegistrySystem.cleanup(this.spawnBandSystem);
+
+    // 8. Spawn system updates (rule-driven world population)
+    this.spawnSystem.update();
+
+    // 8.5. Lane entity spawn system updates (difficulty-scaled lane spawning)
+    this.laneEntitySpawnSystem.update(performance.now());
+
+    // 9. Collision intent system processes (deterministic collision detection)
+    const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
+
+    // 10. Collision consumption system processes intents into domain events
+    const domainEvents = this.collisionConsumptionSystem.process(collisionIntents);
+
+    // 11. Score system consumes domain events and updates score state
+    this.scoreSystem.consume(domainEvents);
+
+    // 12. Collision impact system processes domain events into player consequences
+    this.collisionImpactSystem.process(domainEvents);
+
+    // 13. Collision damage system processes domain events into health damage
+    this.collisionDamageSystem.process(domainEvents, this.playerActionStateSystem);
+
+    // Check for player death and handle game over
+    if (this.healthSystem.isDead() && this.gameState.status !== 'GAME_OVER') {
+      this.gameState.status = 'GAME_OVER';
+      console.log('[Game] GAME OVER - Player has died');
+    }
+
+    // 14. Presentation system observes score and domain events for DOM updates
+    this.presentationSystem.update(this.scoreSystem, domainEvents);
+
+    // 15. Audio presentation system observes domain events for sound feedback
+    this.audioPresentationSystem.update(domainEvents);
+
+    // 16. VFX presentation system observes domain events for visual effects
+    this.vfxPresentationSystem.update(domainEvents);
+
+    // 17. Lane entity approach system creates visual approach effect
+    this.laneEntityApproachSystem.update();
+
+    // 18. Lane entity visual system manages visuals for lane entities
+    this.laneEntityVisualSystem.update();
+
+    // 19. Debug world overlay system displays real-time engine state
+    this.debugWorldOverlaySystem.update(deltaTime);
+
+    // 18. Player proxy updates (visual representation)
+    this.playerProxy.update(deltaTime);
+
+    // 19. Player visual movement system updates lane-based X position
+    this.playerVisualMovementSystem.update(deltaTime);
+
+    // 19.5. Player vertical constraint system enforces Y positioning for camera framing
+    this.playerVerticalConstraintSystem.update(deltaTime);
+
+    // 20. Sea system updates (pure renderer - reads Z from scroller)
+    this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
+
+    // 17. Sky system updates (pure renderer - reads Z from scroller)
+    this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
+
+    // 18. Camera system updates (delegated to CameraRig)
+    this.cameraRig.update();
+
+    // 19. Clear collision intents, domain events, and player intents for next frame
+    this.collisionIntentSystem.clear();
+    this.collisionConsumptionSystem.clear();
+    this.playerIntentSystem.clear();
+
+    // Update game time
+    this.gameState.time += deltaTime;
+  }
+
+  pause() {
+    // Stop updates without mutating state
+    this.isPaused = true;
+    console.log('[EndlessMode] Paused - updates stopped');
+  }
+
+  resume() {
+    // Continue updates
+    this.isPaused = false;
+    console.log('[EndlessMode] Resumed - updates continued');
+  }
+
+  destroy() {
+    // Deactivate
+    this.isActive = false;
+    this.isPaused = false;
+
+    // Reset lifecycle flags for potential restart
+    this.hasStarted = false;
+
+    // Clear camera following
+    if (this.cameraRig) {
+      this.cameraRig.clear();
+    }
+
+    // Clean up all references and remove from world
+    if (this.planeView) {
+      this.planeView.destroy();
+      this.planeView = null;
+    }
+
+    if (this.seaSystem) {
+      this.seaSystem.destroy();
+      this.seaSystem = null;
+    }
+
+    if (this.skySystem) {
+      this.skySystem.destroy();
+      this.skySystem = null;
+    }
+
+    // Clear all component references
+    this.planeEntity = null;
+    this.planeController = null;
+
+    // Clear dependency references
+    this.gameState = null;
+    this.world = null;
+    this.input = null;
+    this.cameraRig = null;
+    this.seaSystem = null;
+    this.skySystem = null;
+    this.worldAxisSystem = null;
+    this.viewProfileSystem = null;
+    this.depthLayerSystem = null;
+    this.worldLayoutSystem = null;
+
+    console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
+  }
 }

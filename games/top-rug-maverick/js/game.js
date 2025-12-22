@@ -1,3 +1,7 @@
+// Import the MovementModel
+// Note: In a browser environment, we'll load this script before the game script
+// For now, assuming FreeFlightMovement is available globally
+
 function createAirplaneMesh() {
 	const mesh = new THREE.Object3D()
 
@@ -162,57 +166,6 @@ function createAirplaneMesh() {
 
 
 
-const utils = {
-	normalize: function (v, vmin, vmax, tmin, tmax) {
-		var nv = Math.max(Math.min(v,vmax), vmin)
-		var dv = vmax-vmin
-		var pc = (nv-vmin)/dv
-		var dt = tmax-tmin
-		var tv = tmin + (pc*dt)
-		return tv
-	},
-
-	findWhere: function (list, properties) {
-		for (const elem of list) {
-			let all = true
-			for (const key in properties) {
-				if (elem[key] !== properties[key]) {
-					all = false
-					break
-				}
-			}
-			if (all) {
-				return elem
-			}
-		}
-		return null
-	},
-
-	randomOneOf: function (choices) {
-		return choices[Math.floor(Math.random() * choices.length)]
-	},
-
-	randomFromRange: function (min, max) {
-		return min + Math.random() * (max - min)
-	},
-
-	collide: function (mesh1, mesh2, tolerance) {
-		const diffPos = mesh1.position.clone().sub(mesh2.position.clone())
-		const d = diffPos.length()
-		return d < tolerance
-	},
-
-	makeTetrahedron: function (a, b, c, d) {
-		return [
-			a[0], a[1], a[2],
-			b[0], b[1], b[2],
-			c[0], c[1], c[2],
-			b[0], b[1], b[2],
-			c[0], c[1], c[2],
-			d[0], d[1], d[2],
-		]
-	}
-}
 
 
 
@@ -457,9 +410,17 @@ function createScene() {
 	audioManager.setCamera(camera)
 	scene.fog = new THREE.Fog(0xf7d9aa, 100, 950)
 
-	renderer = new THREE.WebGLRenderer({canvas: ui.canvas, alpha: true, antialias: true})
+	renderer = new THREE.WebGLRenderer({alpha: true, antialias: true})
 	renderer.setSize(ui.width, ui.height)
 	renderer.setPixelRatio(window.devicePixelRatio? window.devicePixelRatio : 1)
+
+	// Append canvas to the appropriate world container
+	const worldContainer = document.getElementById('world-toprug2') // Combat mode container
+	if (worldContainer) {
+		ui.canvas = renderer.domElement
+		ui.canvas.id = 'threejs-canvas'
+		worldContainer.appendChild(ui.canvas)
+	}
 
 	renderer.shadowMap.enabled = true
 
@@ -817,6 +778,7 @@ class Airplane {
 		this.pilot = pilot
 		this.weapon = null
 		this.lastShot = 0
+		this.movement = new FreeFlightMovement()
 	}
 
 
@@ -862,21 +824,14 @@ class Airplane {
 		this.propeller.rotation.x += 0.2 + game.planeSpeed * deltaTime*.005
 
 		if (game.status === 'playing') {
-			game.planeSpeed = utils.normalize(ui.mousePos.x, -0.5, 0.5, world.planeMinSpeed, world.planeMaxSpeed)
-			let targetX = utils.normalize(ui.mousePos.x, -1, 1, -world.planeAmpWidth*0.7, -world.planeAmpWidth)
-			let targetY = utils.normalize(ui.mousePos.y, -0.75, 0.75, world.planeDefaultHeight-world.planeAmpHeight, world.planeDefaultHeight+world.planeAmpHeight)
+			// Call movement model to get new position and rotation
+			const movementResult = this.movement.update(ui.mousePos, deltaTime, game, this)
 
-			game.planeCollisionDisplacementX += game.planeCollisionSpeedX
-			targetX += game.planeCollisionDisplacementX
-
-			game.planeCollisionDisplacementY += game.planeCollisionSpeedY
-			targetY += game.planeCollisionDisplacementY
-
-			this.mesh.position.x += (targetX - this.mesh.position.x) * deltaTime * world.planeMoveSensivity
-			this.mesh.position.y += (targetY - this.mesh.position.y) * deltaTime * world.planeMoveSensivity
-
-			this.mesh.rotation.x = (this.mesh.position.y - targetY) * deltaTime * world.planeRotZSensivity
-			this.mesh.rotation.z = (targetY - this.mesh.position.y) * deltaTime * world.planeRotXSensivity
+			// Apply returned values directly
+			this.mesh.position.x = movementResult.x
+			this.mesh.position.y = movementResult.y
+			this.mesh.rotation.x = movementResult.rotX
+			this.mesh.rotation.z = movementResult.rotZ
 
 			if (game.fpv) {
 				camera.position.y = this.mesh.position.y + 20
@@ -1641,7 +1596,7 @@ class UI {
 		this.width = window.innerWidth
 		this.height = window.innerHeight
 		this.mousePos = {x: 0, y: 0}
-		this.canvas = document.getElementById('threejs-canvas')
+		this.canvas = null // Will be set by Three.js renderer
 
 		this.mouseButtons = [false, false, false]
 		this.keysDown = {}
@@ -1909,6 +1864,16 @@ function resetMap() {
 		planeCollisionSpeedX: 0,
 		planeCollisionDisplacementY: 0,
 		planeCollisionSpeedY: 0,
+
+		// World constants for movement
+		planeDefaultHeight: 100,
+		planeAmpHeight: 80,
+		planeAmpWidth: 75,
+		planeMoveSensivity: 0.005,
+		planeRotXSensivity: 0.0008,
+		planeRotZSensivity: 0.0004,
+		planeMinSpeed: 1.2,
+		planeMaxSpeed: 1.6,
 
 		coinLastSpawn: 0,
 		enemyLastSpawn: 0,

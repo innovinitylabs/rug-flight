@@ -1,211 +1,244 @@
-// Game Mode Controller
-// Handles game mode selection and loading
+// Game Controller - Mode selection for unified game
 
 (function() {
   'use strict';
 
-  var GameModeController = {
-    currentMode: null,
-    toprug1Loaded: false,
-    toprug2Loaded: false,
+  var GameController = {
+    gameLoaded: false,
+    selectedMode: null, // 'endless' or 'combat'
 
     init: function() {
-      console.log('[Game Controller] Initializing...');
-      var selector = document.getElementById('gameModeSelector');
-      if (!selector) {
-        console.error('[Game Controller] Game mode selector not found');
-        console.log('[Game Controller] Available elements with IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
-        return;
-      }
+      console.log('[Game Controller] Initializing mode selection...');
 
-      console.log('[Game Controller] Found selector, setting up buttons...');
+      // Load additional dependencies first
+      var scriptsToLoad = [
+        'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/loaders/OBJLoader.js',
+        'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/controls/OrbitControls.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.10.2/gsap.min.js'
+      ];
 
-      // Add event listeners to mode buttons
-      var buttons = selector.querySelectorAll('.mode-button');
-      console.log('[Game Controller] Found', buttons.length, 'mode buttons');
+      // Load CSS
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = 'games/top-rug/css/styles.css';
+      document.head.appendChild(link);
 
-      for (var i = 0; i < buttons.length; i++) {
-        var mode = buttons[i].getAttribute('data-mode');
-        console.log('[Game Controller] Button', i, 'has mode:', mode);
-        buttons[i].addEventListener('click', this.handleModeSelection.bind(this));
-      }
+      // Load fonts
+      var fontLink = document.createElement('link');
+      fontLink.rel = 'preconnect';
+      fontLink.href = 'https://fonts.googleapis.com';
+      document.head.appendChild(fontLink);
+
+      var fontLink2 = document.createElement('link');
+      fontLink2.rel = 'preconnect';
+      fontLink2.href = 'https://fonts.gstatic.com';
+      fontLink2.crossOrigin = 'anonymous';
+      document.head.appendChild(fontLink2);
+
+      var fontLink3 = document.createElement('link');
+      fontLink3.href = 'https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap';
+      fontLink3.rel = 'stylesheet';
+      document.head.appendChild(fontLink3);
+
+      // Load scripts sequentially
+      this.loadScriptsSequentially(scriptsToLoad, function() {
+        // Dependencies loaded, now setup mode selection
+        GameController.setupModeSelection();
+      });
 
       console.log('[Game Controller] Initialization complete');
     },
 
-    handleModeSelection: function(event) {
-      console.log('[Game Controller] Button clicked');
-      var mode = event.currentTarget.getAttribute('data-mode');
+    setupModeSelection: function() {
+      console.log('[Game Controller] Setting up mode selection...');
+
+      var endlessBtn = document.getElementById('endless-mode-btn');
+      var combatBtn = document.getElementById('combat-mode-btn');
+      var modeScreen = document.getElementById('mode-selection-screen');
+
+      if (!endlessBtn || !combatBtn || !modeScreen) {
+        console.error('[Game Controller] Mode selection elements not found');
+        return;
+      }
+
+      endlessBtn.addEventListener('click', function() {
+        GameController.selectMode('endless');
+      });
+
+      combatBtn.addEventListener('click', function() {
+        GameController.selectMode('combat');
+      });
+
+      // Show mode selection screen
+      modeScreen.classList.add('visible');
+
+      // Force visibility with inline styles to override CSS conflicts
+      modeScreen.style.display = 'flex';
+      modeScreen.style.position = 'fixed';
+      modeScreen.style.top = '0';
+      modeScreen.style.left = '0';
+      modeScreen.style.width = '100%';
+      modeScreen.style.height = '100%';
+      modeScreen.style.zIndex = '9999';
+      modeScreen.style.pointerEvents = 'auto';
+      modeScreen.style.background = 'rgba(0,0,0,0.6)';
+
+      console.log('[Game Controller] Mode selection screen ready');
+    },
+
+    selectMode: function(mode) {
       console.log('[Game Controller] Mode selected:', mode);
+      this.selectedMode = mode;
 
-      if (!mode) {
-        console.error('No mode specified');
-        return;
+      // Hide mode selection screen
+      var modeScreen = document.getElementById('mode-selection-screen');
+      if (modeScreen) {
+        modeScreen.classList.remove('visible');
+        modeScreen.style.display = 'none';
+        modeScreen.style.pointerEvents = 'none';
       }
 
-      this.loadGameMode(mode);
-    },
+      // Load appropriate CSS for the selected mode
+      this.loadModeCSS(mode);
 
-    loadGameMode: function(mode) {
-      console.log('[Game Controller] Loading game mode:', mode);
+      // Hide unified UI and show appropriate mode UI
+      this.showModeUI(mode);
 
-      if (this.currentMode === mode) {
-        console.log('[Game Controller] Mode already loaded, skipping');
-        return; // Already loaded
-      }
-
-      console.log('[Game Controller] Hiding selector and setting current mode to:', mode);
-
-      // Hide selector
-      var selector = document.getElementById('gameModeSelector');
-      if (selector) {
-        console.log('[Game Controller] Found selector to hide, removing from DOM');
-        selector.parentNode.removeChild(selector);
-        console.log('[Game Controller] Selector removed from DOM');
+      // Determine which game script to load based on mode
+      var gameScriptPath;
+      if (mode === 'endless') {
+        gameScriptPath = 'games/top-rug/js/game.js';
+      } else if (mode === 'combat') {
+        gameScriptPath = 'games/top-rug-maverick/js/game.js';
       } else {
-        console.error('[Game Controller] Could not find selector to hide!');
-      }
-
-      this.currentMode = mode;
-
-      if (mode === 'toprug1') {
-        this.loadTopRug1();
-      } else if (mode === 'toprug2') {
-        this.loadTopRug2();
-      }
-    },
-
-    loadTopRug1: function() {
-      var container = document.getElementById('gameHolderTopRug1');
-      if (!container) {
-        console.error('Top Rug container not found');
+        console.error('[Game Controller] Unknown game mode:', mode);
         return;
       }
 
-      // Hide Top Rug Maverick if it's showing
-      var maverickContainer = document.getElementById('gameHolderTopRug2');
-      if (maverickContainer) {
-        maverickContainer.style.display = 'none';
-      }
+      // Load utils first, then MovementModel, then the game script
+      var utilsScript = document.createElement('script');
+      utilsScript.src = 'shared/js/utils.js';
+      utilsScript.onload = function() {
+        console.log('[Game Controller] utils loaded');
 
-      container.style.display = 'block';
+        // Now load MovementModel
+      var movementScript = document.createElement('script');
+      movementScript.src = 'core/MovementModel.js';
+      movementScript.onload = function() {
+        console.log('[Game Controller] MovementModel loaded');
 
-      if (!this.toprug1Loaded) {
-        // Load the game script and CSS
-        var css = document.createElement('link');
-        css.rel = 'stylesheet';
-        css.type = 'text/css';
-        css.href = 'games/top-rug/css/styles.css';
-        css.onload = function() {
-          console.log('[Game Controller] Top Rug CSS loaded successfully');
-        };
-        css.onerror = function() {
-          console.error('[Game Controller] Failed to load Top Rug CSS');
-        };
-        document.head.appendChild(css);
-
+        // Now load the game script
         var script = document.createElement('script');
-        script.src = 'games/top-rug/js/game.js?v=7';
+        script.src = gameScriptPath;
         script.onload = function() {
-          console.log('Top Rug game loaded');
-          // Initialize the game
-          if (typeof window.Aviator1Game !== 'undefined' && window.Aviator1Game.init) {
+          console.log('[Game Controller] Game loaded for mode:', mode);
+
+          // Show intro screen
+          var introScreen = document.getElementById('intro-screen');
+          if (introScreen) {
+            introScreen.classList.add('visible');
+          }
+
+          // Initialize the game (different namespaces for different modes)
+          if (mode === 'endless' && typeof window.Aviator1Game !== 'undefined') {
             window.Aviator1Game.init();
+
+            // System initialization now handled by mode.init()
+          } else if (mode === 'combat' && typeof window.Aviator2Game !== 'undefined') {
+            window.Aviator2Game.init();
+          } else {
+            console.error('[Game Controller] Game namespace not found for mode:', mode);
           }
         };
         script.onerror = function() {
-          console.error('Failed to load Top Rug game script');
+          console.error('[Game Controller] Failed to load game script for mode:', mode, 'path:', gameScriptPath);
         };
         document.head.appendChild(script);
-        this.toprug1Loaded = true;
-      } else {
-        // Game already loaded, just show it
-        if (typeof window.Aviator1Game !== 'undefined' && window.Aviator1Game.show) {
-          window.Aviator1Game.show();
-        }
-      }
+      };
+      movementScript.onerror = function() {
+        console.error('[Game Controller] Failed to load MovementModel script');
+      };
+      document.head.appendChild(movementScript);
+      };
+      utilsScript.onerror = function() {
+        console.error('[Game Controller] Failed to load utils script');
+      };
+      document.head.appendChild(utilsScript);
     },
 
-    loadTopRug2: function() {
-      var container = document.getElementById('gameHolderTopRug2');
-      if (!container) {
-        console.error('Top Rug Maverick container not found');
+    loadModeCSS: function(mode) {
+      var cssPath;
+      if (mode === 'endless') {
+        cssPath = 'games/top-rug/css/styles.css';
+      } else if (mode === 'combat') {
+        cssPath = 'games/top-rug-maverick/css/styles.css';
+      } else {
+        console.error('[Game Controller] Unknown game mode for CSS:', mode);
         return;
       }
 
-      // Hide Top Rug if it's showing
-      var classicContainer = document.getElementById('gameHolderTopRug1');
-      if (classicContainer) {
-        classicContainer.style.display = 'none';
+      // Check if CSS is already loaded
+      var existingLink = document.querySelector('link[href="' + cssPath + '"]');
+      if (existingLink) {
+        console.log('[Game Controller] CSS already loaded for mode:', mode);
+        return;
       }
 
-      container.style.display = 'block';
+      // Load the CSS
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = cssPath;
+      document.head.appendChild(link);
+      console.log('[Game Controller] CSS loaded for mode:', mode, 'path:', cssPath);
+    },
 
-      if (!this.toprug2Loaded) {
-        // Check if we need to load additional scripts for Aviator2
-        var scriptsToLoad = [
-          'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/loaders/OBJLoader.js',
-          'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/controls/OrbitControls.js',
-          'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.10.2/gsap.min.js'
-        ];
+    showModeUI: function(mode) {
+      // Hide all game UIs first
+      var unifiedUI = document.getElementById('score-toprug');
+      var endlessUI = document.getElementById('score-toprug1');
+      var combatUI = document.getElementById('score-toprug2');
+      var unifiedWorld = document.getElementById('world-toprug');
+      var endlessWorld = document.getElementById('world-toprug1');
+      var combatWorld = document.getElementById('world-toprug2');
+      var unifiedReplay = document.getElementById('replayMessage-toprug');
+      var endlessReplay = document.getElementById('replayMessage-toprug1');
+      var combatReplay = document.getElementById('replayMessage-toprug2');
 
-        // Also need to load Aviator2 CSS if not already loaded
-        var existingLink = document.querySelector('link[href="games/top-rug-maverick/css/styles.css"]');
-        if (!existingLink) {
-          var link = document.createElement('link');
-          link.rel = 'stylesheet';
-          link.type = 'text/css';
-          link.href = 'games/top-rug-maverick/css/styles.css';
-          document.head.appendChild(link);
-        }
+      if (unifiedUI) unifiedUI.style.display = 'none';
+      if (endlessUI) endlessUI.style.display = 'none';
+      if (combatUI) combatUI.style.display = 'none';
+      if (unifiedWorld) unifiedWorld.style.display = 'none';
+      if (endlessWorld) endlessWorld.style.display = 'none';
+      if (combatWorld) combatWorld.style.display = 'none';
+      if (unifiedReplay) unifiedReplay.style.display = 'none';
+      if (endlessReplay) endlessReplay.style.display = 'none';
+      if (combatReplay) combatReplay.style.display = 'none';
 
-        // Load additional fonts if needed
-        var existingFontLink = document.querySelector('link[href*="Dela+Gothic+One"]');
-        if (!existingFontLink) {
-          var fontLink = document.createElement('link');
-          fontLink.rel = 'preconnect';
-          fontLink.href = 'https://fonts.googleapis.com';
-          document.head.appendChild(fontLink);
+      // Show the appropriate UI based on mode
+      if (mode === 'endless') {
+        if (endlessUI) endlessUI.style.display = 'flex';
+        if (endlessWorld) endlessWorld.style.display = 'block';
+        if (endlessReplay) endlessReplay.style.display = 'block';
+      } else if (mode === 'combat') {
+        if (combatUI) combatUI.style.display = 'flex';
+        if (combatWorld) combatWorld.style.display = 'block';
+        if (combatReplay) combatReplay.style.display = 'block';
+      }
 
-          var fontLink2 = document.createElement('link');
-          fontLink2.rel = 'preconnect';
-          fontLink2.href = 'https://fonts.gstatic.com';
-          fontLink2.crossOrigin = 'anonymous';
-          document.head.appendChild(fontLink2);
-
-          var fontLink3 = document.createElement('link');
-          fontLink3.href = 'https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap';
-          fontLink3.rel = 'stylesheet';
-          document.head.appendChild(fontLink3);
-        }
-
-        // Load scripts sequentially
-        this.loadScriptsSequentially(scriptsToLoad, function() {
-          // Now load the Aviator2 game script
-          var script = document.createElement('script');
-          script.src = 'games/top-rug-maverick/js/game.js';
-          script.onload = function() {
-            console.log('Top Rug Maverick game loaded');
-            // Initialize the game
-            if (typeof window.Aviator2Game !== 'undefined' && window.Aviator2Game.init) {
-              window.Aviator2Game.init();
-            } else if (typeof window.onWebsiteLoaded === 'function') {
-              // Fallback: call the original initialization function
-              window.onWebsiteLoaded();
-            }
-          };
-          script.onerror = function() {
-            console.error('Failed to load Top Rug Maverick game script');
-          };
-          document.head.appendChild(script);
-        });
-
-        this.toprug2Loaded = true;
-      } else {
-        // Game already loaded, just show it
-        if (typeof window.Aviator2Game !== 'undefined' && window.Aviator2Game.show) {
-          window.Aviator2Game.show();
-        }
+      // Enforce world layering with z-index and pointer-events
+      if (unifiedWorld) {
+        unifiedWorld.style.zIndex = '0';
+        unifiedWorld.style.pointerEvents = 'none';
+      }
+      if (endlessWorld) {
+        endlessWorld.style.zIndex = mode === 'endless' ? '10' : '0';
+        endlessWorld.style.pointerEvents = mode === 'endless' ? 'auto' : 'none';
+      }
+      if (combatWorld) {
+        combatWorld.style.zIndex = mode === 'combat' ? '10' : '0';
+        combatWorld.style.pointerEvents = mode === 'combat' ? 'auto' : 'none';
       }
     },
 
@@ -231,13 +264,13 @@
   // Initialize when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-      GameModeController.init();
+      GameController.init();
     });
   } else {
-    GameModeController.init();
+    GameController.init();
   }
 
   // Expose to window for debugging
-  window.GameModeController = GameModeController;
+  window.GameController = GameController;
 })();
 
