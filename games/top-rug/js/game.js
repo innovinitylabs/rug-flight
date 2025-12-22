@@ -847,6 +847,58 @@ class PlayerActionStateSystem {
   }
 }
 
+// CollisionImpactSystem class - processes collision consequences without mutating game state
+class CollisionImpactSystem {
+  constructor(playerActionStateSystem) {
+    // Observer-only system: processes domain events into player consequences
+    // Never emits events, never renders, never mutates entities
+    // Converts COLLISION domain events into player state changes
+
+    this.playerActionStateSystem = playerActionStateSystem;
+    this.lastStunLog = 0;
+
+    console.log('[CollisionImpact] Collision consequence processing established');
+  }
+
+  // Process domain events and apply collision consequences
+  process(domainEvents) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return; // Safety check
+    }
+
+    // Find all COLLISION events
+    const collisionEvents = domainEvents.filter(event => event.type === 'COLLISION');
+
+    if (collisionEvents.length === 0) {
+      return; // No collisions this frame
+    }
+
+    // Calculate maximum stun duration from all collisions
+    let maxStunDuration = 0;
+
+    for (const event of collisionEvents) {
+      // Compute stun duration based on collision intensity
+      const baseStunMs = 200; // Base stun duration
+      const intensityFactor = Math.max(0.5, Math.min(2.0, event.value / 50)); // Clamp 0.5-2.0
+      const stunDuration = baseStunMs * intensityFactor;
+
+      maxStunDuration = Math.max(maxStunDuration, stunDuration);
+    }
+
+    // Apply the maximum stun duration (multiple collisions = worst one wins)
+    if (maxStunDuration > 0) {
+      this.playerActionStateSystem.applyStun(maxStunDuration);
+
+      // Log stun application (throttled to avoid spam)
+      const now = performance.now();
+      if (now - this.lastStunLog > 1000) { // Log at most once per second
+        console.log(`[CollisionImpact] Player stunned for ${maxStunDuration.toFixed(0)}ms (${collisionEvents.length} collision(s))`);
+        this.lastStunLog = now;
+      }
+    }
+  }
+}
+
 // LaneController class - converts input intent into lane change requests
 class LaneController {
   constructor(laneSystem) {
@@ -2319,6 +2371,7 @@ class EndlessMode {
     this.laneSystem = null;
     this.playerIntentSystem = null;
     this.playerActionStateSystem = null;
+    this.collisionImpactSystem = null;
     this.laneController = null;
     this.spawnBandSystem = null;
     this.entityRegistrySystem = null;
@@ -2366,6 +2419,7 @@ class EndlessMode {
     this.laneSystem = new LaneSystem(3, 40);
     this.playerIntentSystem = new PlayerIntentSystem();
     this.playerActionStateSystem = new PlayerActionStateSystem();
+    this.collisionImpactSystem = new CollisionImpactSystem(this.playerActionStateSystem);
     this.laneController = new LaneController(this.laneSystem);
 
     // Create spawn band system - defines spatial spawn rules
@@ -2524,13 +2578,16 @@ class EndlessMode {
     // 11. Score system consumes domain events and updates score state
     this.scoreSystem.consume(domainEvents);
 
-    // 12. Presentation system observes score and domain events for DOM updates
+    // 12. Collision impact system processes domain events into player consequences
+    this.collisionImpactSystem.process(domainEvents);
+
+    // 14. Presentation system observes score and domain events for DOM updates
     this.presentationSystem.update(this.scoreSystem, domainEvents);
 
-    // 13. Audio presentation system observes domain events for sound feedback
+    // 15. Audio presentation system observes domain events for sound feedback
     this.audioPresentationSystem.update(domainEvents);
 
-    // 14. VFX presentation system observes domain events for visual effects
+    // 16. VFX presentation system observes domain events for visual effects
     this.vfxPresentationSystem.update(domainEvents);
 
     // 16. Sea system updates (pure renderer - reads Z from scroller)
