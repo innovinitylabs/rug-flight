@@ -1969,6 +1969,60 @@ class PlayerVisualMovementSystem {
   }
 }
 
+// PlayerVerticalConstraintSystem class - enforces vertical positioning constraints
+class PlayerVerticalConstraintSystem {
+  constructor(worldLayoutSystem, playerProxy) {
+    // Presentation-only system: enforces visual vertical constraints
+    // Never mutates gameplay logic, only corrects visual drift
+    // Ensures player stays in correct vertical band for camera framing
+
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.playerProxy = playerProxy;
+
+    // Movement smoothing for constraint corrections
+    this.constraintLerpSpeed = 0.05; // Gentle correction to avoid jarring
+
+    // Debug logging guard
+    this.driftLogged = false;
+
+    console.log('[PlayerVerticalConstraint] Vertical constraint system established');
+  }
+
+  update(deltaTime) {
+    if (!this.worldLayoutSystem || !this.playerProxy) {
+      return; // Safety check
+    }
+
+    // Get the target Y position from world layout
+    const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+    if (!midAirZone || typeof midAirZone.yBaseline !== 'number') {
+      return; // Cannot enforce constraint without valid baseline
+    }
+
+    const targetY = midAirZone.yBaseline;
+    const currentPosition = this.playerProxy.getPosition();
+    const currentY = currentPosition.y;
+
+    // Check for significant drift
+    const yDeviation = Math.abs(currentY - targetY);
+    if (yDeviation > 5) {
+      if (!this.driftLogged) {
+        console.log(`[VerticalConstraint] Correcting Y drift of ${yDeviation.toFixed(1)} units`);
+        this.driftLogged = true;
+      }
+    } else {
+      // Reset logging flag when back in tolerance
+      this.driftLogged = false;
+    }
+
+    // Smoothly constrain Y position to baseline
+    const newY = currentY + (targetY - currentY) * this.constraintLerpSpeed;
+
+    // Update player proxy position (only Y, preserve X and Z)
+    this.playerProxy.setPosition(currentPosition.x, newY, currentPosition.z);
+  }
+}
+
 // LaneEntitySpawnSystem class - gameplay system for spawning lane-based entities
 class LaneEntitySpawnSystem {
   constructor(laneSystem, worldLayoutSystem, difficultyCurveSystem, entityRegistrySystem, world, distanceSystem) {
@@ -3191,6 +3245,12 @@ class EndlessMode {
       this.playerProxy
     );
 
+    // Create player vertical constraint system - enforces Y positioning for camera framing
+    this.playerVerticalConstraintSystem = new PlayerVerticalConstraintSystem(
+      this.worldLayoutSystem,
+      this.playerProxy
+    );
+
     // Create lane entity spawn system - gameplay entity spawning
     this.laneEntitySpawnSystem = new LaneEntitySpawnSystem(
       this.laneSystem,
@@ -3407,6 +3467,9 @@ class EndlessMode {
 
     // 19. Player visual movement system updates lane-based X position
     this.playerVisualMovementSystem.update(deltaTime);
+
+    // 19.5. Player vertical constraint system enforces Y positioning for camera framing
+    this.playerVerticalConstraintSystem.update(deltaTime);
 
     // 20. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
