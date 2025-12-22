@@ -260,7 +260,7 @@ class World {
       if (object.material) {
         if (Array.isArray(object.material)) {
           object.material.forEach(material => material.dispose());
-      } else {
+    } else {
           object.material.dispose();
         }
       }
@@ -894,6 +894,102 @@ class CollisionImpactSystem {
       if (now - this.lastStunLog > 1000) { // Log at most once per second
         console.log(`[CollisionImpact] Player stunned for ${maxStunDuration.toFixed(0)}ms (${collisionEvents.length} collision(s))`);
         this.lastStunLog = now;
+      }
+    }
+  }
+}
+
+// HealthSystem class - authoritative player health and survival management
+class HealthSystem {
+  constructor(initialLives = 3) {
+    this.initialLives = initialLives;
+    this.currentLives = initialLives;
+    this.isAlive = true;
+
+    console.log(`[Health] Player starts with ${initialLives} lives`);
+  }
+
+  // Apply damage to player health
+  applyDamage(amount = 1) {
+    if (!this.isAlive) return 0; // No damage if already dead
+
+    const damageApplied = Math.min(amount, this.currentLives);
+    this.currentLives -= damageApplied;
+
+    if (this.currentLives <= 0) {
+      this.isAlive = false;
+      console.log('[Health] Player died');
+    } else {
+      console.log(`[Health] Life lost, remaining: ${this.currentLives}`);
+    }
+
+    return damageApplied;
+  }
+
+  // Get current number of lives
+  getLives() {
+    return this.currentLives;
+  }
+
+  // Check if player is dead
+  isDead() {
+    return !this.isAlive;
+  }
+
+  // Reset health to initial state
+  reset() {
+    this.currentLives = this.initialLives;
+    this.isAlive = true;
+    console.log(`[Health] Health reset to ${this.initialLives} lives`);
+  }
+
+  // Get health state for debugging
+  getState() {
+    return {
+      currentLives: this.currentLives,
+      initialLives: this.initialLives,
+      isAlive: this.isAlive
+    };
+  }
+}
+
+// CollisionDamageSystem class - processes collision events into health damage
+class CollisionDamageSystem {
+  constructor(healthSystem) {
+    // Observer-only system: converts COLLISION domain events into health damage
+    // Never emits events, never renders, never mutates entities
+    // Throttles damage to prevent stun-stacking abuse
+
+    this.healthSystem = healthSystem;
+    this.lastDamageFrame = -1; // Track frame-based damage throttling
+
+    console.log('[CollisionDamage] Collision damage processing established');
+  }
+
+  // Process domain events and apply damage for collisions
+  process(domainEvents, playerActionStateSystem) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return; // Safety check
+    }
+
+    // Check if player is currently stunned (damage throttling)
+    const playerState = playerActionStateSystem.getCurrentState();
+    const isStunned = playerState.state === 'STUNNED';
+
+    if (isStunned) {
+      // Player is stunned - no additional damage this frame
+      // This prevents stun-stacking abuse where multiple collisions
+      // in the same frame would kill the player instantly
+      return;
+    }
+
+    // Count COLLISION events (one collision = one damage)
+    const collisionCount = domainEvents.filter(event => event.type === 'COLLISION').length;
+
+    if (collisionCount > 0) {
+      // Apply damage for each collision
+      for (let i = 0; i < collisionCount; i++) {
+        this.healthSystem.applyDamage(1);
       }
     }
   }
@@ -2004,8 +2100,9 @@ class VFXPresentationSystem {
 
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
-  constructor() {
-    this.distanceSystem = new DistanceSystem();
+  constructor(distanceSystem) {
+    console.assert(distanceSystem, '[WorldAxisSystem] ERROR: distanceSystem required');
+    this.distanceSystem = distanceSystem;
     this.forwardSpeed = 0.02; // Matches DistanceSystem speed
   }
 
@@ -2363,6 +2460,7 @@ class EndlessMode {
     this.planeView = null;
     this.seaSystem = null;
     this.skySystem = null;
+    this.distanceSystem = null;
     this.worldAxisSystem = null;
     this.depthLayerSystem = null;
     this.worldLayoutSystem = null;
@@ -2372,6 +2470,8 @@ class EndlessMode {
     this.playerIntentSystem = null;
     this.playerActionStateSystem = null;
     this.collisionImpactSystem = null;
+    this.healthSystem = null;
+    this.collisionDamageSystem = null;
     this.laneController = null;
     this.spawnBandSystem = null;
     this.entityRegistrySystem = null;
@@ -2405,7 +2505,8 @@ class EndlessMode {
     this.planeView = new PlaneView(world);
     this.seaSystem = new SeaSystem(world);
     this.skySystem = new SkySystem(world);
-    this.worldAxisSystem = new WorldAxisSystem();
+    this.distanceSystem = new DistanceSystem();
+    this.worldAxisSystem = new WorldAxisSystem(this.distanceSystem);
     this.depthLayerSystem = new DepthLayerSystem();
     this.worldLayoutSystem = new WorldLayoutSystem();
     this.difficultyCurveSystem = new DifficultyCurveSystem();
@@ -2420,6 +2521,8 @@ class EndlessMode {
     this.playerIntentSystem = new PlayerIntentSystem();
     this.playerActionStateSystem = new PlayerActionStateSystem();
     this.collisionImpactSystem = new CollisionImpactSystem(this.playerActionStateSystem);
+    this.healthSystem = new HealthSystem(3); // Start with 3 lives
+    this.collisionDamageSystem = new CollisionDamageSystem(this.healthSystem);
     this.laneController = new LaneController(this.laneSystem);
 
     // Create spawn band system - defines spatial spawn rules
@@ -2501,6 +2604,10 @@ class EndlessMode {
   }
 
   update(deltaTime) {
+    // Critical system assertions - fail fast if core systems missing
+    console.assert(this.distanceSystem, '[EndlessMode] CRITICAL: distanceSystem missing');
+    console.assert(this.worldScrollerSystem, '[EndlessMode] CRITICAL: worldScrollerSystem missing');
+
     // Health check: warn if update runs while inactive
     if (!this.isActive) {
       console.warn('[EndlessMode] WARNING: update() called while inactive');
@@ -2510,6 +2617,16 @@ class EndlessMode {
     // Only run when active and not paused
     if (this.isPaused) return;
     if (!this.planeEntity || !this.planeController || !this.planeView || !this.input) return;
+
+    // Check for game over - skip gameplay logic if player is dead
+    if (this.gameState.status === 'GAME_OVER') {
+      // Still allow presentation systems to run (for UI updates)
+      // But skip all gameplay logic
+      this.presentationSystem.update(this.scoreSystem, []);
+      this.audioPresentationSystem.update([]);
+      this.vfxPresentationSystem.update([]);
+      return;
+    }
 
     // 1. Player action state system manages cooldowns and state
     this.playerActionStateSystem.update(deltaTime);
@@ -2580,6 +2697,15 @@ class EndlessMode {
 
     // 12. Collision impact system processes domain events into player consequences
     this.collisionImpactSystem.process(domainEvents);
+
+    // 13. Collision damage system processes domain events into health damage
+    this.collisionDamageSystem.process(domainEvents, this.playerActionStateSystem);
+
+    // Check for player death and handle game over
+    if (this.healthSystem.isDead() && this.gameState.status !== 'GAME_OVER') {
+      this.gameState.status = 'GAME_OVER';
+      console.log('[Game] GAME OVER - Player has died');
+    }
 
     // 14. Presentation system observes score and domain events for DOM updates
     this.presentationSystem.update(this.scoreSystem, domainEvents);
