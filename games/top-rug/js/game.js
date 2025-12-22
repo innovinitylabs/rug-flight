@@ -3131,13 +3131,14 @@ class LaneVisualGuideSystem {
 
     this.guideLines = []; // Array of THREE.Line objects
 
-    // Note: createMeshes() will be called from EndlessMode.init() to ensure proper timing
+    this.createGuideLines(); // Create meshes immediately in constructor
 
     console.log('[LaneVisualGuide] Presentation-only lane guide system established');
   }
 
   createMeshes() {
-    // Public interface for mesh creation - called from EndlessMode.init()
+    // Legacy method - meshes are now created in constructor
+    // Kept for API compatibility but not used externally
     this.createGuideLines();
   }
 
