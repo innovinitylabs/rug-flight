@@ -1466,6 +1466,7 @@ class CoinEntity {
     this.type = 'coin';
     this.laneIndex = laneIndex;
     this.z = z;
+    this.visualOffsetZ = 0; // Default visual offset for coordination between visual systems
 
     console.log(`[CoinEntity] Created coin ${id} at lane ${laneIndex}, Z=${z.toFixed(2)}`);
   }
@@ -2162,12 +2163,14 @@ class LaneEntityVisualSystem {
 
     const mesh = visualData.mesh;
 
-    // Update position based on entity data
+    // Update position based on entity data with visual offset coordination
     if (entity.position) {
+      const baseZ = entity.position.z || 0;
+      const offsetZ = entity.visualOffsetZ || 0;
       mesh.position.set(
         entity.position.x || 0,
         entity.position.y || 0,
-        entity.position.z || 0
+        baseZ + offsetZ
       );
     }
   }
@@ -2247,18 +2250,14 @@ class LaneEntityApproachSystem {
       // As distance increases, entities appear to move toward player
       const approachZ = -(currentDistance - entity.spawnDistance);
 
-      // Access the visual mesh through the visual system
-      const visualData = this.laneEntityVisualSystem.visualEntities.get(entity.id);
-      if (visualData && visualData.mesh) {
-        // Update only the Z position for approach effect
-        visualData.mesh.position.z = approachZ;
+      // Set visual offset for coordination with LaneEntityVisualSystem
+      entity.visualOffsetZ = approachZ;
 
-        // Check if entity has crossed the player plane
-        if (approachZ > this.PLAYER_PLANE_Z + 10) {
-          // Entity has passed the player, unregister it
-          console.log('[Approach] Entity crossed player plane');
-          this.entityRegistrySystem.unregister(entity);
-        }
+      // Check if entity has crossed the player plane
+      if (approachZ > this.PLAYER_PLANE_Z + 10) {
+        // Entity has passed the player, unregister it
+        console.log('[Approach] Entity crossed player plane');
+        this.entityRegistrySystem.unregister(entity);
       }
     }
   }
