@@ -3319,10 +3319,13 @@ class EndlessMode {
     const currentDistance = this.distanceSystem.getDistance();
     this.difficultyCurveSystem.update(currentDistance);
 
-    // Log distance every ~500 units
-    if (this.lastDistanceLog === null || currentDistance - this.lastDistanceLog >= 500) {
+    // Log distance every ~500 units (skip initial 0)
+    if (this.lastDistanceLog === null && currentDistance >= 500) {
       console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
-      this.lastDistanceLog = Math.floor(currentDistance / 500) * 500; // Snap to 500-unit intervals
+      this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
+    } else if (this.lastDistanceLog !== null && currentDistance - this.lastDistanceLog >= 500) {
+      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
     }
 
     // 5. World scroller system updates (single source of truth for forward motion)
