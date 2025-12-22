@@ -1204,6 +1204,7 @@ function resetGame(){
   } else {
     console.log('[PROPELLER] resetGame: User not interacted yet');
   }
+}
 
 //THREEJS RELATED VARIABLES
 
@@ -1276,7 +1277,7 @@ function createScene() {
 
   //controls.noZoom = true;
   //controls.noPan = true;
-  //*/
+  */
 }
 
 // MOUSE AND SCREEN EVENTS
@@ -2199,7 +2200,7 @@ window.TopRugEngine.createSky = createSky;
 function createCoins(){
 
   coinsHolder = new CoinsHolder(20);
-  scene.add(coinsHolder.mesh)
+  World.add(coinsHolder.mesh)
 }
 
 function createEnnemies(){
@@ -2209,7 +2210,7 @@ function createEnnemies(){
   }
   ennemiesHolder = new EnnemiesHolder();
   //ennemiesHolder.mesh.position.y = -game.seaRadius;
-  scene.add(ennemiesHolder.mesh)
+  World.add(ennemiesHolder.mesh)
 }
 
 function createParticles(){
@@ -2219,7 +2220,7 @@ function createParticles(){
   }
   particlesHolder = new ParticlesHolder();
   //ennemiesHolder.mesh.position.y = -game.seaRadius;
-  scene.add(particlesHolder.mesh)
+  World.add(particlesHolder.mesh)
 }
 
 function loop() {
@@ -2867,10 +2868,10 @@ window.Aviator1Game = {
 
           // Maximum anisotropy for sharp textures at angles
           var maxAnisotropy = 16;
-          if (renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-            maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-          } else if (renderer && renderer.getMaxAnisotropy) {
-            maxAnisotropy = renderer.getMaxAnisotropy();
+          if (World.renderer && World.renderer.capabilities && World.renderer.capabilities.getMaxAnisotropy) {
+            maxAnisotropy = World.renderer.capabilities.getMaxAnisotropy();
+          } else if (World.renderer && World.renderer.getMaxAnisotropy) {
+            maxAnisotropy = World.renderer.getMaxAnisotropy();
           }
           texture.anisotropy = maxAnisotropy;
 
