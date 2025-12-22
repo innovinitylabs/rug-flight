@@ -773,6 +773,187 @@ class SpawnBandSystem {
   }
 }
 
+// EntityRegistrySystem class - authoritative source of truth for world entities
+class EntityRegistrySystem {
+  constructor() {
+    this.entities = new Map(); // id -> entity
+    this.entitiesByType = new Map(); // type -> Set of entities
+    this.nextId = 1;
+    this.lastLogTime = 0;
+
+    console.log('[EntityRegistry] Authoritative entity registry established');
+  }
+
+  // Register an entity in the registry
+  register(entity) {
+    console.assert(entity, '[EntityRegistry] ERROR: Cannot register null/undefined entity');
+    console.assert(entity.id, '[EntityRegistry] ERROR: Entity must have id property');
+    console.assert(entity.type, '[EntityRegistry] ERROR: Entity must have type property');
+    console.assert(typeof entity.z === 'number', '[EntityRegistry] ERROR: Entity must have numeric z property');
+
+    if (this.entities.has(entity.id)) {
+      console.warn(`[EntityRegistry] WARNING: Entity ${entity.id} already registered, updating`);
+    }
+
+    this.entities.set(entity.id, entity);
+
+    // Add to type index
+    if (!this.entitiesByType.has(entity.type)) {
+      this.entitiesByType.set(entity.type, new Set());
+    }
+    this.entitiesByType.get(entity.type).add(entity);
+
+    console.log(`[EntityRegistry] Registered ${entity.type} entity ${entity.id} at Z=${entity.z.toFixed(2)}`);
+    return entity.id;
+  }
+
+  // Unregister an entity from the registry
+  unregister(entityOrId) {
+    const id = typeof entityOrId === 'object' ? entityOrId.id : entityOrId;
+    const entity = this.entities.get(id);
+
+    if (!entity) {
+      console.warn(`[EntityRegistry] WARNING: Entity ${id} not found for unregister`);
+      return false;
+    }
+
+    // Remove from type index
+    const typeSet = this.entitiesByType.get(entity.type);
+    if (typeSet) {
+      typeSet.delete(entity);
+      if (typeSet.size === 0) {
+        this.entitiesByType.delete(entity.type);
+      }
+    }
+
+    this.entities.delete(id);
+    console.log(`[EntityRegistry] Unregistered ${entity.type} entity ${id}`);
+    return true;
+  }
+
+  // Get all registered entities
+  getAll() {
+    return Array.from(this.entities.values());
+  }
+
+  // Get entities by type
+  getByType(type) {
+    const typeSet = this.entitiesByType.get(type);
+    return typeSet ? Array.from(typeSet) : [];
+  }
+
+  // Get entities in a specific spawn band
+  getByBand(spawnBandSystem, bandName) {
+    console.assert(spawnBandSystem, '[EntityRegistry] ERROR: spawnBandSystem required');
+    const allEntities = this.getAll();
+    return allEntities.filter(entity => spawnBandSystem.isInBand(entity.z, bandName));
+  }
+
+  // Clean up entities that should be recycled
+  cleanup(spawnBandSystem) {
+    console.assert(spawnBandSystem, '[EntityRegistry] ERROR: spawnBandSystem required');
+
+    const entitiesToRemove = [];
+    const allEntities = this.getAll();
+
+    for (const entity of allEntities) {
+      if (spawnBandSystem.shouldRecycle(entity.z)) {
+        entitiesToRemove.push(entity);
+      }
+    }
+
+    // Remove entities that need recycling
+    for (const entity of entitiesToRemove) {
+      this.unregister(entity);
+      if (entity.destroy) {
+        entity.destroy(); // Call entity's destroy method if it exists
+      }
+    }
+
+    if (entitiesToRemove.length > 0) {
+      console.log(`[EntityRegistry] Cleaned up ${entitiesToRemove.length} entities`);
+    }
+
+    return entitiesToRemove.length;
+  }
+
+  // Update all registered entities (if they have update methods)
+  update(deltaTime) {
+    const allEntities = this.getAll();
+    let updatedCount = 0;
+
+    for (const entity of allEntities) {
+      if (entity.update) {
+        entity.update(deltaTime);
+        updatedCount++;
+      }
+    }
+
+    // Periodic logging (not every frame)
+    const now = performance.now();
+    if (now - this.lastLogTime > 5000) { // Log every 5 seconds
+      const countsByType = {};
+      for (const [type, entities] of this.entitiesByType) {
+        countsByType[type] = entities.size;
+      }
+
+      console.log(`[EntityRegistry] Registry size: ${this.entities.size} entities`, countsByType);
+      this.lastLogTime = now;
+    }
+
+    return updatedCount;
+  }
+
+  // Generate unique entity ID
+  generateId() {
+    return this.nextId++;
+  }
+
+  // Get registry statistics
+  getStats() {
+    const stats = {
+      totalEntities: this.entities.size,
+      entitiesByType: {},
+      averageZ: 0
+    };
+
+    let totalZ = 0;
+    for (const [type, entities] of this.entitiesByType) {
+      stats.entitiesByType[type] = entities.size;
+    }
+
+    for (const entity of this.entities.values()) {
+      totalZ += entity.z;
+    }
+
+    if (this.entities.size > 0) {
+      stats.averageZ = totalZ / this.entities.size;
+    }
+
+    return stats;
+  }
+
+  // Clear all entities (useful for mode transitions)
+  clear() {
+    const count = this.entities.size;
+    for (const entity of this.entities.values()) {
+      if (entity.destroy) {
+        entity.destroy();
+      }
+    }
+
+    this.entities.clear();
+    this.entitiesByType.clear();
+    this.nextId = 1;
+
+    if (count > 0) {
+      console.log(`[EntityRegistry] Cleared ${count} entities`);
+    }
+
+    return count;
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -1141,6 +1322,7 @@ class EndlessMode {
     this.laneSystem = null;
     this.laneController = null;
     this.spawnBandSystem = null;
+    this.entityRegistrySystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1179,6 +1361,9 @@ class EndlessMode {
 
     // Create spawn band system - defines spatial spawn rules
     this.spawnBandSystem = new SpawnBandSystem();
+
+    // Create entity registry system - authoritative source of truth for entities
+    this.entityRegistrySystem = new EntityRegistrySystem();
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -1262,13 +1447,17 @@ class EndlessMode {
     // Player is always at Z=0, so pass current world scroll offset
     this.spawnBandSystem.update(deltaTime, 0);
 
-    // 7. Sea system updates (pure renderer - reads Z from scroller)
+    // 7. Entity registry system updates (manages all world entities)
+    this.entityRegistrySystem.update(deltaTime);
+    this.entityRegistrySystem.cleanup(this.spawnBandSystem);
+
+    // 8. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
-    // 8. Sky system updates (pure renderer - reads Z from scroller)
+    // 9. Sky system updates (pure renderer - reads Z from scroller)
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
-    // 9. Camera system updates (delegated to CameraRig)
+    // 10. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
     // Update game time
