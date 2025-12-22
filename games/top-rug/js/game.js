@@ -731,7 +731,7 @@ class PlayerIntentSystem {
       intentType = 'MOVE_LEFT';
     } else if (mouseX > 0.33) {
       intentType = 'MOVE_RIGHT';
-    } else {
+  } else {
       intentType = 'HOLD';
     }
 
@@ -806,7 +806,7 @@ class PlayerActionStateSystem {
         console.log('[PlayerActionState] Lane switch cooldown ended');
         this._cooldownLogged = true;
       }
-    } else {
+  } else {
       // Reset flags when not in these states
       this._recoveryLogged = false;
       this._cooldownLogged = false;
@@ -1577,7 +1577,7 @@ class LaneObstacleEntity {
     const halfHeight = 4; // Half of box height
     const halfDepth = 2; // Half of box depth
 
-    return {
+  return {
       minX: this.position.x - halfWidth,
       maxX: this.position.x + halfWidth,
       minY: this.position.y - halfHeight,
@@ -2116,14 +2116,14 @@ class PresentationSystem {
 
 // DebugWorldOverlaySystem class - real-time engine state display
 class DebugWorldOverlaySystem {
-  constructor(viewProfileSystem, distanceSystem, worldScrollerSystem, playerProxy, playerActionStateSystem) {
+  constructor(viewProfileSystem, distanceSystem, worldScrollerSystem, playerEntity, playerActionStateSystem) {
     // Read-only observer: never mutates game state or influences gameplay
     // Provides real-time engine state visibility for debugging
 
     this.viewProfileSystem = viewProfileSystem;
     this.distanceSystem = distanceSystem;
     this.worldScrollerSystem = worldScrollerSystem;
-    this.playerProxy = playerProxy;
+    this.playerEntity = playerEntity;
     this.playerActionStateSystem = playerActionStateSystem;
 
     this.overlayElement = null;
@@ -2174,9 +2174,9 @@ class DebugWorldOverlaySystem {
         skyFarZ: this.worldScrollerSystem ? Math.round(this.worldScrollerSystem.getZoneZ('SKY_FAR')) : 0
       },
       playerProxy: {
-        x: this.playerProxy ? Math.round(this.playerProxy.getPosition().x) : 0,
-        y: this.playerProxy ? Math.round(this.playerProxy.getPosition().y) : 0,
-        z: this.playerProxy ? Math.round(this.playerProxy.getPosition().z) : 0
+        x: this.playerEntity ? Math.round(this.playerEntity.getPosition().x) : 0,
+        y: this.playerEntity ? Math.round(this.playerEntity.getPosition().y) : 0,
+        z: this.playerEntity ? Math.round(this.playerEntity.getPosition().z) : 0
       },
       playerActionState: this.playerActionStateSystem ? this.playerActionStateSystem.getCurrentState() : {}
     };
@@ -3112,6 +3112,103 @@ class SkySystem {
   }
 }
 
+// LaneVisualGuideSystem - presentation-only lane visualization
+class LaneVisualGuideSystem {
+  constructor(laneSystem, worldLayoutSystem, world, worldScrollerSystem) {
+    // Presentation-only system: renders subtle visual guides for lane positions
+    // Never mutates gameplay logic, only provides visual clarity
+    // Helps players see lane boundaries and depth
+
+    this.laneSystem = laneSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.world = world;
+    this.worldScrollerSystem = worldScrollerSystem;
+
+    this.guideLines = []; // Array of THREE.Line objects
+
+    this.createGuideLines();
+
+    console.log('[LaneVisualGuide] Presentation-only lane guide system established');
+  }
+
+  createGuideLines() {
+    const laneCount = this.laneSystem.getLaneCount();
+
+    // Create a line for each lane
+    for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
+      const laneCenterX = this.laneSystem.getLaneCenter(laneIndex);
+
+      // Create geometry for a vertical line extending forward
+      const geometry = new THREE.BufferGeometry();
+
+      // Line from current position to far forward (positive Z)
+      const points = [
+        new THREE.Vector3(laneCenterX, 0, 0),     // Near the player
+        new THREE.Vector3(laneCenterX, 0, 200),    // Far forward
+      ];
+
+      geometry.setFromPoints(points);
+
+      // Subtle material: low opacity, neutral gray
+      const material = new THREE.LineBasicMaterial({
+        color: 0x888888, // Neutral gray
+        transparent: true,
+        opacity: 0.12,   // Very subtle
+      });
+
+      const line = new THREE.Line(geometry, material);
+      this.guideLines.push(line);
+      this.world.add(line);
+    }
+
+    console.log(`[LaneVisualGuide] Created ${laneCount} subtle lane guide lines`);
+  }
+
+  update() {
+    if (!this.worldScrollerSystem) {
+      return;
+    }
+
+    // Move guide lines with world scroll to maintain visual reference
+    const groundZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
+
+    // Update each guide line position
+    this.guideLines.forEach((line, laneIndex) => {
+      const laneCenterX = this.laneSystem.getLaneCenter(laneIndex);
+
+      // Update line positions relative to world scroll
+      const positions = line.geometry.attributes.position.array;
+      positions[0] = laneCenterX; // Near X
+      positions[1] = 0;          // Near Y (ground level)
+      positions[2] = groundZ;    // Near Z (world scroll position)
+      positions[3] = laneCenterX; // Far X
+      positions[4] = 0;          // Far Y (ground level)
+      positions[5] = groundZ + 200; // Far Z (extended forward)
+
+      line.geometry.attributes.position.needsUpdate = true;
+    });
+  }
+
+  destroy() {
+    // Remove and dispose of all guide lines
+    this.guideLines.forEach(line => {
+      if (this.world) {
+        this.world.remove(line);
+      }
+      if (line.geometry) {
+        line.geometry.dispose();
+      }
+      if (line.material) {
+        line.material.dispose();
+      }
+    });
+
+    this.guideLines.length = 0;
+
+    console.log('[LaneVisualGuide] Destroyed - guide lines removed and disposed');
+  }
+}
+
 // PlaneEntity - state and transform only (X and Y only, Z locked to 0)
 class PlaneEntity {
   constructor(laneSystem = null) {
@@ -3499,7 +3596,7 @@ class EndlessMode {
     this.planeEntity = null;
     this.planeController = null;
     this.planeView = null;
-    this.playerProxy = null;
+    this.playerEntity = null;
     this.seaSystem = null;
     this.skySystem = null;
     this.distanceSystem = null;
@@ -3546,13 +3643,13 @@ class EndlessMode {
     // Set view profile for endless flight mode
     this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
 
-    // Create components - no initialization
-    this.planeEntity = new PlaneEntity(this.laneSystem);
-    this.planeController = new PlaneController();
-    this.planeView = new PlaneView(world);
-    this.seaSystem = new SeaSystem(world);
-    this.skySystem = new SkySystem(world);
-    this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world);
+    // ===== VISUAL-ONLY SYSTEMS ===== (presentation layer, no gameplay logic)
+    this.seaSystem = new SeaSystem(world); // Animated sea surface
+    this.skySystem = new SkySystem(world); // Parallax cloud layer
+    this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
+
+    // ===== CORE GAMEPLAY SYSTEMS ===== (game logic, state management)
+    this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world); // Player position and lane state
     this.distanceSystem = new DistanceSystem();
     this.worldAxisSystem = new WorldAxisSystem(this.distanceSystem);
     this.depthLayerSystem = new DepthLayerSystem();
@@ -3564,64 +3661,61 @@ class EndlessMode {
       this.depthLayerSystem
     );
 
-    // Create lane system - 3 lanes, 40 units wide
-    this.laneSystem = new LaneSystem(3, 40);
-    this.playerIntentSystem = new PlayerIntentSystem();
-    this.playerActionStateSystem = new PlayerActionStateSystem();
-    this.collisionImpactSystem = new CollisionImpactSystem(this.playerActionStateSystem);
-    this.healthSystem = new HealthSystem(3); // Start with 3 lives
-    this.collisionDamageSystem = new CollisionDamageSystem(this.healthSystem);
-    this.laneController = new LaneController(this.laneSystem);
+    // ===== LANE AND INPUT SYSTEMS ===== (gameplay logic)
+    this.laneSystem = new LaneSystem(3, 40); // Discrete lane positions
+    this.playerIntentSystem = new PlayerIntentSystem(); // Mouse → semantic intents
+    this.playerActionStateSystem = new PlayerActionStateSystem(); // Cooldowns and state gating
+    this.laneController = new LaneController(this.laneSystem); // Intent → lane target
 
-    // Create spawn band system - defines spatial spawn rules
-    this.spawnBandSystem = new SpawnBandSystem();
+    // ===== HEALTH AND DAMAGE SYSTEMS ===== (gameplay consequences)
+    this.healthSystem = new HealthSystem(3); // Player lives (start with 3)
+    this.collisionImpactSystem = new CollisionImpactSystem(this.playerActionStateSystem); // Stun on collision
+    this.collisionDamageSystem = new CollisionDamageSystem(this.healthSystem); // Damage on collision
 
-    // Create entity registry system - authoritative source of truth for entities
-    this.entityRegistrySystem = new EntityRegistrySystem();
-
-    // Create collision intent system - deterministic collision detection layer
-    this.collisionIntentSystem = new CollisionIntentSystem(15); // 15 unit Z threshold
-
-    // Create spawn system - rule-driven world population
-    this.spawnSystem = new SpawnSystem(
+    // ===== ENTITY AND SPAWN SYSTEMS ===== (gameplay logic)
+    this.spawnBandSystem = new SpawnBandSystem(); // Spatial spawn zones (AHEAD_SPAWN, ACTIVE_WINDOW, etc.)
+    this.entityRegistrySystem = new EntityRegistrySystem(); // Authoritative entity storage and cleanup
+    this.collisionIntentSystem = new CollisionIntentSystem(15); // Legacy plane-entity collision detection
+    this.spawnSystem = new SpawnSystem( // Legacy coin spawning system
       this.spawnBandSystem,
       this.entityRegistrySystem,
       this.laneSystem,
       50 // Spawn every 50 world units
     );
+    this.collisionConsumptionSystem = new CollisionConsumptionSystem(this.entityRegistrySystem); // Intent → domain event conversion
 
-    // Create collision consumption system - processes intents into domain events
-    this.collisionConsumptionSystem = new CollisionConsumptionSystem(this.entityRegistrySystem);
+    // ===== NEW LANE-BASED SYSTEMS ===== (modern lane-based gameplay)
+    this.laneObstacleCollisionSystem = new LaneObstacleCollisionSystem(10); // Player vs lane obstacle detection
+    this.obstacleSpawnSystem = new ObstacleSpawnSystem( // Lane obstacle spawning and management
+      this.distanceSystem,
+      this.difficultyCurveSystem,
+      this.laneSystem,
+      this.worldLayoutSystem,
+      world
+    );
 
-    // Create lane obstacle collision system - detects player vs obstacle collisions
-    this.laneObstacleCollisionSystem = new LaneObstacleCollisionSystem(10); // 10 unit Z threshold
-
-    // Create score system - authoritative scoring state management
-    this.scoreSystem = new ScoreSystem();
-
-    // Create presentation system - observer-only DOM updates for Endless mode
-    this.presentationSystem = new PresentationSystem();
-
-    // Create audio presentation system - observer-only audio feedback
-    this.audioPresentationSystem = new AudioPresentationSystem();
-
-    // Create VFX presentation system - observer-only visual effects
-    this.vfxPresentationSystem = new VFXPresentationSystem(world);
-
-    // Create debug world overlay system - real-time engine state display
-    this.debugWorldOverlaySystem = new DebugWorldOverlaySystem(
+    // ===== PRESENTATION-ONLY SYSTEMS ===== (no gameplay logic, pure visuals/audio)
+    this.scoreSystem = new ScoreSystem(); // Authoritative scoring state
+    this.presentationSystem = new PresentationSystem(); // DOM updates for UI
+    this.audioPresentationSystem = new AudioPresentationSystem(); // Sound effects
+    this.vfxPresentationSystem = new VFXPresentationSystem(world); // Particle effects
+    this.debugWorldOverlaySystem = new DebugWorldOverlaySystem( // Debug info overlay
       this.viewProfileSystem,
       this.distanceSystem,
       this.worldScrollerSystem,
-      this.playerProxy,
+      this.playerEntity, // Updated to use playerEntity instead of playerProxy
       this.playerActionStateSystem
     );
 
-    // Create player visual movement system - presentation-only lane movement
-    this.playerVisualMovementSystem = new PlayerVisualMovementSystem(
+    // ===== VISUAL COORDINATION SYSTEMS ===== (presentation-only, coordinate visuals)
+    this.playerVisualMovementSystem = new PlayerVisualMovementSystem( // Lane-based visual lerping
       this.laneController,
       this.laneSystem,
       this.playerActionStateSystem,
+      this.playerEntity
+    );
+    this.playerVerticalConstraintSystem = new PlayerVerticalConstraintSystem( // Y position constraints
+      this.worldLayoutSystem,
       this.playerEntity
     );
 
@@ -3878,6 +3972,9 @@ class EndlessMode {
 
     // 17. Sky system updates (pure renderer - reads Z from scroller)
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
+
+    // 17.5. Lane visual guide system updates (presentation-only lane guides)
+    this.laneVisualGuideSystem.update();
 
     // 18. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
