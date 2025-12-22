@@ -620,7 +620,7 @@ var collectiblesHolder = null;
 var particlesHolder = null;
 
 // ---- Banner texture cache for async loading ----
-let bannerTextureCache = null;
+var bannerTextureCache = null;
 
 // ---- World container for scene ownership ----
 const World = {
@@ -690,7 +690,7 @@ function ParticlesHolder() {
 }
 
 ParticlesHolder.prototype.spawnParticles = function(pos, count, color, scale) {
-  for (let i = 0; i < count; i++) {
+  for (var i = 0; i < count; i++) {
     const geom = new THREE.TetrahedronGeometry(3, 0);
     const mat = new THREE.MeshPhongMaterial({
       color: color || 0xffffff,
@@ -720,7 +720,7 @@ ParticlesHolder.prototype.spawnParticles = function(pos, count, color, scale) {
 };
 
 ParticlesHolder.prototype.update = function(deltaTime) {
-  for (let i = this.particles.length - 1; i >= 0; i--) {
+  for (var i = this.particles.length - 1; i >= 0; i--) {
     const p = this.particles[i];
     p.life -= deltaTime * 0.005;
 
@@ -1105,7 +1105,7 @@ const EndlessMode = {
 };
 
 // Current active mode
-let currentMode = null;
+var currentMode = null;
 
 function resetGame(){
   if (!World.airplane) {
