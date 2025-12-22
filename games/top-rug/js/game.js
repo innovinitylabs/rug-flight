@@ -3131,9 +3131,14 @@ class LaneVisualGuideSystem {
 
     this.guideLines = []; // Array of THREE.Line objects
 
-    this.createGuideLines();
+    // Note: createMeshes() will be called from EndlessMode.init() to ensure proper timing
 
     console.log('[LaneVisualGuide] Presentation-only lane guide system established');
+  }
+
+  createMeshes() {
+    // Public interface for mesh creation - called from EndlessMode.init()
+    this.createGuideLines();
   }
 
   createGuideLines() {
@@ -3671,6 +3676,9 @@ class EndlessMode {
     this.skySystem = new SkySystem(world); // Parallax cloud layer
     this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
 
+    // Initialize lane visual guide meshes immediately after construction
+    this.laneVisualGuideSystem.createMeshes();
+
     // ===== ENTITY SYSTEMS ===== (gameplay logic)
     this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world); // Player position and lane state
     this.playerIntentSystem = new PlayerIntentSystem(); // Mouse → semantic intents
@@ -3782,6 +3790,11 @@ class EndlessMode {
     // Reset state
     this.isActive = true;
     this.isPaused = false;
+
+    // Safety guard: warn if lane visual guide system is missing (last resort)
+    if (!this.laneVisualGuideSystem) {
+      console.warn('[EndlessMode] LaneVisualGuideSystem missing at start — skipping visuals');
+    }
 
     // Initialize view (create meshes)
     this.planeView.createMeshes();
@@ -4043,7 +4056,8 @@ class EndlessMode {
 
     if (this.laneVisualGuideSystem) {
       this.laneVisualGuideSystem.destroy();
-      this.laneVisualGuideSystem = null;
+      // Note: LaneVisualGuideSystem is presentation-only and persists for mode lifecycle
+      // this.laneVisualGuideSystem = null; // Do not null - presentation systems persist
     }
 
     // Clear all component references
