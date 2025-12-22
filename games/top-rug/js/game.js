@@ -5,40 +5,54 @@
 class ModeSupervisor {
   constructor() {
     this.currentMode = null;
+
+    // Health check: track lifecycle state
+    this.hasActiveMode = false;
   }
 
   setMode(mode) {
+    // Health check: warn if setting mode while another is active
+    if (this.hasActiveMode) {
+      console.warn('[ModeSupervisor] WARNING: Setting new mode while previous mode is still active');
+    }
+
     this.currentMode = mode;
+    this.hasActiveMode = false; // Reset until started
   }
 
   start() {
+    // Health check: ensure mode is set before starting
+    console.assert(this.currentMode, '[ModeSupervisor] ERROR: Cannot start without setting a mode first');
+
     if (this.currentMode) {
       this.currentMode.start();
+      this.hasActiveMode = true;
     }
   }
 
   update(deltaTime) {
-    if (this.currentMode) {
+    if (this.currentMode && this.hasActiveMode) {
       this.currentMode.update(deltaTime);
     }
   }
 
   pause() {
-    if (this.currentMode) {
+    if (this.currentMode && this.hasActiveMode) {
       this.currentMode.pause();
     }
   }
 
   resume() {
-    if (this.currentMode) {
+    if (this.currentMode && this.hasActiveMode) {
       this.currentMode.resume();
     }
   }
 
   destroy() {
-    if (this.currentMode) {
+    if (this.currentMode && this.hasActiveMode) {
       this.currentMode.destroy();
       this.currentMode = null;
+      this.hasActiveMode = false;
     }
   }
 }
@@ -140,9 +154,16 @@ class World {
     this.camera = null;
     this.renderer = null;
     this.lights = [];
+
+    // Health check: ensure single initialization
+    this.hasInitialized = false;
   }
 
   init() {
+    // Health check: World must be initialized only once
+    console.assert(!this.hasInitialized, '[World] ERROR: init() called multiple times - only one renderer canvas allowed');
+    this.hasInitialized = true;
+
     // Create scene
     this.scene = new THREE.Scene();
     // Adjust fog for better horizon feel - start closer to camera, extend much further
@@ -219,6 +240,34 @@ class World {
   render() {
     this.renderer.render(this.scene, this.camera);
   }
+
+  destroy() {
+    // Health check: ensure all scene objects are removed
+    const objectsToRemove = [];
+    this.scene.traverse((object) => {
+      if (object !== this.scene) {
+        objectsToRemove.push(object);
+      }
+    });
+
+    objectsToRemove.forEach((object) => {
+      this.scene.remove(object);
+      // Dispose geometries and materials to prevent memory leaks
+      if (object.geometry) object.geometry.dispose();
+      if (object.material) {
+        if (Array.isArray(object.material)) {
+          object.material.forEach(material => material.dispose());
+        } else {
+          object.material.dispose();
+        }
+      }
+    });
+
+    // Clear lights array
+    this.lights.length = 0;
+
+    console.log(`[World] Destroyed - removed ${objectsToRemove.length} scene objects`);
+  }
 }
 
 // CameraRig class - manages camera follow behavior
@@ -249,6 +298,200 @@ class CameraRig {
   clear() {
     this.targetEntity = null;
     console.log('[CameraRig] Cleared follow target');
+  }
+}
+
+// SeaSystem class - animated sea visual system
+class SeaSystem {
+  constructor(world) {
+    this.world = world;
+    this.mesh = null;
+    this.material = null;
+    this.geometry = null;
+    this.scrollPhase = 0;
+  }
+
+  init() {
+    // Create large circular geometry for the sea
+    this.geometry = new THREE.CircleGeometry(1000, 32);
+
+    // Simple blue material
+    this.material = new THREE.MeshLambertMaterial({
+      color: 0x006994,
+      transparent: true,
+      opacity: 0.8
+    });
+
+    // Create mesh and position it
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
+
+    // Rotate to lie flat on the ground (rotate around X axis)
+    this.mesh.rotation.x = -Math.PI / 2;
+
+    // Position at water level (below airplane baseline)
+    this.mesh.position.y = -20;
+
+    // Add to world
+    this.world.add(this.mesh);
+
+    console.log('[SeaSystem] Initialized - sea mesh added to world');
+  }
+
+  update(deltaTime, distanceDelta = 0) {
+    if (!this.mesh) return;
+
+    // Accumulate smooth phase
+    this.scrollPhase += distanceDelta * 0.05;
+
+    // Apply as sinusoidal offset (never resets)
+    this.mesh.position.z = Math.sin(this.scrollPhase) * 10;
+    this.mesh.position.x = Math.cos(this.scrollPhase * 0.7) * 5;
+  }
+
+  destroy() {
+    if (this.mesh) {
+      this.world.remove(this.mesh);
+      this.mesh = null;
+    }
+
+    if (this.geometry) {
+      this.geometry.dispose();
+      this.geometry = null;
+    }
+
+    if (this.material) {
+      this.material.dispose();
+      this.material = null;
+    }
+
+    console.log('[SeaSystem] Destroyed - sea mesh removed and resources disposed');
+  }
+}
+
+// DistanceSystem class - creates forward motion illusion
+class DistanceSystem {
+  constructor() {
+    this.distance = 0;
+    this.speed = 0.02; // Base speed for distance accumulation
+    this.lastDelta = 0;
+  }
+
+  reset() {
+    this.distance = 0;
+    this.lastDelta = 0;
+  }
+
+  update(deltaTime) {
+    this.lastDelta = this.speed * deltaTime;
+    this.distance += this.lastDelta;
+  }
+
+  getDistance() {
+    return this.distance;
+  }
+
+  getDelta() {
+    return this.lastDelta;
+  }
+}
+
+// SkySystem class - parallax cloud layer visual system
+class SkySystem {
+  constructor(world) {
+    this.world = world;
+    this.cloudGroup = null;
+    this.clouds = [];
+    this.animationSpeed = 0.0002; // Very slow movement for parallax
+    this.cloudCount = 20; // Number of clouds
+  }
+
+  init() {
+    // Create group to hold all clouds
+    this.cloudGroup = new THREE.Group();
+
+    // Create clouds distributed in a wide area
+    for (let i = 0; i < this.cloudCount; i++) {
+      this.createCloud();
+    }
+
+    // Position the entire group above sea but below camera far plane
+    this.cloudGroup.position.y = 50; // Above sea level
+
+    // Add group to world
+    this.world.add(this.cloudGroup);
+
+    console.log(`[SkySystem] Initialized - ${this.cloudCount} clouds added to world`);
+  }
+
+  createCloud() {
+    // Simple cloud using multiple spheres or boxes
+    const cloudGroup = new THREE.Group();
+
+    // Create 3-5 spheres per cloud for fluffy look
+    const sphereCount = 3 + Math.floor(Math.random() * 3);
+    const cloudGeometry = new THREE.SphereGeometry(8 + Math.random() * 4, 8, 6);
+    const cloudMaterial = new THREE.MeshLambertMaterial({
+      color: 0xffffff - Math.floor(Math.random() * 0x222222), // Vary white shades
+    transparent: true,
+      opacity: 0.7 + Math.random() * 0.3
+    });
+
+    for (let i = 0; i < sphereCount; i++) {
+      const sphere = new THREE.Mesh(cloudGeometry, cloudMaterial);
+      sphere.position.set(
+        (Math.random() - 0.5) * 20, // Spread horizontally
+        (Math.random() - 0.5) * 10, // Spread vertically
+        (Math.random() - 0.5) * 20  // Spread depth
+      );
+      sphere.scale.setScalar(0.8 + Math.random() * 0.4); // Vary sizes
+      cloudGroup.add(sphere);
+    }
+
+    // Position cloud in wide arc around the scene
+    const angle = (Math.PI * 2 * this.clouds.length) / this.cloudCount;
+    const distance = 200 + Math.random() * 300; // Vary distance from center
+    const height = 20 + Math.random() * 40; // Vary height
+
+    cloudGroup.position.set(
+      Math.cos(angle) * distance,
+      height,
+      Math.sin(angle) * distance
+    );
+
+    // Store cloud for cleanup
+    const cloudData = {
+      group: cloudGroup,
+      geometry: cloudGeometry,
+      material: cloudMaterial
+    };
+    this.clouds.push(cloudData);
+
+    // Add to main group
+    this.cloudGroup.add(cloudGroup);
+  }
+
+  update(deltaTime) {
+    if (!this.cloudGroup) return;
+
+    // Slow horizontal movement for parallax effect
+    this.cloudGroup.rotation.y += this.animationSpeed * deltaTime;
+  }
+
+  destroy() {
+    if (this.cloudGroup) {
+      this.world.remove(this.cloudGroup);
+      this.cloudGroup = null;
+    }
+
+    // Dispose all cloud resources
+    this.clouds.forEach(cloud => {
+      cloud.geometry.dispose();
+      cloud.material.dispose();
+    });
+
+    this.clouds.length = 0;
+
+    console.log('[SkySystem] Destroyed - cloud group removed and resources disposed');
   }
 }
 
@@ -390,6 +633,10 @@ class EndlessMode {
     this.isActive = false;
     this.isPaused = false;
 
+    // Health checks
+    this.hasInitialized = false;
+    this.hasStarted = false;
+
     // Dependencies
     this.gameState = null;
     this.world = null;
@@ -400,9 +647,16 @@ class EndlessMode {
     this.planeEntity = null;
     this.planeController = null;
     this.planeView = null;
+    this.seaSystem = null;
+    this.skySystem = null;
+    this.distanceSystem = null;
   }
 
   init(gameState, world, input, cameraRig) {
+    // Lifecycle guard: init must run only once
+    console.assert(!this.hasInitialized, '[EndlessMode] ERROR: init() called multiple times');
+    this.hasInitialized = true;
+
     // Store dependencies - no side effects
     this.gameState = gameState;
     this.world = world;
@@ -413,17 +667,33 @@ class EndlessMode {
     this.planeEntity = new PlaneEntity();
     this.planeController = new PlaneController();
     this.planeView = new PlaneView(world);
+    this.seaSystem = new SeaSystem(world);
+    this.skySystem = new SkySystem(world);
+    this.distanceSystem = new DistanceSystem();
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
   }
 
   start() {
+    // Lifecycle guard: start must not run twice without destroy
+    console.assert(!this.hasStarted || !this.isActive, '[EndlessMode] ERROR: start() called twice without destroy()');
+    this.hasStarted = true;
+
     // Reset state
     this.isActive = true;
     this.isPaused = false;
 
     // Initialize view (create meshes)
     this.planeView.createMeshes();
+
+    // Initialize sea system
+    this.seaSystem.init();
+
+    // Initialize sky system
+    this.skySystem.init();
+
+    // Reset distance system
+    this.distanceSystem.reset();
 
     // Reset entity to initial state
     this.planeEntity = new PlaneEntity(); // Fresh entity
@@ -435,8 +705,14 @@ class EndlessMode {
   }
 
   update(deltaTime) {
+    // Health check: warn if update runs while inactive
+    if (!this.isActive) {
+      console.warn('[EndlessMode] WARNING: update() called while inactive');
+    return;
+    }
+
     // Only run when active and not paused
-    if (!this.isActive || this.isPaused) return;
+    if (this.isPaused) return;
     if (!this.planeEntity || !this.planeController || !this.planeView || !this.input) return;
 
     // 1. Controller processes input into intent
@@ -450,7 +726,16 @@ class EndlessMode {
     // 3. View updates visuals from entity state
     this.planeView.updateFromEntity(this.planeEntity);
 
-    // 4. Camera system updates (delegated to CameraRig)
+    // 4. Distance system updates
+    this.distanceSystem.update(deltaTime);
+
+    // 5. Sea system updates (now uses distance for motion illusion)
+    this.seaSystem.update(deltaTime, this.distanceSystem.getDelta());
+
+    // 6. Sky system updates
+    this.skySystem.update(deltaTime);
+
+    // 6. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
     // Update game time
@@ -474,6 +759,9 @@ class EndlessMode {
     this.isActive = false;
     this.isPaused = false;
 
+    // Reset lifecycle flags for potential restart
+    this.hasStarted = false;
+
     // Clear camera following
     if (this.cameraRig) {
       this.cameraRig.clear();
@@ -485,6 +773,16 @@ class EndlessMode {
       this.planeView = null;
     }
 
+    if (this.seaSystem) {
+      this.seaSystem.destroy();
+      this.seaSystem = null;
+    }
+
+    if (this.skySystem) {
+      this.skySystem.destroy();
+      this.skySystem = null;
+    }
+
     // Clear all component references
     this.planeEntity = null;
     this.planeController = null;
@@ -494,7 +792,10 @@ class EndlessMode {
     this.world = null;
     this.input = null;
     this.cameraRig = null;
+    this.seaSystem = null;
+    this.skySystem = null;
+    this.distanceSystem = null;
 
-    console.log('[EndlessMode] Destroyed - all references cleared');
+    console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
   }
 }
