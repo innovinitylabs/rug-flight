@@ -2151,13 +2151,13 @@ class PlayerVisualMovementSystem {
 
 // PlayerVerticalConstraintSystem class - enforces vertical positioning constraints
 class PlayerVerticalConstraintSystem {
-  constructor(worldLayoutSystem, playerProxy) {
+  constructor(worldLayoutSystem, playerEntity) {
     // Presentation-only system: enforces visual vertical constraints
     // Never mutates gameplay logic, only corrects visual drift
     // Ensures player stays in correct vertical band for camera framing
 
     this.worldLayoutSystem = worldLayoutSystem;
-    this.playerProxy = playerProxy;
+    this.playerEntity = playerEntity;
 
     // Movement smoothing for constraint corrections
     this.constraintLerpSpeed = 0.05; // Gentle correction to avoid jarring
@@ -2169,22 +2169,23 @@ class PlayerVerticalConstraintSystem {
   }
 
   update(deltaTime) {
-    if (!this.worldLayoutSystem || !this.playerProxy) {
+    if (!this.worldLayoutSystem || !this.playerEntity) {
       return; // Safety check
     }
 
-    // Get the target Y position from world layout
+    // Get the MID_AIR zone constraints
     const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
-    if (!midAirZone || typeof midAirZone.yBaseline !== 'number') {
-      return; // Cannot enforce constraint without valid baseline
+    if (!midAirZone || !midAirZone.yRange || !Array.isArray(midAirZone.yRange) || midAirZone.yRange.length !== 2) {
+      return; // Cannot enforce constraint without valid yRange
     }
 
-    const targetY = midAirZone.yBaseline;
-    const currentPosition = this.playerProxy.getPosition();
-    const currentY = currentPosition.y;
+    const [minY, maxY] = midAirZone.yRange;
+    const currentY = this.playerEntity.position.y;
 
-    // Check for significant drift
-    const yDeviation = Math.abs(currentY - targetY);
+    // Check for significant drift from the allowed range
+    const clampedY = Math.max(minY, Math.min(maxY, currentY));
+    const yDeviation = Math.abs(currentY - clampedY);
+
     if (yDeviation > 5) {
       if (!this.driftLogged) {
         console.log(`[VerticalConstraint] Correcting Y drift of ${yDeviation.toFixed(1)} units`);
@@ -2195,11 +2196,11 @@ class PlayerVerticalConstraintSystem {
       this.driftLogged = false;
     }
 
-    // Smoothly constrain Y position to baseline
-    const newY = currentY + (targetY - currentY) * this.constraintLerpSpeed;
+    // Smoothly constrain Y position within the allowed range
+    const newY = currentY + (clampedY - currentY) * this.constraintLerpSpeed;
 
-    // Update player proxy position (only Y, preserve X and Z)
-    this.playerProxy.setPosition(currentPosition.x, newY, currentPosition.z);
+    // Write the clamped value back to player entity position
+    this.playerEntity.position.y = newY;
   }
 }
 
