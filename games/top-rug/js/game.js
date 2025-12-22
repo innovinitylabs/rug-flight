@@ -2436,6 +2436,64 @@ class PlaneView {
   }
 }
 
+// PlayerProxy class - minimal visual representation for endless mode
+class PlayerProxy {
+  constructor(world, worldLayoutSystem) {
+    this.world = world;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.mesh = null;
+
+    this.createMesh();
+  }
+
+  createMesh() {
+    // Simple box geometry for player representation
+    const geometry = new THREE.BoxGeometry(4, 4, 4);
+    const material = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // Red box
+
+    this.mesh = new THREE.Mesh(geometry, material);
+
+    // Position in MID_AIR zone
+    if (this.worldLayoutSystem) {
+      const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+      if (midAirZone && midAirZone.baselineY) {
+        this.mesh.position.set(0, midAirZone.baselineY, 0);
+      }
+    }
+
+    // Add to world
+    this.world.add(this.mesh);
+
+    console.log('[PlayerProxy] Visual player representation created');
+  }
+
+  getPosition() {
+    return this.mesh ? this.mesh.position.clone() : new THREE.Vector3();
+  }
+
+  setPosition(x, y, z) {
+    if (this.mesh) {
+      this.mesh.position.set(x, y, z);
+    }
+  }
+
+  update(deltaTime) {
+    // Simple rotation for visual feedback
+    if (this.mesh) {
+      this.mesh.rotation.y += deltaTime * 0.5; // Slow Y rotation
+    }
+  }
+
+  destroy() {
+    if (this.mesh && this.world) {
+      this.world.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      this.mesh.material.dispose();
+      this.mesh = null;
+    }
+  }
+}
+
 // EndlessMode class - orchestrates the components
 class EndlessMode {
   constructor() {
@@ -2458,6 +2516,7 @@ class EndlessMode {
     this.planeEntity = null;
     this.planeController = null;
     this.planeView = null;
+    this.playerProxy = null;
     this.seaSystem = null;
     this.skySystem = null;
     this.distanceSystem = null;
@@ -2505,6 +2564,7 @@ class EndlessMode {
     this.planeView = new PlaneView(world);
     this.seaSystem = new SeaSystem(world);
     this.skySystem = new SkySystem(world);
+    this.playerProxy = new PlayerProxy(world, this.worldLayoutSystem);
     this.distanceSystem = new DistanceSystem();
     this.worldAxisSystem = new WorldAxisSystem(this.distanceSystem);
     this.depthLayerSystem = new DepthLayerSystem();
@@ -2597,8 +2657,17 @@ class EndlessMode {
     this.laneController.setCurrentLane(1); // Middle lane for 3-lane setup
     this.planeEntity.setTargetLane(1); // Sync entity with lane controller
 
-    // Start camera following
-    this.cameraRig.follow(this.planeEntity);
+    // Force SIDE_SCROLLER view profile for endless mode
+    this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
+    console.log('[EndlessMode] View profile forced to SIDE_SCROLLER');
+
+    // Add debug coordinate axes
+    const axesHelper = new THREE.AxesHelper(200);
+    this.world.add(axesHelper);
+    console.log('[EndlessMode] Debug coordinate axes added (X=red, Y=green, Z=blue)');
+
+    // Start camera following PlayerProxy
+    this.cameraRig.follow(this.playerProxy);
 
     console.log('[EndlessMode] Started - input active, state reset');
   }
@@ -2670,7 +2739,14 @@ class EndlessMode {
     this.worldAxisSystem.update(deltaTime);
 
     // 4.5. Difficulty curve system updates (centralized difficulty progression)
-    this.difficultyCurveSystem.update(this.distanceSystem.getDistance());
+    const currentDistance = this.distanceSystem.getDistance();
+    this.difficultyCurveSystem.update(currentDistance);
+
+    // Log distance every ~500 units
+    if (!this.lastDistanceLog || currentDistance - this.lastDistanceLog >= 500) {
+      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      this.lastDistanceLog = Math.floor(currentDistance / 500) * 500; // Snap to 500-unit intervals
+    }
 
     // 5. World scroller system updates (single source of truth for forward motion)
     this.worldScrollerSystem.update(deltaTime);
@@ -2716,7 +2792,10 @@ class EndlessMode {
     // 16. VFX presentation system observes domain events for visual effects
     this.vfxPresentationSystem.update(domainEvents);
 
-    // 16. Sea system updates (pure renderer - reads Z from scroller)
+    // 16. Player proxy updates (visual representation)
+    this.playerProxy.update(deltaTime);
+
+    // 17. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
     // 17. Sky system updates (pure renderer - reads Z from scroller)
