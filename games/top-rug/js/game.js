@@ -1084,6 +1084,91 @@ class CollisionIntentSystem {
   }
 }
 
+// CoinEntity class - minimal entity for testing spawn system
+class CoinEntity {
+  constructor(id, laneIndex, z) {
+    this.id = id;
+    this.type = 'coin';
+    this.laneIndex = laneIndex;
+    this.z = z;
+
+    console.log(`[CoinEntity] Created coin ${id} at lane ${laneIndex}, Z=${z.toFixed(2)}`);
+  }
+
+  // Optional update method (does nothing for now)
+  update(deltaTime) {
+    // No behavior for minimal coin entity
+  }
+
+  // Cleanup method
+  destroy() {
+    console.log(`[CoinEntity] Destroyed coin ${this.id}`);
+  }
+}
+
+// SpawnSystem class - rule-driven world population
+class SpawnSystem {
+  constructor(spawnBandSystem, entityRegistry, laneSystem, spawnInterval = 50) {
+    this.spawnBandSystem = spawnBandSystem;
+    this.entityRegistry = entityRegistry;
+    this.laneSystem = laneSystem;
+    this.spawnInterval = spawnInterval; // World units between spawns
+
+    this.lastSpawnProgress = 0;
+
+    console.log(`[SpawnSystem] Rule-driven spawning established (interval: ${spawnInterval} world units)`);
+  }
+
+  update() {
+    const currentProgress = this.spawnBandSystem.getWorldProgress();
+
+    // Check if we've moved far enough to spawn something new
+    if (currentProgress - this.lastSpawnProgress >= this.spawnInterval) {
+      this.spawnEntity();
+      this.lastSpawnProgress = currentProgress;
+    }
+  }
+
+  spawnEntity() {
+    // Choose random lane
+    const laneIndex = Math.floor(Math.random() * this.laneSystem.getLaneCount());
+
+    // Get spawn Z from spawn band system
+    const spawnZ = this.spawnBandSystem.getSpawnZ('AHEAD_SPAWN');
+
+    // Generate unique ID
+    const entityId = this.entityRegistry.generateId();
+
+    // Create coin entity
+    const coinEntity = new CoinEntity(entityId, laneIndex, spawnZ);
+
+    // Register with entity registry
+    this.entityRegistry.register(coinEntity);
+
+    console.log(`[SpawnSystem] SPAWNED: Coin ${entityId} in lane ${laneIndex} at Z=${spawnZ.toFixed(2)} (progress: ${this.spawnBandSystem.getWorldProgress().toFixed(0)})`);
+  }
+
+  // Configuration methods
+  setSpawnInterval(interval) {
+    console.assert(interval > 0, '[SpawnSystem] ERROR: Spawn interval must be positive');
+    this.spawnInterval = interval;
+    console.log(`[SpawnSystem] Spawn interval updated to ${interval} world units`);
+  }
+
+  getSpawnInterval() {
+    return this.spawnInterval;
+  }
+
+  getLastSpawnProgress() {
+    return this.lastSpawnProgress;
+  }
+
+  getEntitiesSpawned() {
+    // Count entities created by this spawn system (simple approximation)
+    return Math.floor(this.lastSpawnProgress / this.spawnInterval);
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -1454,6 +1539,7 @@ class EndlessMode {
     this.spawnBandSystem = null;
     this.entityRegistrySystem = null;
     this.collisionIntentSystem = null;
+    this.spawnSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1498,6 +1584,14 @@ class EndlessMode {
 
     // Create collision intent system - deterministic collision detection layer
     this.collisionIntentSystem = new CollisionIntentSystem(15); // 15 unit Z threshold
+
+    // Create spawn system - rule-driven world population
+    this.spawnSystem = new SpawnSystem(
+      this.spawnBandSystem,
+      this.entityRegistrySystem,
+      this.laneSystem,
+      50 // Spawn every 50 world units
+    );
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -1585,19 +1679,22 @@ class EndlessMode {
     this.entityRegistrySystem.update(deltaTime);
     this.entityRegistrySystem.cleanup(this.spawnBandSystem);
 
-    // 8. Collision intent system processes (deterministic collision detection)
+    // 8. Spawn system updates (rule-driven world population)
+    this.spawnSystem.update();
+
+    // 9. Collision intent system processes (deterministic collision detection)
     this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
 
-    // 9. Sea system updates (pure renderer - reads Z from scroller)
+    // 10. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
-    // 9. Sky system updates (pure renderer - reads Z from scroller)
+    // 11. Sky system updates (pure renderer - reads Z from scroller)
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
-    // 10. Camera system updates (delegated to CameraRig)
+    // 12. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
-    // 11. Clear collision intents for next frame
+    // 13. Clear collision intents for next frame
     this.collisionIntentSystem.clear();
 
     // Update game time
