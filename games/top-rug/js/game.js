@@ -1505,6 +1505,224 @@ class AudioPresentationSystem {
   }
 }
 
+// VFXPresentationSystem class - observer-only visual effects system
+class VFXPresentationSystem {
+  constructor(world) {
+    // Observer-only system: never mutates game state or influences gameplay
+    // Listens to domain events to provide spatial visual feedback
+    // Must never mutate state - only observes and creates temporary visuals
+
+    this.world = world;
+    this.activeEffects = []; // Track active visual effects for cleanup
+
+    console.log('[VFXPresentation] Observer-only visual effects system established');
+  }
+
+  // Observer-only update method - reads domain events, spawns temporary visuals
+  update(domainEvents) {
+    if (!domainEvents || !Array.isArray(domainEvents)) {
+      return; // Safety check
+    }
+
+    // Clean up expired effects first
+    this.cleanupExpiredEffects();
+
+    // Process each domain event
+    for (const event of domainEvents) {
+      this.processDomainEvent(event);
+    }
+  }
+
+  processDomainEvent(event) {
+    // Switch on event type to determine visual response
+    switch (event.type) {
+      case 'COIN_COLLECTED':
+        this.createCoinCollectEffect(event);
+        break;
+
+      case 'COLLISION':
+        this.createCollisionEffect(event);
+        break;
+
+      default:
+        // Gracefully ignore unknown events
+        break;
+    }
+  }
+
+  createCoinCollectEffect(event) {
+    if (!event.position) return; // Skip if no position data
+
+    // Create a small burst of gold/yellow particles or planes
+    const effectGroup = new THREE.Group();
+
+    // Create 4-6 small planes/particles in a small burst
+    const particleCount = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < particleCount; i++) {
+      const particle = this.createCoinParticle();
+      // Random spread around the event position
+      particle.position.set(
+        (Math.random() - 0.5) * 4,
+        Math.random() * 3,
+        (Math.random() - 0.5) * 4
+      );
+      effectGroup.add(particle);
+    }
+
+    // Position the effect group at event location
+    effectGroup.position.copy(event.position);
+
+    // Add to world
+    this.world.add(effectGroup);
+
+    // Track for cleanup
+    const effect = {
+      object: effectGroup,
+      startTime: performance.now(),
+      lifetime: 400 + Math.random() * 200, // 400-600ms
+      update: (currentTime) => this.updateCoinEffect(effectGroup, currentTime)
+    };
+
+    this.activeEffects.push(effect);
+  }
+
+  createCoinParticle() {
+    // Create a small plane with gold material
+    const geometry = new THREE.PlaneGeometry(0.5, 0.5);
+    const material = new THREE.MeshLambertMaterial({
+      color: 0xffd700, // Gold
+      transparent: true,
+      opacity: 0.8
+    });
+
+    const particle = new THREE.Mesh(geometry, material);
+
+    // Random rotation
+    particle.rotation.set(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI
+    );
+
+    return particle;
+  }
+
+  updateCoinEffect(effectGroup, currentTime) {
+    const elapsed = currentTime - this.activeEffects.find(e => e.object === effectGroup).startTime;
+    const lifetime = this.activeEffects.find(e => e.object === effectGroup).lifetime;
+
+    if (elapsed > lifetime) return; // Effect will be cleaned up
+
+    // Fade out over time
+    const fadeProgress = elapsed / lifetime;
+    effectGroup.children.forEach(particle => {
+      if (particle.material) {
+        particle.material.opacity = 0.8 * (1 - fadeProgress);
+      }
+      // Gentle upward movement
+      particle.position.y += 0.01;
+    });
+  }
+
+  createCollisionEffect(event) {
+    if (!event.position) return; // Skip if no position data
+
+    // Create a brief flash/ring effect
+    const geometry = new THREE.RingGeometry(0.5, 1.5, 8);
+    const material = new THREE.MeshLambertMaterial({
+      color: event.value > 5 ? 0xff0000 : 0xffffff, // Red for hard hits, white for soft
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide
+    });
+
+    const ring = new THREE.Mesh(geometry, material);
+
+    // Position at event location, slight Y offset
+    ring.position.copy(event.position);
+    ring.position.y += 1;
+
+    // Orient horizontally
+    ring.rotation.x = -Math.PI / 2;
+
+    // Add to world
+    this.world.add(ring);
+
+    // Track for cleanup
+    const effect = {
+      object: ring,
+      startTime: performance.now(),
+      lifetime: 200 + Math.random() * 100, // 200-300ms
+      update: (currentTime) => this.updateCollisionEffect(ring, currentTime)
+    };
+
+    this.activeEffects.push(effect);
+  }
+
+  updateCollisionEffect(ring, currentTime) {
+    const elapsed = currentTime - this.activeEffects.find(e => e.object === ring).startTime;
+    const lifetime = this.activeEffects.find(e => e.object === ring).lifetime;
+
+    if (elapsed > lifetime) return; // Effect will be cleaned up
+
+    // Expand and fade
+    const expandProgress = elapsed / lifetime;
+    const scale = 1 + expandProgress * 2;
+    ring.scale.setScalar(scale);
+
+    if (ring.material) {
+      ring.material.opacity = 0.7 * (1 - expandProgress);
+    }
+  }
+
+  cleanupExpiredEffects() {
+    const currentTime = performance.now();
+    const expiredEffects = [];
+
+    // Find expired effects
+    for (let i = this.activeEffects.length - 1; i >= 0; i--) {
+      const effect = this.activeEffects[i];
+      if (currentTime - effect.startTime > effect.lifetime) {
+        expiredEffects.push(effect);
+        this.activeEffects.splice(i, 1);
+      }
+    }
+
+    // Clean up expired effects
+    for (const effect of expiredEffects) {
+      if (effect.object) {
+        // Dispose geometries and materials
+        effect.object.traverse((child) => {
+          if (child.geometry) {
+            child.geometry.dispose();
+          }
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => mat.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+
+        // Remove from world
+        this.world.remove(effect.object);
+      }
+    }
+  }
+
+  // Optional cleanup method
+  cleanup() {
+    // Clean up all active effects
+    for (const effect of this.activeEffects) {
+      if (effect.object) {
+        this.world.remove(effect.object);
+      }
+    }
+    this.activeEffects = [];
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -1880,6 +2098,7 @@ class EndlessMode {
     this.scoreSystem = null;
     this.presentationSystem = null;
     this.audioPresentationSystem = null;
+    this.vfxPresentationSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1944,6 +2163,9 @@ class EndlessMode {
 
     // Create audio presentation system - observer-only audio feedback
     this.audioPresentationSystem = new AudioPresentationSystem();
+
+    // Create VFX presentation system - observer-only visual effects
+    this.vfxPresentationSystem = new VFXPresentationSystem(world);
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -2049,16 +2271,19 @@ class EndlessMode {
     // 13. Audio presentation system observes domain events for sound feedback
     this.audioPresentationSystem.update(domainEvents);
 
-    // 14. Sea system updates (pure renderer - reads Z from scroller)
+    // 14. VFX presentation system observes domain events for visual effects
+    this.vfxPresentationSystem.update(domainEvents);
+
+    // 16. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
-    // 15. Sky system updates (pure renderer - reads Z from scroller)
+    // 17. Sky system updates (pure renderer - reads Z from scroller)
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
-    // 16. Camera system updates (delegated to CameraRig)
+    // 18. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
-    // 17. Clear collision intents and domain events for next frame
+    // 19. Clear collision intents and domain events for next frame
     this.collisionIntentSystem.clear();
     this.collisionConsumptionSystem.clear();
     this.collisionIntentSystem.clear();
