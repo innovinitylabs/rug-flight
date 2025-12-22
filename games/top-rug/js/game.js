@@ -774,6 +774,8 @@ class PlayerActionStateSystem {
     // Logging guards (one-time per state transition)
     this._recoveryLogged = false;
     this._cooldownLogged = false;
+    this._laneSwitchLogged = false;
+    this._stunLogged = false;
 
     console.log('[PlayerActionState] Action state management established');
   }
@@ -808,6 +810,8 @@ class PlayerActionStateSystem {
       // Reset flags when not in these states
       this._recoveryLogged = false;
       this._cooldownLogged = false;
+      this._laneSwitchLogged = false;
+      this._stunLogged = false;
     }
   }
 
@@ -835,7 +839,10 @@ class PlayerActionStateSystem {
       // Enter lane switch cooldown
       this.currentState = 'LANE_SWITCH_COOLDOWN';
       this.cooldownRemaining = this.laneSwitchCooldownMs;
-      console.log(`[PlayerActionState] Lane switch executed - cooldown ${this.laneSwitchCooldownMs}ms`);
+      if (!this._laneSwitchLogged) {
+        console.log(`[PlayerActionState] Lane switch executed - cooldown ${this.laneSwitchCooldownMs}ms`);
+        this._laneSwitchLogged = true;
+      }
     }
   }
 
@@ -843,7 +850,10 @@ class PlayerActionStateSystem {
   applyStun(durationMs) {
     this.currentState = 'STUNNED';
     this.stunRemaining = durationMs;
-    console.log(`[PlayerActionState] Stunned for ${durationMs}ms`);
+    if (!this._stunLogged) {
+      console.log(`[PlayerActionState] Stunned for ${durationMs}ms`);
+      this._stunLogged = true;
+    }
   }
 
   // Get current state for debugging
@@ -2770,6 +2780,11 @@ class PlaneEntity {
     // Z-axis lock assertion
     this._lastZ = 0;
 
+    // Logging guards for one-time error reporting
+    this._zViolationLogged = false;
+    this._laneDriftLogged = false;
+    this._laneErrorLogged = false;
+
     // Lane tracking
     this.currentLaneIndex = 1; // Start in middle lane
   }
@@ -2784,7 +2799,7 @@ class PlaneEntity {
     this.currentLaneIndex = laneIndex;
     this.targetX = this.laneSystem.getLaneCenter(laneIndex);
 
-    console.log(`[PlaneEntity] Targeting lane ${laneIndex} at X=${this.targetX.toFixed(2)}`);
+    // Lane targeting is silent - no logging
   }
 
   setTargetRoll(roll) {
@@ -2798,9 +2813,11 @@ class PlaneEntity {
     this.rotation.z += (this.targetRoll - this.rotation.z) * this.rollLerpSpeed;
 
     // Z-axis lock assertion - plane NEVER moves in Z
-    console.assert(this.position.z === 0, '[PlaneEntity] ERROR: Plane Z position changed - Z axis locked!');
-    if (this.position.z !== this._lastZ) {
-      console.warn('[PlaneEntity] WARNING: Z position modified externally');
+    if (this.position.z !== 0) {
+      if (!this._zViolationLogged) {
+        console.error('[PlaneEntity] ERROR: Plane Z position changed - Z axis locked!');
+        this._zViolationLogged = true;
+      }
       this.position.z = 0; // Force reset
     }
     this._lastZ = this.position.z;
@@ -2812,14 +2829,24 @@ class PlaneEntity {
       const distanceFromLane = Math.abs(this.position.x - laneCenter);
 
       // Assert that plane is within reasonable distance of a lane center
-      console.assert(distanceFromLane < this.laneSystem.laneWidth * 0.6,
-        `[PlaneEntity] ERROR: Plane X=${this.position.x.toFixed(2)} too far from lane center ${laneCenter.toFixed(2)}`);
-
-      if (distanceFromLane > this.laneSystem.laneWidth * 0.4) {
-        console.warn(`[PlaneEntity] WARNING: Plane drifting from lane center (distance: ${distanceFromLane.toFixed(2)})`);
+      if (distanceFromLane >= this.laneSystem.laneWidth * 0.6) {
+        if (!this._laneErrorLogged) {
+          console.error(`[PlaneEntity] ERROR: Plane X=${this.position.x.toFixed(2)} too far from lane center ${laneCenter.toFixed(2)}`);
+          this._laneErrorLogged = true;
+        }
       }
 
-      console.log(`[PlaneEntity] Lane ${currentLaneIndex}, X=${this.position.x.toFixed(2)}, Target=${this.targetX.toFixed(2)}`);
+      if (distanceFromLane > this.laneSystem.laneWidth * 0.4) {
+        if (!this._laneDriftLogged) {
+          console.warn(`[PlaneEntity] WARNING: Plane drifting from lane center (distance: ${distanceFromLane.toFixed(2)})`);
+          this._laneDriftLogged = true;
+        }
+      } else {
+        // Reset drift warning when back in lane
+        this._laneDriftLogged = false;
+      }
+
+      // Lane position logging is silent - no per-frame logs
     }
   }
 
