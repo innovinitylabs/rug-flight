@@ -1348,6 +1348,60 @@ class ScoreSystem {
   }
 }
 
+// PresentationSystem class - observer-only DOM updates for Endless mode
+class PresentationSystem {
+  constructor() {
+    this.lastRenderedCoins = -1; // Cache to avoid unnecessary DOM updates
+    this.coinsElement = null;
+
+    // Cache DOM element reference
+    this.initializeDomReferences();
+
+    console.log('[PresentationSystem] Observer-only presentation system established');
+  }
+
+  initializeDomReferences() {
+    // Target the existing element for Endless mode
+    this.coinsElement = document.getElementById('coinsValue-toprug1');
+  }
+
+  // Observer-only update method
+  update(scoreSystem, domainEvents) {
+    if (!scoreSystem) return;
+
+    // Get current coin count
+    const currentCoins = scoreSystem.getCoinsCollected();
+
+    // Update DOM only if value changed
+    if (currentCoins !== this.lastRenderedCoins) {
+      this.updateCoinsDisplay(currentCoins);
+      this.lastRenderedCoins = currentCoins;
+    }
+
+    // Observe domain events for potential future enhancements
+    // Currently not used but available for animations, sounds, etc.
+    this.observeDomainEvents(domainEvents);
+  }
+
+  updateCoinsDisplay(coins) {
+    if (this.coinsElement) {
+      this.coinsElement.textContent = coins.toString();
+    }
+  }
+
+  observeDomainEvents(domainEvents) {
+    // Observer-only: just observe events, don't process them
+    // Future: Could trigger animations, sounds, etc. based on events
+    // For now, this method exists for architectural completeness
+  }
+
+  // Optional cleanup method
+  cleanup() {
+    this.coinsElement = null;
+    this.lastRenderedCoins = -1;
+  }
+}
+
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor() {
@@ -1721,6 +1775,7 @@ class EndlessMode {
     this.spawnSystem = null;
     this.collisionConsumptionSystem = null;
     this.scoreSystem = null;
+    this.presentationSystem = null;
   }
 
   init(gameState, world, input, cameraRig, viewProfileSystem) {
@@ -1779,6 +1834,9 @@ class EndlessMode {
 
     // Create score system - authoritative scoring state management
     this.scoreSystem = new ScoreSystem();
+
+    // Create presentation system - observer-only DOM updates for Endless mode
+    this.presentationSystem = new PresentationSystem();
 
     console.log('[EndlessMode] Initialized - objects created, ready for start()');
     console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
@@ -1878,16 +1936,19 @@ class EndlessMode {
     // 11. Score system consumes domain events and updates score state
     this.scoreSystem.consume(domainEvents);
 
-    // 13. Sea system updates (pure renderer - reads Z from scroller)
+    // 12. Presentation system observes score and domain events for DOM updates
+    this.presentationSystem.update(this.scoreSystem, domainEvents);
+
+    // 14. Sea system updates (pure renderer - reads Z from scroller)
     this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
 
-    // 14. Sky system updates (pure renderer - reads Z from scroller)
+    // 15. Sky system updates (pure renderer - reads Z from scroller)
     this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
-    // 15. Camera system updates (delegated to CameraRig)
+    // 16. Camera system updates (delegated to CameraRig)
     this.cameraRig.update();
 
-    // 16. Clear collision intents and domain events for next frame
+    // 17. Clear collision intents and domain events for next frame
     this.collisionIntentSystem.clear();
     this.collisionConsumptionSystem.clear();
     this.collisionIntentSystem.clear();
