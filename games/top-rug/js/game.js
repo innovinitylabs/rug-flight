@@ -624,9 +624,9 @@ class WorldScrollerSystem {
     this.updateZoneOffset('GROUND_PLANE', baseDeltaZ);
     this.updateZoneOffset('SKY_FAR', baseDeltaZ);
 
-    // Log current offsets for debugging
-    console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}`);
-    console.log(`[WorldScroller] SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
+    // Log current offsets for debugging (commented out to reduce console spam)
+    // console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}`);
+    // console.log(`[WorldScroller] SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
   }
 
   updateZoneOffset(zoneName, baseDeltaZ) {
@@ -1937,7 +1937,7 @@ class PlayerVisualMovementSystem {
 
 // LaneEntitySpawnSystem class - gameplay system for spawning lane-based entities
 class LaneEntitySpawnSystem {
-  constructor(laneSystem, worldLayoutSystem, difficultyCurveSystem, entityRegistrySystem, world) {
+  constructor(laneSystem, worldLayoutSystem, difficultyCurveSystem, entityRegistrySystem, world, distanceSystem) {
     // Gameplay system: spawns entities that participate in game logic
     // Uses difficulty scaling and lane system for placement
     // Registers entities for collision detection and other systems
@@ -1947,6 +1947,7 @@ class LaneEntitySpawnSystem {
     this.difficultyCurveSystem = difficultyCurveSystem;
     this.entityRegistrySystem = entityRegistrySystem;
     this.world = world;
+    this.distanceSystem = distanceSystem;
 
     // Spawn timing
     this.baseSpawnInterval = 2000; // Base 2 seconds between spawns
@@ -2049,6 +2050,9 @@ class LaneEntitySpawnSystem {
     }
 
     const coinEntity = new CoinEntity(entityId, laneIndex, spawnZ);
+
+    // TEMPORARY: Override spawnDistance to make coins visible immediately for debugging
+    coinEntity.spawnDistance = this.distanceSystem.getDistance() + 150;
 
     // Set position
     coinEntity.position = { x: laneCenterX, y: spawnY, z: spawnZ };
@@ -2167,9 +2171,14 @@ class LaneEntityVisualSystem {
     if (entity.position) {
       const baseZ = entity.position.z || 0;
       const offsetZ = entity.visualOffsetZ || 0;
+
+      // Explicitly set Y position using world layout system for MID_AIR zone
+      const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
+      const yPosition = midAirZone && midAirZone.baselineY ? midAirZone.baselineY : (entity.position.y || 0);
+
       mesh.position.set(
         entity.position.x || 0,
-        entity.position.y || 0,
+        yPosition,
         baseZ + offsetZ
       );
     }
@@ -3116,7 +3125,8 @@ class EndlessMode {
       this.worldLayoutSystem,
       this.difficultyCurveSystem,
       this.entityRegistrySystem,
-      world
+      world,
+      this.distanceSystem
     );
 
     // Create lane entity visual system - presentation-only visual management
