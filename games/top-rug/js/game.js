@@ -439,7 +439,8 @@ class DistanceSystem {
   }
 
   update(deltaTime) {
-    this.lastDelta = this.speed * deltaTime;
+    // Constant forward velocity: 0.05 units per frame for world illusion
+    this.lastDelta = 0.05;
     this.distance += this.lastDelta;
   }
 
@@ -626,9 +627,8 @@ class WorldScrollerSystem {
     this.updateZoneOffset('GROUND_PLANE', baseDeltaZ);
     this.updateZoneOffset('SKY_FAR', baseDeltaZ);
 
-    // Log current offsets for debugging (commented out to reduce console spam)
-    // console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}`);
-    // console.log(`[WorldScroller] SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
+    // Temporary debug logging to verify scrolling is working
+    console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}, SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
   }
 
   updateZoneOffset(zoneName, baseDeltaZ) {
@@ -1518,10 +1518,11 @@ class CoinEntity {
 
 // LaneObstacleEntity class - lane-based obstacle entity
 class LaneObstacleEntity {
-  constructor(id, laneIndex, laneSystem, worldLayoutSystem, world) {
+  constructor(id, laneIndex, laneSystem, worldLayoutSystem, worldScrollerSystem, world) {
     this.id = id;
     this.type = 'obstacle';
     this.laneIndex = laneIndex;
+    this.worldScrollerSystem = worldScrollerSystem;
     this.visualOffsetZ = 0; // Default visual offset for coordination between visual systems
 
     // Position: X from lane center, Y from baseline, Z far ahead
@@ -1529,10 +1530,13 @@ class LaneObstacleEntity {
     const midAirZone = worldLayoutSystem.getZone('MID_AIR');
     const baselineY = midAirZone && midAirZone.baselineY ? midAirZone.baselineY : 100;
 
+    // Store spawn Z position (fixed relative to world)
+    this.spawnZ = 600; // Start 600 units ahead
+
     this.position = {
       x: laneCenterX,
       y: baselineY,
-      z: 600 // Start 600 units ahead
+      z: this.spawnZ // Will be updated by update() method
     };
 
     // Create mesh
@@ -1554,11 +1558,12 @@ class LaneObstacleEntity {
     world.add(this.mesh);
   }
 
-  update(deltaTime, scrollDeltaZ) {
+  update(deltaTime) {
     if (!this.mesh) return;
 
-    // Move obstacle backward (toward player) based on scroll delta
-    this.position.z -= scrollDeltaZ;
+    // Update position based on WorldScrollerSystem - obstacle Z = spawnZ + world Z offset
+    const worldZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
+    this.position.z = this.spawnZ + worldZ;
 
     // Update mesh position
     this.mesh.position.z = this.position.z + this.visualOffsetZ;
@@ -1663,7 +1668,7 @@ class LaneObstacleCollisionSystem {
 
 // ObstacleSpawnSystem class - manages lane-based obstacle spawning
 class ObstacleSpawnSystem {
-  constructor(distanceSystem, difficultyCurveSystem, laneSystem, worldLayoutSystem, world) {
+  constructor(distanceSystem, difficultyCurveSystem, laneSystem, worldLayoutSystem, worldScrollerSystem, world) {
     // Spawns obstacles based on distance traveled and difficulty
     // Manages active obstacles and cleans up passed obstacles
 
@@ -1671,6 +1676,7 @@ class ObstacleSpawnSystem {
     this.difficultyCurveSystem = difficultyCurveSystem;
     this.laneSystem = laneSystem;
     this.worldLayoutSystem = worldLayoutSystem;
+    this.worldScrollerSystem = worldScrollerSystem;
     this.world = world;
 
     // Spawn logic
@@ -1701,12 +1707,12 @@ class ObstacleSpawnSystem {
     }
 
     // Update all active obstacles
-    const scrollDeltaZ = this.distanceSystem.getDelta();
+    console.log(`[ObstacleSpeed] multiplier = ${difficultyState.speedMultiplier}`);
     for (let i = this.activeObstacles.length - 1; i >= 0; i--) {
       const obstacle = this.activeObstacles[i];
 
-      // Update obstacle position
-      obstacle.update(0, scrollDeltaZ);
+      // Update obstacle position (now uses WorldScrollerSystem)
+      obstacle.update(0);
 
       // Check if obstacle has passed behind player (Z < -50)
       if (obstacle.position.z < -50) {
@@ -1727,6 +1733,7 @@ class ObstacleSpawnSystem {
       chosenLane,
       this.laneSystem,
       this.worldLayoutSystem,
+      this.worldScrollerSystem,
       this.world
     );
 
@@ -2981,7 +2988,9 @@ class WorldAxisSystem {
 
   getBaseDeltaZ() {
     // Return negative Z movement to create forward illusion
-    return -this.distanceSystem.getDelta();
+    const deltaZ = -this.distanceSystem.getDelta();
+    console.log(`[WorldAxis] deltaZ = ${deltaZ}`);
+    return deltaZ;
   }
 
   getDistance() {
@@ -3708,6 +3717,7 @@ class EndlessMode {
       this.difficultyCurveSystem,
       this.laneSystem,
       this.worldLayoutSystem,
+      this.worldScrollerSystem,
       world
     );
 
@@ -3758,6 +3768,7 @@ class EndlessMode {
       this.difficultyCurveSystem,
       this.laneSystem,
       this.worldLayoutSystem,
+      this.worldScrollerSystem,
       world
     );
 
@@ -3908,10 +3919,13 @@ class EndlessMode {
     // 3. View updates visuals from entity state
     this.planeView.updateFromEntity(this.planeEntity);
 
-    // 4. World axis system updates
+    // 4. World axis system updates (DistanceSystem first)
     this.worldAxisSystem.update(deltaTime);
 
-    // 4.5. Difficulty curve system updates (centralized difficulty progression)
+    // 5. World scroller system updates immediately after (single source of forward motion)
+    this.worldScrollerSystem.update(deltaTime);
+
+    // 5.5. Difficulty curve system updates (centralized difficulty progression)
     const currentDistance = this.distanceSystem.getDistance();
     this.difficultyCurveSystem.update(currentDistance);
 
@@ -3923,9 +3937,6 @@ class EndlessMode {
       console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
       this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
     }
-
-    // 5. World scroller system updates (single source of truth for forward motion)
-    this.worldScrollerSystem.update(deltaTime);
 
     // 6. Spawn band system updates (defines spatial spawn rules)
     // Player is always at Z=0, so pass current world scroll offset
