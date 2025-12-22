@@ -48,6 +48,16 @@ class PlayerEntity {
   getMesh() {
     return this.mesh;
   }
+
+  // Collision profile - defines collision properties for this player type
+  // Future: Different plane types can override this
+  getCollisionProfile() {
+    return {
+      zCollisionThreshold: 10,  // Distance in Z where collision is detected
+      laneWidth: 40,            // Effective collision width (lane-based)
+      collisionHeight: 20       // Effective collision height
+    };
+  }
 }
 
 export default PlayerEntity;

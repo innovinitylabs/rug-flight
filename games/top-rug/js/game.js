@@ -1,6 +1,14 @@
 // Clean architecture for Endless game mode
 // Single authoritative module with minimal public API
 
+// Game phases for Endless mode - owned by EndlessMode only
+const GAME_PHASES = {
+  GRACE: 'GRACE',           // Initial grace period (no collisions)
+  PLAYING: 'PLAYING',       // Normal gameplay (collisions active)
+  HIT_RECOVERY: 'HIT_RECOVERY', // Brief recovery after hit (no new spawns)
+  GAME_OVER: 'GAME_OVER'    // Player died (input disabled)
+};
+
 // Import modern abstractions
 import PlayerEntity from '/core/entities/PlayerEntity.js';
 import ObstacleEntity from '/core/entities/ObstacleEntity.js';
@@ -1558,8 +1566,7 @@ class EntityRegistrySystem {
 
 // CollisionIntentSystem class - deterministic collision detection layer
 class CollisionIntentSystem {
-  constructor(zCollisionThreshold = 10) {
-    this.zCollisionThreshold = zCollisionThreshold; // Configurable Z distance for collision
+  constructor() {
     this.currentFrameIntents = []; // Intents for current frame only
 
     // Collision grace period - no collisions during initial game phase
@@ -1567,8 +1574,10 @@ class CollisionIntentSystem {
     this.gracePeriodSeconds = 2.0; // First 2 seconds
     this.elapsedTime = 0; // Track total elapsed time
 
-    console.log(`[CollisionIntent] Deterministic collision detection layer established (Z threshold: ${zCollisionThreshold})`);
-    console.log(`[CollisionIntent] Grace period: ${this.gracePeriodWorldUnits} world units OR ${this.gracePeriodSeconds}s`);
+    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      console.log('[CollisionIntent] Deterministic collision detection layer established');
+      console.log(`[CollisionIntent] Grace period: ${this.gracePeriodWorldUnits} world units OR ${this.gracePeriodSeconds}s`);
+    }
   }
 
   // Process collision detection for current frame
@@ -1601,6 +1610,9 @@ class CollisionIntentSystem {
     const planeLaneIndex = playerMovementPipeline.getCurrentLane();
     const planeZ = planeEntity.position.z; // Always 0 for plane
 
+    // Get collision profile from player entity
+    const collisionProfile = planeEntity.getCollisionProfile();
+
     // Check each active entity for collision
     for (const entity of activeEntities) {
       // Skip if entity doesn't have laneIndex (not lane-aware)
@@ -1612,8 +1624,8 @@ class CollisionIntentSystem {
       // Calculate Z distance (plane is always at Z=0)
       const zDistance = Math.abs(entity.z - planeZ);
 
-      // Check if within collision threshold
-      if (zDistance <= this.zCollisionThreshold) {
+      // Check if within collision threshold from profile
+      if (zDistance <= collisionProfile.zCollisionThreshold) {
         // Create collision intent
         const intent = {
           type: 'COLLISION',
@@ -1626,7 +1638,9 @@ class CollisionIntentSystem {
         this.currentFrameIntents.push(intent);
 
         // Log collision intent
-        console.log(`[CollisionIntent] COLLISION: Plane vs ${entity.type} entity ${entity.id} (lane ${planeLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
+        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+          console.log(`[CollisionIntent] COLLISION: Plane vs ${entity.type} entity ${entity.id} (lane ${planeLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
+        }
       }
     }
 
@@ -1687,7 +1701,7 @@ class CollisionIntentSystem {
     const clearedCount = this.currentFrameIntents.length;
     this.currentFrameIntents = [];
 
-    if (clearedCount > 0) {
+    if (clearedCount > 0 && DebugConfig.ENABLE_OBSTACLE_LOGS) {
       console.log(`[CollisionIntent] Cleared ${clearedCount} intents for next frame`);
     }
 
@@ -3769,6 +3783,11 @@ class EndlessMode {
     this.isActive = false;
     this.isPaused = false;
 
+    // Game phases - authoritative state owned by EndlessMode only
+    this.currentPhase = GAME_PHASES.GRACE;
+    this.phaseStartTime = 0; // When current phase started
+    this.hitRecoveryDuration = 1.0; // 1 second recovery after hit
+
     // Health checks
     this.hasInitialized = false;
     this.hasStarted = false;
@@ -4103,6 +4122,8 @@ class EndlessMode {
       <strong>World:</strong><br>
       Ground Z: ${groundZ.toFixed(1)}<br>
       Sky Z: ${skyZ.toFixed(1)}<br>
+      <strong>Game:</strong><br>
+      Phase: ${this.currentPhase}<br>
       <strong>Obstacle:</strong><br>
       ${obstacleInfo}
     `;
@@ -4124,10 +4145,22 @@ class EndlessMode {
     if (this.isPaused) return;
     if (!this.playerEntity || !this.input || !this.worldAxisSystem || !this.worldScrollerSystem) return;
 
-    // Check for game over - skip gameplay logic if player is dead
-    if (this.gameState.status === 'GAME_OVER') {
+    // Update game phases based on current state and time
+    this.updateGamePhases(deltaTime);
+
+    // Check for game over - transition to GAME_OVER phase
+    if (this.healthSystem.isDead()) {
+      if (!this.isInPhase(GAME_PHASES.GAME_OVER)) {
+        this.setPhase(GAME_PHASES.GAME_OVER, performance.now());
+        if (DebugConfig.ENABLE_FRAME_LOGS) {
+          console.log('[EndlessMode] Player died - entering GAME_OVER phase');
+        }
+      }
+    }
+
+    // In GAME_OVER phase, disable input and skip most gameplay logic
+    if (this.isInPhase(GAME_PHASES.GAME_OVER)) {
       // Still allow presentation systems to run (for UI updates)
-      // But skip all gameplay logic
       this.presentationSystem.update(this.scoreSystem, []);
       this.audioPresentationSystem.update([]);
       this.vfxPresentationSystem.update([]);
@@ -4148,8 +4181,10 @@ class EndlessMode {
     this.seaSystem.updateScroll(groundZ);
     this.skySystem.updateScroll(skyZ);
 
-    // Execute complete player movement pipeline
-    this.playerMovementPipeline.update(this.input, deltaTime);
+    // Execute complete player movement pipeline (disabled in GAME_OVER phase)
+    if (!this.isInPhase(GAME_PHASES.GAME_OVER)) {
+      this.playerMovementPipeline.update(this.input, deltaTime);
+    }
 
     // g) this.cameraRig.update()
     this.cameraRig.update();
@@ -4194,10 +4229,14 @@ class EndlessMode {
 
     // Log distance every ~500 units (skip initial 0)
     if (this.lastDistanceLog === null && currentDistance >= 500) {
-      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      if (DebugConfig.ENABLE_FRAME_LOGS) {
+        console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      }
       this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
     } else if (this.lastDistanceLog !== null && currentDistance - this.lastDistanceLog >= 500) {
-      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      if (DebugConfig.ENABLE_FRAME_LOGS) {
+        console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      }
       this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
     }
 
@@ -4219,21 +4258,29 @@ class EndlessMode {
     this.obstacleSpawnSystem.update();
 
     // 8.7. Single obstacle spawner system updates (deterministic single obstacle)
-    // Check if previously spawned obstacle has been recycled (BEHIND_CLEANUP)
-    this.singleObstacleSpawnerSystem.checkObstacleRecycled(this.spawnBandSystem);
+    // Only spawn during PLAYING and GRACE phases (not during HIT_RECOVERY)
+    if (this.isInPhase(GAME_PHASES.PLAYING) || this.isInPhase(GAME_PHASES.GRACE)) {
+      // Check if previously spawned obstacle has been recycled (BEHIND_CLEANUP)
+      this.singleObstacleSpawnerSystem.checkObstacleRecycled(this.spawnBandSystem);
 
-    // Spawn new obstacle if none exists
-    if (!this.singleObstacleSpawnerSystem.hasSpawned) {
-      this.singleObstacleSpawnerSystem.spawnObstacle();
+      // Spawn new obstacle if none exists
+      if (!this.singleObstacleSpawnerSystem.hasSpawned) {
+        this.singleObstacleSpawnerSystem.spawnObstacle();
+      }
     }
     this.singleObstacleSpawnerSystem.updateObstaclePosition();
 
-    // 9. Lane obstacle collision system detects player vs obstacle collisions
-    const activeObstacles = this.obstacleSpawnSystem.getActiveObstacles();
-    const obstacleCollisionEvents = this.laneObstacleCollisionSystem.process(this.playerEntity, activeObstacles);
+    // 9. Lane obstacle collision system detects player vs obstacle collisions (PLAYING phase only)
+    let obstacleCollisionEvents = [];
+    let collisionIntents = [];
 
-    // 10. Collision intent system processes (deterministic collision detection)
-    const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem, this.playerMovementPipeline, deltaTime);
+    if (this.isInPhase(GAME_PHASES.PLAYING)) {
+      const activeObstacles = this.obstacleSpawnSystem.getActiveObstacles();
+      obstacleCollisionEvents = this.laneObstacleCollisionSystem.process(this.playerEntity, activeObstacles);
+
+      // 10. Collision intent system processes (deterministic collision detection)
+      collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem, this.playerMovementPipeline, deltaTime);
+    }
 
     // 11. Collision consumption system processes intents into domain events
     const entityCollisionEvents = this.collisionConsumptionSystem.process(collisionIntents);
@@ -4326,13 +4373,17 @@ class EndlessMode {
   pause() {
     // Stop updates without mutating state
     this.isPaused = true;
-    console.log('[EndlessMode] Paused - updates stopped');
+    if (DebugConfig.ENABLE_FRAME_LOGS) {
+      console.log('[EndlessMode] Paused - updates stopped');
+    }
   }
 
   resume() {
     // Continue updates
     this.isPaused = false;
-    console.log('[EndlessMode] Resumed - updates continued');
+    if (DebugConfig.ENABLE_FRAME_LOGS) {
+      console.log('[EndlessMode] Resumed - updates continued');
+    }
   }
 
   destroy() {
@@ -4389,6 +4440,64 @@ class EndlessMode {
     console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
   }
 
+  // Game phase management - authoritative control owned by EndlessMode only
+  setPhase(newPhase, currentTime) {
+    if (this.currentPhase === newPhase) return; // No change
+
+    const oldPhase = this.currentPhase;
+    this.currentPhase = newPhase;
+    this.phaseStartTime = currentTime;
+
+    if (DebugConfig.ENABLE_FRAME_LOGS) {
+      console.log(`[EndlessMode] Phase transition: ${oldPhase} → ${newPhase}`);
+    }
+  }
+
+  getCurrentPhase() {
+    return this.currentPhase;
+  }
+
+  getPhaseElapsedTime(currentTime) {
+    return currentTime - this.phaseStartTime;
+  }
+
+  isInPhase(phase) {
+    return this.currentPhase === phase;
+  }
+
+  // Update game phases based on current state and time
+  updateGamePhases(deltaTime) {
+    const currentTime = performance.now();
+    const elapsedInPhase = this.getPhaseElapsedTime(currentTime);
+
+    switch (this.currentPhase) {
+      case GAME_PHASES.GRACE:
+        // Check if grace period has ended (world progress OR time)
+        const worldProgress = this.spawnBandSystem.getWorldProgress();
+        const graceEnded = worldProgress >= 100 || (currentTime - this.phaseStartTime) >= 2000;
+
+        if (graceEnded) {
+          this.setPhase(GAME_PHASES.PLAYING, currentTime);
+        }
+        break;
+
+      case GAME_PHASES.PLAYING:
+        // Stay in PLAYING until hit - handled by collision processing
+        break;
+
+      case GAME_PHASES.HIT_RECOVERY:
+        // Recovery period after hit - wait for specified duration
+        if (elapsedInPhase >= (this.hitRecoveryDuration * 1000)) {
+          this.setPhase(GAME_PHASES.PLAYING, currentTime);
+        }
+        break;
+
+      case GAME_PHASES.GAME_OVER:
+        // Terminal state - no transitions out
+        break;
+    }
+  }
+
   // Process single obstacle collision intents and handle damage/destruction
   processSingleObstacleCollisions(collisionIntents) {
     const domainEvents = [];
@@ -4405,7 +4514,12 @@ class EndlessMode {
       // Apply damage to player (1 life)
       const damageApplied = this.healthSystem.applyDamage(1);
       if (damageApplied > 0) {
-        console.log(`[EndlessMode] Player hit obstacle ${obstacle.id}, lost ${damageApplied} life(s)`);
+        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+          console.log(`[EndlessMode] Player hit obstacle ${obstacle.id}, lost ${damageApplied} life(s)`);
+        }
+
+        // Transition to HIT_RECOVERY phase
+        this.setPhase(GAME_PHASES.HIT_RECOVERY, performance.now());
 
         // Create collision domain event
         const domainEvent = {
@@ -4424,7 +4538,9 @@ class EndlessMode {
         }
 
         // Mark obstacle as collided - spawner will respawn only after BEHIND_CLEANUP recycling
-        console.log(`[EndlessMode] Obstacle ${obstacle.id} destroyed after collision - will respawn after recycling`);
+        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+          console.log(`[EndlessMode] Obstacle ${obstacle.id} destroyed after collision - will respawn after recycling`);
+        }
       }
     }
 

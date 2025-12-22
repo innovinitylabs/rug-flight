@@ -3,7 +3,8 @@
 // - Spawns exactly one obstacle per run
 // - Fixed laneIndex = 1, spawn Z = +250
 // - Registers entity with EntityRegistrySystem
-// - No randomness, no complexity
+// - Monitors recycling to know when to spawn next obstacle
+// - No collision awareness, no health logic, no randomness
 
 import DebugConfig from '/core/config/DebugConfig.js';
 
@@ -21,14 +22,18 @@ class SingleObstacleSpawnerSystem {
     this.hasSpawned = false;
     this.spawnedObstacleId = null;
 
-    console.log('[SingleObstacleSpawner] Deterministic single obstacle spawner established');
-    console.log(`[SingleObstacleSpawner] Will spawn one obstacle at lane ${this.spawnLane}, Z=${this.spawnZ}`);
+    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      console.log('[SingleObstacleSpawner] Deterministic single obstacle spawner established');
+      console.log(`[SingleObstacleSpawner] Will spawn one obstacle at lane ${this.spawnLane}, Z=${this.spawnZ}`);
+    }
   }
 
   // Spawn the single obstacle if not already spawned
   spawnObstacle() {
     if (this.hasSpawned) {
-      console.log('[SingleObstacleSpawner] Obstacle already spawned, skipping');
+      if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+        console.log('[SingleObstacleSpawner] Obstacle already spawned, skipping');
+      }
       return null;
     }
 
@@ -47,7 +52,9 @@ class SingleObstacleSpawnerSystem {
     this.spawnedObstacleId = obstacleId;
     this.hasSpawned = true;
 
-    console.log(`[SingleObstacleSpawner] Spawned single obstacle ${obstacleId} at lane ${this.spawnLane}, Z=${this.spawnZ}`);
+    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      console.log(`[SingleObstacleSpawner] Spawned single obstacle ${obstacleId} at lane ${this.spawnLane}, Z=${this.spawnZ}`);
+    }
     return obstacle;
   }
 
@@ -75,6 +82,7 @@ class SingleObstacleSpawnerSystem {
   }
 
   // Check if obstacle has been cleaned up and is ready for respawn
+  // Returns true if obstacle was recycled and spawner is ready to spawn again
   checkObstacleRecycled(spawnBandSystem) {
     if (!this.hasSpawned || !this.spawnedObstacleId) return false;
 
@@ -85,7 +93,9 @@ class SingleObstacleSpawnerSystem {
       if (spawnBandSystem.shouldRecycle(obstacle.z)) {
         // Obstacle should be recycled - unregister it
         this.entityRegistrySystem.unregister(this.spawnedObstacleId);
-        console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} recycled in BEHIND_CLEANUP`);
+        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+          console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} recycled in BEHIND_CLEANUP`);
+        }
 
         // Reset state to allow respawning
         this.hasSpawned = false;
@@ -95,26 +105,15 @@ class SingleObstacleSpawnerSystem {
       return false;
     } else {
       // Obstacle no longer exists in registry (already cleaned up)
-      console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} already cleaned up`);
+      if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+        console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} already cleaned up`);
+      }
 
       // Reset state to allow respawning
       this.hasSpawned = false;
       this.spawnedObstacleId = null;
       return true;
     }
-  }
-
-  // Reset for new run (cleanup)
-  reset() {
-    if (this.hasSpawned && this.spawnedObstacleId) {
-      // Unregister obstacle if it still exists
-      this.entityRegistrySystem.unregister(this.spawnedObstacleId);
-    }
-
-    this.hasSpawned = false;
-    this.spawnedObstacleId = null;
-
-    console.log('[SingleObstacleSpawner] Reset for new run');
   }
 }
 
