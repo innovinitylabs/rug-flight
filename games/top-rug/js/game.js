@@ -3632,6 +3632,7 @@ class EndlessMode {
     this.audioPresentationSystem = null;
     this.vfxPresentationSystem = null;
     this.debugWorldOverlaySystem = null;
+    this.laneVisualGuideSystem = null;
     this.playerVisualMovementSystem = null;
     this.laneEntitySpawnSystem = null;
     this.laneEntityVisualSystem = null;
@@ -3675,9 +3676,6 @@ class EndlessMode {
     this.seaSystem = new SeaSystem(world); // Animated sea surface
     this.skySystem = new SkySystem(world); // Parallax cloud layer
     this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
-
-    // Initialize lane visual guide meshes immediately after construction
-    this.laneVisualGuideSystem.createMeshes();
 
     // ===== ENTITY SYSTEMS ===== (gameplay logic)
     this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world); // Player position and lane state
@@ -3783,6 +3781,12 @@ class EndlessMode {
   }
 
   start() {
+    // Defensive assertion: LaneVisualGuideSystem must exist before start
+    console.assert(
+      this.laneVisualGuideSystem,
+      '[EndlessMode] LaneVisualGuideSystem missing before start()'
+    );
+
     // Lifecycle guard: start must not run twice without destroy
     console.assert(!this.hasStarted || !this.isActive, '[EndlessMode] ERROR: start() called twice without destroy()');
     this.hasStarted = true;
