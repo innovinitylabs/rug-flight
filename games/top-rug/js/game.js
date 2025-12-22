@@ -99,7 +99,7 @@ window.Aviator1Game = {
     // Start animation loop
     let lastTime = 0;
     const loop = (currentTime) => {
-      const deltaTime = currentTime - lastTime;
+      const deltaTime = (currentTime - lastTime) / 1000;
       lastTime = currentTime;
 
       modeSupervisor.update(deltaTime);
@@ -119,14 +119,19 @@ class Input {
   constructor() {
     this.mouse = { x: 0, y: 0 }; // Normalized -1 to 1
     this.windowSize = { width: window.innerWidth, height: window.innerHeight };
+    this.keys = {}; // Track pressed keys
 
     // Bind event handlers
     this.handleMouseMove = this.handleMouseMove.bind(this);
     this.handleResize = this.handleResize.bind(this);
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleKeyUp = this.handleKeyUp.bind(this);
 
     // Add event listeners
     window.addEventListener('mousemove', this.handleMouseMove);
     window.addEventListener('resize', this.handleResize);
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
   }
 
   handleMouseMove(event) {
@@ -140,13 +145,28 @@ class Input {
     this.windowSize.height = window.innerHeight;
   }
 
+  handleKeyDown(event) {
+    this.keys[event.code] = true;
+    console.log('[INPUT] keydown', event.code);
+  }
+
+  handleKeyUp(event) {
+    this.keys[event.code] = false;
+  }
+
   getMouse() {
     return { ...this.mouse }; // Return copy to prevent external mutation
+  }
+
+  isKeyDown(code) {
+    return !!this.keys[code];
   }
 
   destroy() {
     window.removeEventListener('mousemove', this.handleMouseMove);
     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
   }
 }
 
@@ -190,6 +210,16 @@ class World {
       this.renderer.domElement.style.height = '100%';
       this.renderer.domElement.style.display = 'block';
       container.appendChild(this.renderer.domElement);
+
+      // Force keyboard focus on canvas
+      this.renderer.domElement.setAttribute('tabindex', '0');
+      this.renderer.domElement.style.outline = 'none';
+      this.renderer.domElement.focus();
+
+      // Re-focus on click to maintain keyboard input
+      this.renderer.domElement.addEventListener('click', () => {
+        this.renderer.domElement.focus();
+      });
     }
 
     // Handle window resize
@@ -369,11 +399,22 @@ class SeaSystem {
     this.mesh = null;
     this.material = null;
     this.geometry = null;
+    this.basePositions = null; // Store original vertex positions
+    this.waves = []; // Wave animation data
   }
 
   init() {
-    // Create large circular geometry for the sea
-    this.geometry = new THREE.CircleGeometry(1000, 32);
+    const SEA_RADIUS = 600;
+    const SEA_LENGTH = 2000;
+
+    // Create cylindrical geometry for horizon curvature
+    this.geometry = new THREE.CylinderGeometry(
+      SEA_RADIUS,     // top radius
+      SEA_RADIUS,     // bottom radius
+      SEA_LENGTH,     // height
+      40,             // radial segments
+      10              // height segments
+    );
 
     // Simple blue material
     this.material = new THREE.MeshLambertMaterial({
@@ -385,24 +426,100 @@ class SeaSystem {
     // Create mesh and position it
     this.mesh = new THREE.Mesh(this.geometry, this.material);
 
-    // Rotate to lie flat on the ground (rotate around X axis)
+    // Rotate cylinder to lie along Z axis (sea extends forward/backward)
     this.mesh.rotation.x = -Math.PI / 2;
 
-    // Position at water level (below airplane baseline)
-    this.mesh.position.y = -20;
+    // Position sea so player sits just above inner surface
+    // Cylinder center at origin, so position to create horizon effect
+    this.mesh.position.y = -SEA_RADIUS + 50; // Player sits ~50 units above sea surface
+    this.mesh.position.z = -SEA_LENGTH / 4; // Position for forward visibility
+
+    // Store base Z position for relative scrolling
+    this.baseZ = this.mesh.position.z;
+
+    // Store original vertex positions for wave animation
+    this.basePositions = this.geometry.attributes.position.array.slice();
+
+    // Initialize wave animation data
+    this.initWaves();
 
     // Add to world
     this.world.add(this.mesh);
 
-    console.log('[SeaSystem] Initialized - sea mesh added to world');
+    console.log('[SeaSystem] Initialized - cylindrical sea with wave animation added to world');
+  }
+
+  initWaves() {
+    // Initialize wave data for each vertex
+    this.vertexWaves = [];
+
+    // For each vertex in the geometry
+    for (let i = 0; i < this.basePositions.length; i += 3) {
+      this.vertexWaves.push({
+        angle: Math.random() * Math.PI * 2,  // Random starting angle
+        amplitude: 1 + Math.random() * 2,     // 1-3 units amplitude
+        speed: 0.5 + Math.random() * 1.5      // 0.5-2.0 speed
+      });
+    }
+
+    console.log(`[SeaSystem] Initialized ${this.vertexWaves.length} vertex waves`);
   }
 
   update(deltaTime, zoneZ) {
     if (!this.mesh) return;
 
+    // Apply Z scrolling as before
+    this.mesh.position.z = this.baseZ + zoneZ;
+
+    // Animate wave vertices
+    this.animateWaves(deltaTime);
+  }
+
+  animateWaves(deltaTime) {
+    if (!this.geometry || !this.basePositions || !this.vertexWaves) return;
+
+    const positions = this.geometry.attributes.position.array;
+
+    // Animate each vertex with its own wave data
+    for (let i = 0; i < positions.length; i += 3) {
+      const vertexIndex = i / 3;
+      const wave = this.vertexWaves[vertexIndex];
+
+      // Update wave angle
+      wave.angle += wave.speed * deltaTime;
+
+      // Get base position
+      const baseX = this.basePositions[i];
+      const baseY = this.basePositions[i + 1];
+      const baseZ = this.basePositions[i + 2];
+
+      // Apply wave motion in X, Y, and Z directions
+      const waveOffsetX = Math.cos(wave.angle) * wave.amplitude * 0.5;
+      const waveOffsetY = Math.sin(wave.angle) * wave.amplitude;
+
+      // Add subtle Z offset for forward flow illusion (phase-based, time-dependent)
+      // Creates parallax effect without moving camera
+      const waveOffsetZ = Math.sin(wave.angle + baseX * 0.05) * wave.amplitude * 0.6;
+
+      // Apply offsets to current position
+      positions[i] = baseX + waveOffsetX;         // X coordinate
+      positions[i + 1] = baseY + waveOffsetY;     // Y coordinate
+      positions[i + 2] = baseZ + waveOffsetZ;     // Z coordinate with flow illusion
+    }
+
+    // Recompute vertex normals for proper lighting
+    this.geometry.computeVertexNormals();
+
+    // Mark attributes for update
+    this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.attributes.normal.needsUpdate = true;
+  }
+
+  destroy() {
+
     // Pure renderer: read Z offset from WorldScrollerSystem
     // No movement logic here - WorldScrollerSystem owns all Z motion
-    this.mesh.position.z = zoneZ;
+    this.mesh.position.z = this.baseZ + zoneZ;
   }
 
   destroy() {
@@ -439,8 +556,9 @@ class DistanceSystem {
   }
 
   update(deltaTime) {
-    // Constant forward velocity: 0.05 units per frame for world illusion
-    this.lastDelta = 0.05;
+    // Forward velocity: 60 units per second for proper motion scaling
+    const SPEED = 60;
+    this.lastDelta = SPEED * deltaTime;
     this.distance += this.lastDelta;
   }
 
@@ -721,18 +839,29 @@ class PlayerIntentSystem {
       return;
     }
 
-    const mouseX = input.mouseX;
-
-    // Determine intent based on mouse position
     let intentType;
-    const strength = Math.abs(mouseX); // Strength based on how far from center
+    let strength = 1.0; // Keyboard input is always full strength
 
-    if (mouseX < -0.33) {
+    // Keyboard override logic (Arrow keys take precedence)
+    if (input.isKeyDown('ArrowLeft')) {
       intentType = 'MOVE_LEFT';
-    } else if (mouseX > 0.33) {
+    } else if (input.isKeyDown('ArrowRight')) {
       intentType = 'MOVE_RIGHT';
-  } else {
-      intentType = 'HOLD';
+    } else {
+      // Fall back to existing mouse-based intent logic
+      const mouse = input.getMouse();
+      const mouseX = mouse.x;
+
+      // Determine intent based on mouse position
+      strength = Math.abs(mouseX); // Strength based on how far from center
+
+      if (mouseX < -0.33) {
+        intentType = 'MOVE_LEFT';
+      } else if (mouseX > 0.33) {
+        intentType = 'MOVE_RIGHT';
+      } else {
+        intentType = 'HOLD';
+      }
     }
 
     // Create intent (at most one per frame)
@@ -1072,6 +1201,29 @@ class LaneController {
 
   getCurrentLaneIndex() {
     return this.currentLaneIndex;
+  }
+
+  update(intent) {
+    if (!intent) return;
+
+    let targetLaneDelta = 0;
+    switch (intent.type) {
+      case 'MOVE_LEFT':
+        targetLaneDelta = -1;
+        break;
+      case 'MOVE_RIGHT':
+        targetLaneDelta = 1;
+        break;
+      case 'HOLD':
+      default:
+        targetLaneDelta = 0;
+        break;
+    }
+
+    // Update current lane index
+    this.currentLaneIndex = Math.max(0, Math.min(this.laneSystem.getLaneCount() - 1,
+      this.currentLaneIndex + targetLaneDelta));
+    this.targetLaneIndex = this.currentLaneIndex;
   }
 
   getTargetLaneIndex() {
@@ -1554,6 +1706,9 @@ class LaneObstacleEntity {
     // Set initial position
     this.mesh.position.set(this.position.x, this.position.y, this.position.z);
 
+    // Store base Z position for relative scrolling (includes visual offset)
+    this.baseZ = this.mesh.position.z + this.visualOffsetZ;
+
     // Add to world
     world.add(this.mesh);
   }
@@ -1565,8 +1720,8 @@ class LaneObstacleEntity {
     const worldZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
     this.position.z = this.spawnZ + worldZ;
 
-    // Update mesh position
-    this.mesh.position.z = this.position.z + this.visualOffsetZ;
+    // Update mesh position using baseZ + zoneZ pattern
+    this.mesh.position.z = this.baseZ + worldZ;
 
     // Add some visual rotation for interest
     this.mesh.rotation.y += deltaTime * 0.8;
@@ -1663,6 +1818,75 @@ class LaneObstacleCollisionSystem {
     }
 
     return this.domainEvents;
+  }
+}
+
+// SimpleObstacleSpawnSystem class - minimal obstacle spawning for playable loop
+class SimpleObstacleSpawnSystem {
+  constructor(laneSystem, worldLayoutSystem, worldScrollerSystem, world) {
+    this.laneSystem = laneSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.worldScrollerSystem = worldScrollerSystem;
+    this.world = world;
+
+    // Spawn every 2 seconds
+    this.spawnInterval = 2.0;
+    this.lastSpawnTime = 0;
+    this.nextEntityId = 0;
+
+    // Active obstacles
+    this.activeObstacles = [];
+
+    console.log('[SimpleObstacleSpawn] Minimal obstacle spawning system established');
+  }
+
+  update(deltaTime) {
+    this.lastSpawnTime += deltaTime;
+
+    // Spawn obstacle every 2 seconds
+    if (this.lastSpawnTime >= this.spawnInterval) {
+      this.spawnObstacle();
+      this.lastSpawnTime = 0;
+    }
+
+    // Update all active obstacles
+    for (let i = this.activeObstacles.length - 1; i >= 0; i--) {
+      const obstacle = this.activeObstacles[i];
+
+      // Update obstacle position (uses WorldScrollerSystem)
+      obstacle.update(deltaTime);
+
+      // Remove obstacles that have passed behind player
+      if (obstacle.position.z < -100) {
+        obstacle.destroy();
+        this.activeObstacles.splice(i, 1);
+      }
+    }
+  }
+
+  spawnObstacle() {
+    // Random lane (0-2)
+    const randomLane = Math.floor(Math.random() * 3);
+
+    // Create obstacle entity
+    const entityId = `simple_obstacle_${this.nextEntityId++}`;
+    const obstacle = new LaneObstacleEntity(
+      entityId,
+      randomLane,
+      this.laneSystem,
+      this.worldLayoutSystem,
+      this.worldScrollerSystem,
+      this.world
+    );
+
+    // Add to active obstacles
+    this.activeObstacles.push(obstacle);
+
+    console.log(`[SimpleObstacleSpawn] Spawned obstacle in lane ${randomLane}`);
+  }
+
+  getActiveObstacles() {
+    return this.activeObstacles;
   }
 }
 
@@ -2973,28 +3197,22 @@ class VFXPresentationSystem {
 // WorldAxisSystem class - manages world forward motion on Z axis only
 class WorldAxisSystem {
   constructor(distanceSystem) {
-    console.assert(distanceSystem, '[WorldAxisSystem] ERROR: distanceSystem required');
     this.distanceSystem = distanceSystem;
-    this.forwardSpeed = 0.02; // Matches DistanceSystem speed
-  }
-
-  reset() {
-    this.distanceSystem.reset();
   }
 
   update(deltaTime) {
-    this.distanceSystem.update(deltaTime);
+    // DistanceSystem already updates distance
   }
 
   getBaseDeltaZ() {
-    // Return negative Z movement to create forward illusion
-    const deltaZ = -this.distanceSystem.getDelta();
-    console.log(`[WorldAxis] deltaZ = ${deltaZ}`);
-    return deltaZ;
+    // Negative Z = forward illusion
+    return -this.distanceSystem.getDelta();
   }
 
-  getDistance() {
-    return this.distanceSystem.getDistance();
+  reset() {
+    if (this.distanceSystem && this.distanceSystem.reset) {
+      this.distanceSystem.reset();
+    }
   }
 }
 
@@ -3028,6 +3246,9 @@ class SkySystem {
       // Fallback if no layout
       this.cloudGroup.position.y = 50;
     }
+
+    // Store base Z position for relative scrolling
+    this.baseZ = this.cloudGroup.position.z;
 
     // Add group to world
     this.world.add(this.cloudGroup);
@@ -3100,7 +3321,7 @@ class SkySystem {
 
     // Pure renderer: read Z offset from WorldScrollerSystem
     // No movement logic here - WorldScrollerSystem owns all Z motion
-    this.cloudGroup.position.z = zoneZ;
+    this.cloudGroup.position.z = this.baseZ + zoneZ;
   }
 
   destroy() {
@@ -3502,6 +3723,7 @@ class PlayerEntity {
 
     // Lane-based properties
     this.laneIndex = 1; // Default to center lane (assuming 3 lanes: 0, 1, 2)
+    this.targetX = 0; // Target X position for smooth interpolation
     this.position = { x: 0, y: 100, z: 0 }; // Will be updated based on lane and layout
 
     // Visual mesh (reuse PlayerProxy approach)
@@ -3538,6 +3760,15 @@ class PlayerEntity {
     this.updatePositionFromLane();
   }
 
+  // Handle player intents for lane switching
+  processIntent(intentType) {
+    if (intentType === 'MOVE_LEFT') {
+      this.setLane(this.laneIndex - 1);
+    } else if (intentType === 'MOVE_RIGHT') {
+      this.setLane(this.laneIndex + 1);
+    }
+  }
+
   updatePositionFromLane() {
     if (!this.laneSystem || !this.worldLayoutSystem) {
       return;
@@ -3551,13 +3782,22 @@ class PlayerEntity {
     const baselineY = midAirZone && midAirZone.baselineY ? midAirZone.baselineY : 100;
 
     // Update target position
-    this.position.x = laneCenterX;
+    this.targetX = laneCenterX;
+    this.position.x = laneCenterX; // Immediately set for collision detection
     this.position.y = baselineY;
     this.position.z = 0; // Player always at Z=0
   }
 
   getPosition() {
-    return { ...this.position };
+    return this.mesh.position;
+  }
+
+  moveLane(direction) {
+    const oldLaneIndex = this.laneIndex;
+    this.laneIndex += direction;
+    this.laneIndex = Math.max(0, Math.min(2, this.laneIndex));
+    this.targetX = this.laneSystem.getLaneCenter(this.laneIndex);
+    console.log('[PLAYER] moveLane', oldLaneIndex, '→', this.laneIndex);
   }
 
   update(deltaTime) {
@@ -3565,17 +3805,13 @@ class PlayerEntity {
       return;
     }
 
-    // Smoothly lerp mesh position toward target position
-    const currentPos = this.mesh.position;
-    const targetPos = this.position;
+    // Smoothly move X toward target
+    this.position.x += (this.targetX - this.position.x) * 0.2;
 
-    // Lerp X position toward lane center
-    const newX = currentPos.x + (targetPos.x - currentPos.x) * this.lerpSpeed;
-
-    // Y position is constrained by PlayerVerticalConstraintSystem
-    // Z position is always 0 for player
-
-    this.mesh.position.set(newX, currentPos.y, targetPos.z);
+    // FORCE mesh sync
+    this.mesh.position.x = this.position.x;
+    this.mesh.position.y = this.position.y;
+    this.mesh.position.z = this.position.z;
 
     // Simple rotation for visual feedback
     this.mesh.rotation.y += deltaTime * 0.5;
@@ -3604,6 +3840,7 @@ class EndlessMode {
 
     // Logging guards
     this.lastDistanceLog = null;
+    this.debugLogTimer = 0;
 
     // Dependencies
     this.gameState = null;
@@ -3692,6 +3929,8 @@ class EndlessMode {
 
     // ===== ENTITY SYSTEMS ===== (gameplay logic)
     this.playerEntity = new PlayerEntity(this.laneSystem, this.worldLayoutSystem, world); // Player position and lane state
+    this.cameraRig.follow(this.playerEntity);
+    this.simpleObstacleSpawnSystem = new SimpleObstacleSpawnSystem(this.laneSystem, this.worldLayoutSystem, this.worldScrollerSystem, world); // Minimal obstacle spawning
 
     // ===== HEALTH AND DAMAGE SYSTEMS ===== (gameplay consequences)
     this.healthSystem = new HealthSystem(3); // Player lives (start with 3)
@@ -3793,6 +4032,9 @@ class EndlessMode {
   }
 
   start() {
+    // Safety fallback: ensure window focus for keyboard input
+    window.focus();
+
     // Defensive guard: check for null systems
     for (const key in this) {
       if (this[key] === null && key.includes('System')) {
@@ -3881,19 +4123,44 @@ class EndlessMode {
       return;
     }
 
-    // 1. Player action state system manages cooldowns and state
-    this.playerActionStateSystem.update(deltaTime);
+    console.log('[EndlessMode] tick', deltaTime.toFixed(3));
 
-    // 2. Player intent system converts raw input into semantic intents
+    // a) this.distanceSystem.update(deltaTime)
+    this.distanceSystem.update(deltaTime);
+
+    // b) this.worldScrollerSystem.update(deltaTime)
+    this.worldScrollerSystem.update(deltaTime);
+
+    // c) const groundZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE')
+    //    const skyZ = this.worldScrollerSystem.getZoneZ('SKY_FAR')
+    const groundZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
+    const skyZ = this.worldScrollerSystem.getZoneZ('SKY_FAR');
+
+    // d) this.seaSystem.update(deltaTime, groundZ)
+    //    this.skySystem.update(deltaTime, skyZ)
+    this.seaSystem.update(deltaTime, groundZ);
+    this.skySystem.update(deltaTime, skyZ);
+
+    // e) this.playerIntentSystem.update(this.input, deltaTime)
     this.playerIntentSystem.update(this.input, deltaTime);
-    const rawPlayerIntents = this.playerIntentSystem.getIntents();
 
-    // 3. Filter intents through action state system (gate based on cooldowns)
+    // f) this.laneController.update(this.playerIntentSystem.getCurrentIntent())
+    this.laneController.update(this.playerIntentSystem.getCurrentIntent());
+
+    // Update player visual position
+    this.playerEntity.update(deltaTime);
+
+    // g) this.cameraRig.update()
+    this.cameraRig.update();
+
+    // Clear intent
+    this.playerIntentSystem.clear();
+
+    // 4. Lane controller processes approved player intents into lane changes (legacy)
+    const rawPlayerIntents = this.playerIntentSystem.getIntents();
     const approvedIntents = rawPlayerIntents.filter(intent =>
       this.playerActionStateSystem.canExecute(intent.type)
     );
-
-    // 4. Lane controller processes approved player intents into lane changes
     const laneIntent = this.laneController.processIntents(approvedIntents);
 
     // 5. Notify action state system of executed intents
@@ -4004,8 +4271,20 @@ class EndlessMode {
     // 19. Debug world overlay system displays real-time engine state
     this.debugWorldOverlaySystem.update(deltaTime);
 
-    // 18. Player proxy updates (visual representation)
-    this.playerEntity.update(deltaTime);
+    // 17.6. Collision detection (temporary logging only)
+    const playerPos = this.playerEntity.getPosition();
+    const obstacles = this.simpleObstacleSpawnSystem.getActiveObstacles();
+    const laneWidth = this.laneSystem.laneWidth / 2; // Half lane width for collision
+
+    for (const obstacle of obstacles) {
+      const obstaclePos = obstacle.getPosition();
+      const zDistance = Math.abs(playerPos.z - obstaclePos.z);
+      const xDistance = Math.abs(playerPos.x - obstaclePos.x);
+
+      if (zDistance < 20 && xDistance < laneWidth) {
+        console.log('[COLLISION] obstacle hit');
+      }
+    }
 
     // 19. Player visual movement system updates lane-based X position
     this.playerVisualMovementSystem.update(deltaTime);
@@ -4013,24 +4292,26 @@ class EndlessMode {
     // 19.5. Player vertical constraint system enforces Y positioning for camera framing
     this.playerVerticalConstraintSystem.update(deltaTime);
 
-    // 20. Sea system updates (pure renderer - reads Z from scroller)
-    this.seaSystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('GROUND_PLANE'));
-
-    // 17. Sky system updates (pure renderer - reads Z from scroller)
-    this.skySystem.update(deltaTime, this.worldScrollerSystem.getZoneZ('SKY_FAR'));
 
     // 17.5. Lane visual guide system updates (presentation-only lane guides)
     if (this.laneVisualGuideSystem) {
       this.laneVisualGuideSystem.update();
     }
 
-    // 18. Camera system updates (delegated to CameraRig)
-    this.cameraRig.update();
+    // Debug logging once per second
+    this.debugLogTimer += deltaTime;
+    if (this.debugLogTimer >= 1.0) {
+      const playerPos = this.playerEntity.getPosition();
+      const obstacles = this.simpleObstacleSpawnSystem.getActiveObstacles();
+      const firstObstacleZ = obstacles.length > 0 ? obstacles[0].getPosition().z.toFixed(1) : 'none';
 
-    // 19. Clear collision intents, domain events, and player intents for next frame
+      console.log(`[DEBUG] player lane: ${this.playerEntity.laneIndex}, x: ${playerPos.x.toFixed(1)}, first obstacle z: ${firstObstacleZ}`);
+      this.debugLogTimer = 0;
+    }
+
+    // 19. Clear collision intents and domain events for next frame
     this.collisionIntentSystem.clear();
     this.collisionConsumptionSystem.clear();
-    this.playerIntentSystem.clear();
 
     // Update game time
     this.gameState.time += deltaTime;
