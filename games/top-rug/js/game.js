@@ -1516,6 +1516,195 @@ class CoinEntity {
   }
 }
 
+// LaneObstacleEntity class - lane-based obstacle entity
+class LaneObstacleEntity {
+  constructor(id, laneIndex, laneSystem, worldLayoutSystem, world) {
+    this.id = id;
+    this.type = 'obstacle';
+    this.laneIndex = laneIndex;
+    this.visualOffsetZ = 0; // Default visual offset for coordination between visual systems
+
+    // Position: X from lane center, Y from baseline, Z far ahead
+    const laneCenterX = laneSystem.getLaneCenter(laneIndex);
+    const midAirZone = worldLayoutSystem.getZone('MID_AIR');
+    const baselineY = midAirZone && midAirZone.baselineY ? midAirZone.baselineY : 100;
+
+    this.position = {
+      x: laneCenterX,
+      y: baselineY,
+      z: 600 // Start 600 units ahead
+    };
+
+    // Create mesh
+    this.createMesh(world);
+
+    console.log(`[LaneObstacleEntity] Created obstacle ${id} in lane ${laneIndex} at (${laneCenterX.toFixed(1)}, ${baselineY}, 600)`);
+  }
+
+  createMesh(world) {
+    // Simple box geometry for obstacle
+    const geometry = new THREE.BoxGeometry(6, 8, 4); // Slightly taller and wider than player
+    const material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown/saddle brown color
+    this.mesh = new THREE.Mesh(geometry, material);
+
+    // Set initial position
+    this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+
+    // Add to world
+    world.add(this.mesh);
+  }
+
+  update(deltaTime, scrollDeltaZ) {
+    if (!this.mesh) return;
+
+    // Move obstacle backward (toward player) based on scroll delta
+    this.position.z -= scrollDeltaZ;
+
+    // Update mesh position
+    this.mesh.position.z = this.position.z + this.visualOffsetZ;
+
+    // Add some visual rotation for interest
+    this.mesh.rotation.y += deltaTime * 0.8;
+  }
+
+  getPosition() {
+    return { ...this.position };
+  }
+
+  getBounds() {
+    // Simple AABB bounds for future collision detection
+    const halfWidth = 3; // Half of box width
+    const halfHeight = 4; // Half of box height
+    const halfDepth = 2; // Half of box depth
+
+    return {
+      minX: this.position.x - halfWidth,
+      maxX: this.position.x + halfWidth,
+      minY: this.position.y - halfHeight,
+      maxY: this.position.y + halfHeight,
+      minZ: this.position.z - halfDepth,
+      maxZ: this.position.z + halfDepth
+    };
+  }
+
+  destroy() {
+    if (this.mesh && this.mesh.parent) {
+      this.mesh.parent.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      this.mesh.material.dispose();
+      this.mesh = null;
+    }
+    console.log(`[LaneObstacleEntity] Destroyed obstacle ${this.id}`);
+  }
+}
+
+// ObstacleSpawnSystem class - manages lane-based obstacle spawning
+class ObstacleSpawnSystem {
+  constructor(distanceSystem, difficultyCurveSystem, laneSystem, worldLayoutSystem, world) {
+    // Spawns obstacles based on distance traveled and difficulty
+    // Manages active obstacles and cleans up passed obstacles
+
+    this.distanceSystem = distanceSystem;
+    this.difficultyCurveSystem = difficultyCurveSystem;
+    this.laneSystem = laneSystem;
+    this.worldLayoutSystem = worldLayoutSystem;
+    this.world = world;
+
+    // Spawn logic
+    this.baseSpawnDistance = 200; // Distance units between spawns
+    this.lastSpawnDistance = 0;
+    this.nextEntityId = 0;
+
+    // Active obstacles
+    this.activeObstacles = [];
+
+    // Lane tracking to avoid blocking all lanes or same-lane spawns
+    this.lastSpawnLane = -1;
+
+    console.log('[ObstacleSpawn] Lane-based obstacle spawning system established');
+  }
+
+  update() {
+    const currentDistance = this.distanceSystem.getDistance();
+    const difficultyState = this.difficultyCurveSystem.getDifficultyState();
+
+    // Calculate spawn interval based on difficulty
+    const spawnInterval = this.baseSpawnDistance / (1 + difficultyState.speedMultiplier * 0.5);
+
+    // Check if we should spawn
+    if (currentDistance - this.lastSpawnDistance >= spawnInterval) {
+      this.spawnObstacle();
+      this.lastSpawnDistance = currentDistance;
+    }
+
+    // Update all active obstacles
+    const scrollDeltaZ = this.distanceSystem.getDelta();
+    for (let i = this.activeObstacles.length - 1; i >= 0; i--) {
+      const obstacle = this.activeObstacles[i];
+
+      // Update obstacle position
+      obstacle.update(0, scrollDeltaZ);
+
+      // Check if obstacle has passed behind player (Z < -50)
+      if (obstacle.position.z < -50) {
+        obstacle.destroy();
+        this.activeObstacles.splice(i, 1);
+      }
+    }
+  }
+
+  spawnObstacle() {
+    // Choose a lane randomly, but avoid problematic patterns
+    let chosenLane = this.selectLane();
+
+    // Create obstacle entity
+    const entityId = `obstacle_${this.nextEntityId++}`;
+    const obstacle = new LaneObstacleEntity(
+      entityId,
+      chosenLane,
+      this.laneSystem,
+      this.worldLayoutSystem,
+      this.world
+    );
+
+    // Add to active obstacles
+    this.activeObstacles.push(obstacle);
+
+    // Track last spawn lane
+    this.lastSpawnLane = chosenLane;
+
+    console.log(`[ObstacleSpawn] Spawned obstacle in lane ${chosenLane} at distance ${this.distanceSystem.getDistance().toFixed(0)}`);
+  }
+
+  selectLane() {
+    const laneCount = this.laneSystem.getLaneCount();
+    let availableLanes = [];
+
+    // Build list of available lanes
+    for (let i = 0; i < laneCount; i++) {
+      // Always include lanes (we'll handle blocking logic in collision later)
+      availableLanes.push(i);
+    }
+
+    // Prefer different lane than last spawn
+    if (this.lastSpawnLane !== -1) {
+      // Filter out the last spawn lane if there are alternatives
+      const alternatives = availableLanes.filter(lane => lane !== this.lastSpawnLane);
+      if (alternatives.length > 0) {
+        availableLanes = alternatives;
+      }
+    }
+
+    // Random selection from available lanes
+    const randomIndex = Math.floor(Math.random() * availableLanes.length);
+    return availableLanes[randomIndex];
+  }
+
+  getActiveObstacles() {
+    return this.activeObstacles;
+  }
+}
+
 // SpawnSystem class - rule-driven world population
 class SpawnSystem {
   constructor(spawnBandSystem, entityRegistry, laneSystem, spawnInterval = 50) {
@@ -3350,6 +3539,15 @@ class EndlessMode {
       this.distanceSystem
     );
 
+    // Create obstacle spawn system - manages lane-based obstacles
+    this.obstacleSpawnSystem = new ObstacleSpawnSystem(
+      this.distanceSystem,
+      this.difficultyCurveSystem,
+      this.laneSystem,
+      this.worldLayoutSystem,
+      world
+    );
+
     // Create lane entity visual system - presentation-only visual management
     this.laneEntityVisualSystem = new LaneEntityVisualSystem(
       this.entityRegistrySystem,
@@ -3511,6 +3709,9 @@ class EndlessMode {
 
     // 8.5. Lane entity spawn system updates (difficulty-scaled lane spawning)
     this.laneEntitySpawnSystem.update(performance.now());
+
+    // 8.6. Obstacle spawn system updates (lane-based obstacle spawning)
+    this.obstacleSpawnSystem.update();
 
     // 9. Collision intent system processes (deterministic collision detection)
     const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
