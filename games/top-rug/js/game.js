@@ -1562,14 +1562,34 @@ class CollisionIntentSystem {
     this.zCollisionThreshold = zCollisionThreshold; // Configurable Z distance for collision
     this.currentFrameIntents = []; // Intents for current frame only
 
+    // Collision grace period - no collisions during initial game phase
+    this.gracePeriodWorldUnits = 100; // First 100 world units
+    this.gracePeriodSeconds = 2.0; // First 2 seconds
+    this.elapsedTime = 0; // Track total elapsed time
+
     console.log(`[CollisionIntent] Deterministic collision detection layer established (Z threshold: ${zCollisionThreshold})`);
+    console.log(`[CollisionIntent] Grace period: ${this.gracePeriodWorldUnits} world units OR ${this.gracePeriodSeconds}s`);
   }
 
   // Process collision detection for current frame
-  process(planeEntity, entityRegistry, spawnBandSystem) {
+  process(planeEntity, entityRegistry, spawnBandSystem, playerMovementPipeline, deltaTime) {
     console.assert(planeEntity, '[CollisionIntent] ERROR: planeEntity required');
     console.assert(entityRegistry, '[CollisionIntent] ERROR: entityRegistry required');
     console.assert(spawnBandSystem, '[CollisionIntent] ERROR: spawnBandSystem required');
+    console.assert(playerMovementPipeline, '[CollisionIntent] ERROR: playerMovementPipeline required');
+
+    // Update elapsed time for grace period tracking
+    this.elapsedTime += deltaTime;
+
+    // Check collision grace period - no collisions during initial game phase
+    const worldProgress = spawnBandSystem.getWorldProgress();
+    const inGracePeriod = worldProgress < this.gracePeriodWorldUnits || this.elapsedTime < this.gracePeriodSeconds;
+
+    if (inGracePeriod) {
+      // Clear intents and skip collision detection during grace period
+      this.currentFrameIntents = [];
+      return this.currentFrameIntents;
+    }
 
     // Clear previous frame's intents
     this.currentFrameIntents = [];
@@ -1577,8 +1597,8 @@ class CollisionIntentSystem {
     // Only check entities in ACTIVE_WINDOW band (near player)
     const activeEntities = entityRegistry.getByBand(spawnBandSystem, 'ACTIVE_WINDOW');
 
-    // Get plane's current lane (from PlaneEntity)
-    const planeLaneIndex = planeEntity.currentLaneIndex;
+    // Get plane's current lane (from PlayerMovementPipelineSystem)
+    const planeLaneIndex = playerMovementPipeline.getCurrentLane();
     const planeZ = planeEntity.position.z; // Always 0 for plane
 
     // Check each active entity for collision
@@ -4199,6 +4219,10 @@ class EndlessMode {
     this.obstacleSpawnSystem.update();
 
     // 8.7. Single obstacle spawner system updates (deterministic single obstacle)
+    // Check if previously spawned obstacle has been recycled (BEHIND_CLEANUP)
+    this.singleObstacleSpawnerSystem.checkObstacleRecycled(this.spawnBandSystem);
+
+    // Spawn new obstacle if none exists
     if (!this.singleObstacleSpawnerSystem.hasSpawned) {
       this.singleObstacleSpawnerSystem.spawnObstacle();
     }
@@ -4209,7 +4233,7 @@ class EndlessMode {
     const obstacleCollisionEvents = this.laneObstacleCollisionSystem.process(this.playerEntity, activeObstacles);
 
     // 10. Collision intent system processes (deterministic collision detection)
-    const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem);
+    const collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem, this.playerMovementPipeline, deltaTime);
 
     // 11. Collision consumption system processes intents into domain events
     const entityCollisionEvents = this.collisionConsumptionSystem.process(collisionIntents);
@@ -4399,10 +4423,8 @@ class EndlessMode {
           obstacle.destroy();
         }
 
-        // Reset spawner for potential respawn (though deterministic system may not respawn)
-        this.singleObstacleSpawnerSystem.reset();
-
-        console.log(`[EndlessMode] Obstacle ${obstacle.id} destroyed after collision`);
+        // Mark obstacle as collided - spawner will respawn only after BEHIND_CLEANUP recycling
+        console.log(`[EndlessMode] Obstacle ${obstacle.id} destroyed after collision - will respawn after recycling`);
       }
     }
 

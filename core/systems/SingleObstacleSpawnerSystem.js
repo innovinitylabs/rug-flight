@@ -74,6 +74,36 @@ class SingleObstacleSpawnerSystem {
     return this.entityRegistrySystem.entities.get(this.spawnedObstacleId) || null;
   }
 
+  // Check if obstacle has been cleaned up and is ready for respawn
+  checkObstacleRecycled(spawnBandSystem) {
+    if (!this.hasSpawned || !this.spawnedObstacleId) return false;
+
+    // Check if obstacle still exists in registry
+    const obstacle = this.entityRegistrySystem.entities.get(this.spawnedObstacleId);
+    if (obstacle) {
+      // Obstacle still exists, check if it should be recycled
+      if (spawnBandSystem.shouldRecycle(obstacle.z)) {
+        // Obstacle should be recycled - unregister it
+        this.entityRegistrySystem.unregister(this.spawnedObstacleId);
+        console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} recycled in BEHIND_CLEANUP`);
+
+        // Reset state to allow respawning
+        this.hasSpawned = false;
+        this.spawnedObstacleId = null;
+        return true;
+      }
+      return false;
+    } else {
+      // Obstacle no longer exists in registry (already cleaned up)
+      console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} already cleaned up`);
+
+      // Reset state to allow respawning
+      this.hasSpawned = false;
+      this.spawnedObstacleId = null;
+      return true;
+    }
+  }
+
   // Reset for new run (cleanup)
   reset() {
     if (this.hasSpawned && this.spawnedObstacleId) {
