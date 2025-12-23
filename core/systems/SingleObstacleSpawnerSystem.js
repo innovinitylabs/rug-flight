@@ -32,10 +32,10 @@ class SingleObstacleSpawnerSystem {
 
   // Create a highly visible debug mesh for obstacles
   createObstacleMesh() {
-    // Large, bright magenta box - impossible to miss
-    const geometry = new THREE.BoxGeometry(8, 6, 4); // Large size: 8x6x4
+    // Very large, bright yellow box - much larger than player, impossible to miss
+    const geometry = new THREE.BoxGeometry(12, 8, 6); // Very large: 12x8x6 (larger than player capsule)
     const material = new THREE.MeshLambertMaterial({
-      color: 0xff00ff, // Bright magenta
+      color: 0xffff00, // Bright yellow for obstacle identification
       transparent: false,
       wireframe: false // Solid fill for maximum visibility
     });
@@ -46,7 +46,7 @@ class SingleObstacleSpawnerSystem {
     mesh.position.set(0, 0, 0);
 
     if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
-      console.log('[SingleObstacleSpawner] Created highly visible obstacle mesh');
+      console.log('[SingleObstacleSpawner] Created highly visible yellow obstacle mesh (12x8x6)');
     }
 
     return mesh;

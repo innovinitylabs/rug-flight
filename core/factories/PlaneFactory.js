@@ -3,20 +3,20 @@
 
 class PlaneFactory {
   static createBasicPlane() {
-    // Create a simple capsule/box geometry as placeholder
-    const geometry = new THREE.BoxGeometry(6, 3, 12);
+    // Create elongated capsule-like geometry for player
+    const geometry = new THREE.CapsuleGeometry(2, 8, 4, 8); // Radius 2, height 8, capsule shape
     const material = new THREE.MeshLambertMaterial({
-      color: 0xff4444, // Bright red for visibility
+      color: 0x0088ff, // Bright blue for player identification
       transparent: false
     });
 
     const mesh = new THREE.Mesh(geometry, material);
 
-    // Center the pivot
+    // Center the pivot and add slight forward tilt (nose down)
     mesh.position.set(0, 0, 0);
-    mesh.rotation.set(0, 0, 0);
+    mesh.rotation.set(-0.2, 0, 0); // Slight forward tilt for direction cue
 
-    console.log('[PlaneFactory] Basic plane placeholder created');
+    console.log('[PlaneFactory] Player plane (blue capsule) created with forward tilt');
     return mesh;
   }
 
