@@ -3912,6 +3912,7 @@ class EndlessMode {
       this.entityRegistrySystem,
       this.laneSystem,
       this.worldScrollerSystem,
+      this.spawnBandSystem,
       world
     ); // Deterministic single obstacle spawning
 

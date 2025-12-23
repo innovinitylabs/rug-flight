@@ -10,15 +10,15 @@ import DebugConfig from '/core/config/DebugConfig.js';
 import ObstacleEntity from '/core/entities/ObstacleEntity.js';
 
 class SingleObstacleSpawnerSystem {
-  constructor(entityRegistrySystem, laneSystem, worldScrollerSystem, world) {
+  constructor(entityRegistrySystem, laneSystem, worldScrollerSystem, spawnBandSystem, world) {
     this.entityRegistrySystem = entityRegistrySystem;
     this.laneSystem = laneSystem;
     this.worldScrollerSystem = worldScrollerSystem;
+    this.spawnBandSystem = spawnBandSystem;
     this.world = world; // THREE.js scene reference
 
     // Deterministic spawn parameters
     this.spawnLane = 1; // Fixed lane index
-    this.spawnZ = 250; // Fixed spawn Z position
 
     // Vertical positioning - base height with lane-based variation
     this.baseY = 100; // Base obstacle height
@@ -71,12 +71,15 @@ class SingleObstacleSpawnerSystem {
     // Calculate spawn Y position based on lane (deterministic variation)
     const spawnY = this.baseY + (this.spawnLane * this.laneHeightVariation);
 
+    // Get spawn Z from SpawnBandSystem (player-relative positioning)
+    const baseZ = this.spawnBandSystem.getSpawnZ('AHEAD_SPAWN');
+
     // Create obstacle entity with mesh, lane system, and world scroller for positioning
     const obstacleId = `obstacle_single_${Date.now()}`;
     const obstacle = new ObstacleEntity(
       obstacleId,
       this.spawnLane,
-      this.spawnZ, // This is now baseZ
+      baseZ, // Player-relative spawn position from spawn band system
       spawnY,
       obstacleMesh,
       this.laneSystem,
