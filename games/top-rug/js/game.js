@@ -419,7 +419,7 @@ class SeaSystem {
     this.geometry = null;
     this.basePositions = null; // Store original vertex positions
     this.vertexWaves = []; // Per-vertex wave data
-    this.seaLength = 2000; // Length of each sea segment
+    this.segmentLength = 0; // Computed from geometry bounding box
 
     // Debug flag for visibility
     this.DEBUG_SEA = true;
@@ -427,16 +427,22 @@ class SeaSystem {
 
   init() {
     const SEA_RADIUS = 600;
-    this.seaLength = 2000;
+    const SEA_LENGTH = 2000; // Initial creation size
 
     // Create cylindrical geometry for horizon curvature
     this.geometry = new THREE.CylinderGeometry(
       SEA_RADIUS,     // top radius
       SEA_RADIUS,     // bottom radius
-      this.seaLength, // height (segment length)
+      SEA_LENGTH,     // height (initial creation size)
       40,             // radial segments
       10              // height segments
     );
+
+    // Compute actual segment length from geometry bounding box after rotation
+    const tempMesh = new THREE.Mesh(this.geometry);
+    tempMesh.rotation.x = -Math.PI / 2; // Apply rotation like real meshes
+    this.geometry.computeBoundingBox();
+    this.segmentLength = this.geometry.boundingBox.max.z - this.geometry.boundingBox.min.z;
 
     // Debug material for visibility
     this.material = new THREE.MeshLambertMaterial({
@@ -446,7 +452,7 @@ class SeaSystem {
       wireframe: this.DEBUG_SEA // Wireframe for debug visibility
     });
 
-    // Create 2 identical sea segment meshes
+    // Create 2 identical sea segment meshes positioned edge-to-edge
     for (let i = 0; i < 2; i++) {
       const mesh = new THREE.Mesh(this.geometry, this.material);
 
@@ -456,8 +462,8 @@ class SeaSystem {
       // Position sea so player sits just above inner surface
       mesh.position.y = -SEA_RADIUS + 50; // Player sits ~50 units above sea surface
 
-      // Position segments: first at base position, second offset by sea length
-      mesh.position.z = -this.seaLength / 4 + (i * this.seaLength);
+      // Position segments edge-to-edge: segment0 at 0, segment1 at segmentLength
+      mesh.position.z = i * this.segmentLength;
 
       // Store base Z position for relative scrolling
       mesh.userData.baseZ = mesh.position.z;
@@ -472,7 +478,7 @@ class SeaSystem {
     // Initialize wave animation data
     this.initWaves();
 
-    console.log('[SeaSystem] Initialized - 2-segment cylindrical sea with wave animation');
+    console.log(`[SeaSystem] Initialized - 2-segment sea (length: ${this.segmentLength.toFixed(1)})`);
   }
 
   initWaves() {
@@ -495,23 +501,28 @@ class SeaSystem {
   updateScroll(zoneZ) {
     if (!this.meshes || this.meshes.length === 0) return;
 
-    // Update each segment position
+    // Update each segment position with proper edge-based wrapping
     for (let i = 0; i < this.meshes.length; i++) {
       const mesh = this.meshes[i];
-      const newZ = mesh.userData.baseZ + zoneZ;
 
-      // Check if this segment has scrolled past the wrap threshold (behind player)
-      if (newZ < -this.seaLength) {
-        // Wrap this segment ahead of the other segment
+      // Compute visual position
+      const visualZ = mesh.userData.baseZ + zoneZ;
+
+      // Check if trailing edge has passed wrap threshold (behind player)
+      // Wrap when (visualZ + segmentLength/2) < 0 (center-based approximation)
+      // This ensures the segment is fully behind before wrapping
+      if (visualZ + this.segmentLength / 2 < 0) {
+        // Find the other segment to position ahead of it
         const otherSegment = this.meshes[(i + 1) % 2];
-        const otherZ = otherSegment.position.z;
+        const otherVisualZ = otherSegment.userData.baseZ + zoneZ;
 
-        // Position this segment ahead of the other one
-        mesh.position.z = otherZ + this.seaLength;
-        mesh.userData.baseZ = mesh.position.z - zoneZ;
+        // Position this segment ahead of the other segment
+        const newPositionZ = otherVisualZ + this.segmentLength;
+        mesh.position.z = newPositionZ;
+        mesh.userData.baseZ = newPositionZ - zoneZ;
       } else {
         // Normal scrolling
-        mesh.position.z = newZ;
+        mesh.position.z = visualZ;
       }
     }
   }
