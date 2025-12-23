@@ -54,17 +54,20 @@ class SeaVisual {
 
     // Create actual mesh and apply rotation
     const mesh = new THREE.Mesh(this.geometry, this.material);
+    mesh.rotation.x = -Math.PI / 2; // Rotate to lie along Z axis
 
-    // FORCE VISIBILITY OVERRIDES
-    mesh.rotation.set(0, 0, 0);          // disable rotation temporarily
-    mesh.position.set(0, 0, 500);        // place directly in front of camera
-    mesh.scale.set(1, 1, 1);
+    // Position sea so player sits just above inner surface
+    mesh.position.y = -SEA_RADIUS + 50; // Player sits ~50 units above sea surface
 
-    mesh.frustumCulled = false;          // CRITICAL
-    mesh.material.side = THREE.DoubleSide;
-    mesh.material.wireframe = true;      // force outline visibility
+    // Visibility fixes: ensure mesh is always visible
+    mesh.frustumCulled = false; // Prevent frustum culling issues
+    mesh.material.side = THREE.DoubleSide; // Render both sides
 
-    console.log('[SEA DEBUG] Mesh forced into view', mesh);
+    // Store original vertex positions for wave animation
+    this.basePositions = this.geometry.attributes.position.array.slice();
+
+    // Initialize wave animation data
+    this.initWaves();
 
     return mesh;
   }
@@ -519,7 +522,7 @@ class CameraRig {
 
     // Camera look target strategy
     if (profile.cameraLookTarget === 'plane') {
-      this.world.camera.lookAt(0, 0, 500);
+      this.world.camera.lookAt(entityPos.x, entityPos.y, entityPos.z);
     }
   }
 
@@ -541,11 +544,34 @@ class GroundSegmentSystem {
   }
 
   init() {
-    const mesh = this.visual.createMesh();
-    this.world.add(mesh);
+    // Get mesh template from visual object (this also computes segmentLength)
+    const templateMesh = this.visual.createMesh();
 
-    console.log('[GROUND DEBUG] Single mesh added directly to world');
-    return;
+    // Get authoritative segment length from visual
+    // This length accounts for geometry type, size, and rotation
+    this.segmentLength = this.visual.getSegmentLength();
+
+    // Create 2 segment meshes positioned edge-to-edge
+    // baseZ represents SEGMENT CENTER position
+    // For seamless edge-to-edge placement:
+    // - Segment 0 center at segmentLength/2 (extends from 0 to segmentLength)
+    // - Segment 1 center at segmentLength + segmentLength/2 (extends from segmentLength to 2*segmentLength)
+    // This ensures trailing edge of segment 0 meets leading edge of segment 1
+    for (let i = 0; i < 2; i++) {
+      // Clone the template mesh for each segment
+      const mesh = templateMesh.clone();
+
+      // Set authoritative baseZ: segment CENTER positions for edge-to-edge placement
+      // Each segment center is positioned so segments connect seamlessly
+      const baseZ = (i * this.segmentLength) + (this.segmentLength / 2);
+      mesh.userData.baseZ = baseZ;
+
+      // Initial visual position (no world scroll offset yet)
+      mesh.position.z = baseZ;
+
+      this.meshes.push(mesh);
+      this.world.add(mesh);
+    }
 
     // Assert invariant: segments are exactly segmentLength apart
     this.assertSegmentInvariants();
