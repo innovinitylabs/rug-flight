@@ -64,14 +64,15 @@ class SingleObstacleSpawnerSystem {
     // Create highly visible debug mesh
     const obstacleMesh = this.createObstacleMesh();
 
-    // Create obstacle entity with mesh and lane system for positioning
+    // Create obstacle entity with mesh, lane system, and world scroller for positioning
     const obstacleId = `obstacle_single_${Date.now()}`;
     const obstacle = new ObstacleEntity(
       obstacleId,
       this.spawnLane,
-      this.spawnZ,
+      this.spawnZ, // This is now baseZ
       obstacleMesh,
-      this.laneSystem
+      this.laneSystem,
+      this.worldScrollerSystem
     );
 
     // Add mesh to world scene for visibility
@@ -88,21 +89,11 @@ class SingleObstacleSpawnerSystem {
     return obstacle;
   }
 
-  // Update obstacle position using WorldScrollerSystem
+  // Obstacle positions are now computed dynamically in ObstacleEntity.update()
+  // No per-frame position updates needed - obstacles are Z-passive
   updateObstaclePosition() {
-    if (!this.hasSpawned || !this.spawnedObstacleId) return;
-
-    const obstacle = this.entityRegistrySystem.entities.get(this.spawnedObstacleId);
-    if (!obstacle) return;
-
-    // Update Z position using WorldScrollerSystem - obstacle moves with world
-    // The obstacle's Z decreases as the world scrolls forward
-    obstacle.z = this.spawnZ - this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
-
-    // Log position periodically (not every frame)
-    if (DebugConfig.ENABLE_OBSTACLE_LOGS && Math.abs(obstacle.z) % 50 < 1) {
-      console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} at Z=${obstacle.z.toFixed(2)}`);
-    }
+    // Visual Z positions are computed in ObstacleEntity.update() as: baseZ - worldScrollOffset
+    // This ensures obstacles appear to move toward player ONLY due to WorldScrollerSystem
   }
 
   // Get the spawned obstacle (for external systems)

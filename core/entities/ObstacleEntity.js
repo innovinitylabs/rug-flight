@@ -5,22 +5,32 @@
 // - Only syncs mesh position to current state
 
 class ObstacleEntity {
-  constructor(id, laneIndex, z, mesh = null, laneSystem = null) {
+  constructor(id, laneIndex, baseZ, mesh = null, laneSystem = null, worldScrollerSystem = null) {
     this.id = id;
     this.type = 'OBSTACLE';
     this.laneIndex = laneIndex;
-    this.z = z; // Z position (will be updated by WorldScrollerSystem)
+    this.baseZ = baseZ; // Fixed Z position at spawn time
     this.mesh = mesh; // Optional visual representation
     this.laneSystem = laneSystem; // For proper lane positioning
+    this.worldScrollerSystem = worldScrollerSystem; // For computing visual Z position
 
-    console.log(`[ObstacleEntity] Created obstacle ${id} at lane ${laneIndex}, Z=${z}`);
+    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      console.log(`[ObstacleEntity] Created obstacle ${id} at lane ${laneIndex}, baseZ=${baseZ}`);
+    }
   }
 
   // Only syncs mesh position - no self-movement logic
   update(deltaTime) {
     if (this.mesh) {
-      // Position is managed externally by WorldScrollerSystem
-      this.mesh.position.z = this.z;
+      // Compute visual Z position: baseZ - world scroll offset
+      // This makes obstacles appear to move toward player as world scrolls
+      if (this.worldScrollerSystem) {
+        const visualZ = this.baseZ - this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
+        this.mesh.position.z = visualZ;
+      } else {
+        // Fallback - shouldn't happen in normal operation
+        this.mesh.position.z = this.baseZ;
+      }
 
       // X position determined by lane center (if laneSystem available)
       if (this.laneSystem) {

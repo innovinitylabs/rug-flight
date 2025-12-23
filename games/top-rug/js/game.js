@@ -327,7 +327,7 @@ const VIEW_PROFILES = {
     name: 'SIDE_SCROLLER',
     description: 'Endless flight - plane appears to fly horizontally',
     planeVisualForwardAxis: 'X', // Plane visually faces right
-    cameraOffset: { x: -80, y: 30, z: 0 }, // Lateral camera position
+    cameraOffset: { x: 100, y: 30, z: 0 }, // Lateral camera position
     cameraLookTarget: 'plane' // Look directly at plane
   }
 };
@@ -4259,7 +4259,6 @@ class EndlessMode {
         this.singleObstacleSpawnerSystem.spawnObstacle();
       }
     }
-    this.singleObstacleSpawnerSystem.updateObstaclePosition();
 
     // 9. Lane obstacle collision system detects player vs obstacle collisions (PLAYING phase only)
     let obstacleCollisionEvents = [];
