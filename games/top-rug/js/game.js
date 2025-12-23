@@ -3805,9 +3805,7 @@ class EndlessMode {
     this.viewProfileSystem = null;
 
     // Components
-    this.planeEntity = null;
     this.planeController = null;
-    this.planeView = null;
     this.playerEntity = null;
     this.playerController = null;
     this.playerMovementPipeline = null;
@@ -3880,9 +3878,6 @@ class EndlessMode {
     this.seaSystem = new SeaSystem(world); // Animated sea surface
     this.skySystem = new SkySystem(world); // Parallax cloud layer
     this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
-
-    // ===== VISUAL COMPONENTS ===== (presentation)
-    this.planeView = new PlaneView(world); // Plane visual representation
 
     // ===== ENTITY SYSTEMS ===== (gameplay logic)
     const playerMesh = PlaneFactory.createBasicPlane(); // Create visual placeholder
@@ -4038,8 +4033,6 @@ class EndlessMode {
       console.warn('[EndlessMode] LaneVisualGuideSystem missing at start — skipping visuals');
     }
 
-    // Initialize view (create meshes)
-    this.planeView.createMeshes();
 
     // Initialize sea system
     this.seaSystem.init();
@@ -4047,8 +4040,6 @@ class EndlessMode {
     // Initialize sky system
     this.skySystem.init();
 
-    // Initialize plane view layout
-    this.planeView.setWorldLayout(this.worldLayoutSystem);
 
     // Register systems with world layout zones
     this.worldLayoutSystem.registerSystem('SeaSystem', 'GROUND_PLANE');
@@ -4061,12 +4052,8 @@ class EndlessMode {
     // Reset single obstacle spawner for fresh game
     this.singleObstacleSpawnerSystem.reset();
 
-    // Reset entity to initial state
-    this.planeEntity = new PlaneEntity(this.laneSystem); // Fresh entity
-
     // Initialize lane controller to middle lane
     this.laneController.setCurrentLane(1); // Middle lane for 3-lane setup
-    this.planeEntity.setTargetLane(1); // Sync entity with lane controller
 
     // Force SIDE_SCROLLER view profile for endless mode
     this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
@@ -4289,7 +4276,7 @@ class EndlessMode {
       obstacleCollisionEvents = this.laneObstacleCollisionSystem.process(this.playerEntity, activeObstacles);
 
       // 10. Collision intent system processes (deterministic collision detection)
-      collisionIntents = this.collisionIntentSystem.process(this.planeEntity, this.entityRegistrySystem, this.spawnBandSystem, this.playerMovementPipeline, deltaTime);
+      collisionIntents = this.collisionIntentSystem.process(this.playerEntity, this.entityRegistrySystem, this.spawnBandSystem, this.playerMovementPipeline, deltaTime);
     }
 
     // 11. Collision consumption system processes intents into domain events
@@ -4412,10 +4399,6 @@ class EndlessMode {
     }
 
     // Clean up all references and remove from world
-    if (this.planeView) {
-      this.planeView.destroy();
-      this.planeView = null;
-    }
 
     if (this.seaSystem) {
       this.seaSystem.destroy();
@@ -4434,7 +4417,6 @@ class EndlessMode {
     }
 
     // Clear all component references
-    this.planeEntity = null;
     this.planeController = null;
 
     // Clear dependency references
