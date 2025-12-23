@@ -414,11 +414,12 @@ class CameraRig {
 class SeaSystem {
   constructor(world) {
     this.world = world;
-    this.mesh = null;
+    this.meshes = []; // Array of 2 sea segment meshes
     this.material = null;
     this.geometry = null;
     this.basePositions = null; // Store original vertex positions
     this.vertexWaves = []; // Per-vertex wave data
+    this.seaLength = 2000; // Length of each sea segment
 
     // Debug flag for visibility
     this.DEBUG_SEA = true;
@@ -426,13 +427,13 @@ class SeaSystem {
 
   init() {
     const SEA_RADIUS = 600;
-    const SEA_LENGTH = 2000;
+    this.seaLength = 2000;
 
     // Create cylindrical geometry for horizon curvature
     this.geometry = new THREE.CylinderGeometry(
       SEA_RADIUS,     // top radius
       SEA_RADIUS,     // bottom radius
-      SEA_LENGTH,     // height
+      this.seaLength, // height (segment length)
       40,             // radial segments
       10              // height segments
     );
@@ -445,30 +446,33 @@ class SeaSystem {
       wireframe: this.DEBUG_SEA // Wireframe for debug visibility
     });
 
-    // Create mesh and position it
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    // Create 2 identical sea segment meshes
+    for (let i = 0; i < 2; i++) {
+      const mesh = new THREE.Mesh(this.geometry, this.material);
 
-    // Rotate cylinder to lie along Z axis (sea extends forward/backward)
-    this.mesh.rotation.x = -Math.PI / 2;
+      // Rotate cylinder to lie along Z axis (sea extends forward/backward)
+      mesh.rotation.x = -Math.PI / 2;
 
-    // Position sea so player sits just above inner surface
-    // Cylinder center at origin, so position to create horizon effect
-    this.mesh.position.y = -SEA_RADIUS + 50; // Player sits ~50 units above sea surface
-    this.mesh.position.z = -SEA_LENGTH / 4; // Position for forward visibility
+      // Position sea so player sits just above inner surface
+      mesh.position.y = -SEA_RADIUS + 50; // Player sits ~50 units above sea surface
 
-    // Store base Z position for relative scrolling
-    this.baseZ = this.mesh.position.z;
+      // Position segments: first at base position, second offset by sea length
+      mesh.position.z = -this.seaLength / 4 + (i * this.seaLength);
 
-    // Store original vertex positions for wave animation
+      // Store base Z position for relative scrolling
+      mesh.userData.baseZ = mesh.position.z;
+
+      this.meshes.push(mesh);
+      this.world.add(mesh);
+    }
+
+    // Store original vertex positions for wave animation (use first mesh's geometry)
     this.basePositions = this.geometry.attributes.position.array.slice();
 
     // Initialize wave animation data
     this.initWaves();
 
-    // Add to world
-    this.world.add(this.mesh);
-
-    console.log('[SeaSystem] Initialized - cylindrical sea with wave animation added to world');
+    console.log('[SeaSystem] Initialized - 2-segment cylindrical sea with wave animation');
   }
 
   initWaves() {
@@ -489,16 +493,33 @@ class SeaSystem {
 
   // WorldScrollConsumer contract
   updateScroll(zoneZ) {
-    if (!this.mesh) return;
+    if (!this.meshes || this.meshes.length === 0) return;
 
-    // Apply Z scrolling - world illusion through mesh translation
-    this.mesh.position.z = this.baseZ + zoneZ;
+    // Update each segment position
+    for (let i = 0; i < this.meshes.length; i++) {
+      const mesh = this.meshes[i];
+      const newZ = mesh.userData.baseZ + zoneZ;
+
+      // Check if this segment has scrolled past the wrap threshold (behind player)
+      if (newZ < -this.seaLength) {
+        // Wrap this segment ahead of the other segment
+        const otherSegment = this.meshes[(i + 1) % 2];
+        const otherZ = otherSegment.position.z;
+
+        // Position this segment ahead of the other one
+        mesh.position.z = otherZ + this.seaLength;
+        mesh.userData.baseZ = mesh.position.z - zoneZ;
+      } else {
+        // Normal scrolling
+        mesh.position.z = newZ;
+      }
+    }
   }
 
   update(deltaTime, zoneZ) {
-    if (!this.mesh) return;
+    if (!this.meshes || this.meshes.length === 0) return;
 
-    // Legacy compatibility - apply scrolling and animation
+    // Apply scrolling and animation
     this.updateScroll(zoneZ);
     this.animateWaves(deltaTime);
   }
