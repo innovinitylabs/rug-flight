@@ -547,17 +547,19 @@ class GroundSegmentSystem {
     // This length accounts for geometry type, size, and rotation
     this.segmentLength = this.visual.getSegmentLength();
 
-    // Create 2 segment meshes positioned so their CENTERS are exactly segmentLength apart
+    // Create 2 segment meshes positioned edge-to-edge
     // baseZ represents SEGMENT CENTER position
-    // Segment 0 center at 0, Segment 1 center at segmentLength
-    // This ensures edge-to-edge placement regardless of mesh geometry
+    // For seamless edge-to-edge placement:
+    // - Segment 0 center at segmentLength/2 (extends from 0 to segmentLength)
+    // - Segment 1 center at segmentLength + segmentLength/2 (extends from segmentLength to 2*segmentLength)
+    // This ensures trailing edge of segment 0 meets leading edge of segment 1
     for (let i = 0; i < 2; i++) {
       // Clone the template mesh for each segment
       const mesh = templateMesh.clone();
 
-      // Set authoritative baseZ: segment CENTER positions
-      // Segment centers are spaced exactly segmentLength apart
-      const baseZ = i * this.segmentLength;
+      // Set authoritative baseZ: segment CENTER positions for edge-to-edge placement
+      // Each segment center is positioned so segments connect seamlessly
+      const baseZ = (i * this.segmentLength) + (this.segmentLength / 2);
       mesh.userData.baseZ = baseZ;
 
       // Initial visual position (no world scroll offset yet)
@@ -574,18 +576,23 @@ class GroundSegmentSystem {
   }
 
   // WorldScrollConsumer contract
-  // CRITICAL SPATIAL LOGIC:
-  // - baseZ represents SEGMENT CENTER position (authoritative)
-  // - visualZ = baseZ + zoneZ (computed each frame)
-  // - Trailing edge = visualZ - segmentLength/2
-  // - We wrap based on TRAILING EDGE, not center, to ensure seamless looping
+  // CRITICAL SPATIAL LOGIC FOR SEAMLESS LOOPING:
+  // - baseZ represents SEGMENT CENTER position (authoritative, never changes except on wrap)
+  // - visualZ = baseZ + zoneZ (computed each frame from world scroll)
+  // - Trailing edge = visualZ - segmentLength/2 (segment center minus half length)
+  // - Leading edge = visualZ + segmentLength/2 (segment center plus half length)
+  // - We wrap based on TRAILING EDGE passing Z=0 to ensure seamless edge-to-edge connection
+  // - When wrapping: new segment center = maxBaseZ + segmentLength
+  //   This positions wrapped segment so its trailing edge meets the leading edge of rightmost segment
   // - This works for ANY mesh geometry because we use the visual's declared segmentLength
   updateScroll(zoneZ) {
     if (!this.meshes || this.meshes.length === 0) return;
 
-    // Wrap threshold: trailing edge must be at least segmentLength/2 behind origin
-    // This ensures segment is fully behind before wrapping
-    const wrapThreshold = -this.segmentLength / 2;
+    // Wrap threshold: wrap when trailing edge passes behind player (Z=0)
+    // This ensures seamless edge-to-edge connection - no gaps, no overlaps
+    // trailingEdgeZ = visualZ - segmentLength/2
+    // Wrap when trailingEdgeZ < 0, which means visualZ < segmentLength/2
+    const wrapThreshold = 0;
 
     // First pass: identify segments that need wrapping
     const segmentsToWrap = [];
@@ -614,11 +621,13 @@ class GroundSegmentSystem {
 
     // Second pass: apply wraps sequentially, updating maxBaseZ after each wrap
     // This ensures proper spacing even if multiple segments wrap in one frame
+    // Each wrapped segment is positioned so its trailing edge meets the leading edge of the rightmost segment
     for (const mesh of segmentsToWrap) {
       // Position wrapped segment ahead of current rightmost segment
+      // New center = maxBaseZ + segmentLength ensures edge-to-edge connection
       const newBaseZ = maxBaseZ + this.segmentLength;
       mesh.userData.baseZ = newBaseZ;
-      maxBaseZ = newBaseZ; // Update max for next potential wrap
+      maxBaseZ = newBaseZ; // Update max for next potential wrap in this frame
     }
 
     // Update visual positions for all segments (including wrapped ones)
