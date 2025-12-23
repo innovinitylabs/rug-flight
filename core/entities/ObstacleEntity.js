@@ -12,6 +12,7 @@ class ObstacleEntity {
     this.type = 'OBSTACLE';
     this.laneIndex = laneIndex;
     this.baseZ = baseZ; // Fixed Z position at spawn time
+    this.z = baseZ; // Current Z position (satisfies EntityRegistry contract)
     this.mesh = mesh; // Optional visual representation
     this.laneSystem = laneSystem; // For proper lane positioning
     this.worldScrollerSystem = worldScrollerSystem; // For computing visual Z position
@@ -29,9 +30,11 @@ class ObstacleEntity {
       if (this.worldScrollerSystem) {
         const visualZ = this.baseZ - this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
         this.mesh.position.z = visualZ;
+        this.z = visualZ; // Update z property to satisfy EntityRegistry contract
       } else {
         // Fallback - shouldn't happen in normal operation
         this.mesh.position.z = this.baseZ;
+        this.z = this.baseZ; // Update z property to satisfy EntityRegistry contract
       }
 
       // X position determined by lane center (if laneSystem available)
