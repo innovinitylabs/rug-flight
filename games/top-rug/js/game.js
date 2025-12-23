@@ -62,6 +62,21 @@ class SeaVisual {
     return this.geometry;
   }
 
+  // Get segment length using proper bounding box calculation
+  getSegmentLength() {
+    // Create a temporary mesh with the same geometry and material
+    const tempMesh = new THREE.Mesh(this.geometry, this.material);
+
+    // Apply the same rotation as used in the real meshes
+    tempMesh.rotation.x = -Math.PI / 2;
+
+    // Compute bounding box from the rotated mesh
+    const boundingBox = new THREE.Box3().setFromObject(tempMesh);
+
+    // Return the Z extent (length along the scrolling axis)
+    return boundingBox.max.z - boundingBox.min.z;
+  }
+
   initWaves() {
     // Initialize wave data for each vertex
     this.vertexWaves = [];
@@ -524,28 +539,30 @@ class GroundSegmentSystem {
   }
 
   init() {
+    // Get segment length from visual (accounts for rotation and geometry)
+    this.segmentLength = this.visual.getSegmentLength();
+
     // Get mesh template from visual object
     const templateMesh = this.visual.createMesh();
-
-    // Compute segment length from visual geometry after rotation
-    const geometry = this.visual.getGeometry();
-    geometry.computeBoundingBox();
-    this.segmentLength = geometry.boundingBox.max.z - geometry.boundingBox.min.z;
 
     // Create 2 segment meshes positioned edge-to-edge
     for (let i = 0; i < 2; i++) {
       // Clone the template mesh for each segment
       const mesh = templateMesh.clone();
 
-      // Position segments edge-to-edge: segment0 at 0, segment1 at segmentLength
-      mesh.position.z = i * this.segmentLength;
+      // Set authoritative baseZ positions: segment0 at 0, segment1 at segmentLength
+      const baseZ = i * this.segmentLength;
+      mesh.userData.baseZ = baseZ;
 
-      // Store base Z position for relative scrolling
-      mesh.userData.baseZ = mesh.position.z;
+      // Initial visual position
+      mesh.position.z = baseZ;
 
       this.meshes.push(mesh);
       this.world.add(mesh);
     }
+
+    // Assert invariant: segments are exactly segmentLength apart
+    this.assertSegmentInvariants();
 
     console.log(`[GroundSegmentSystem] Initialized - 2 segments (length: ${this.segmentLength.toFixed(1)})`);
   }
@@ -554,29 +571,54 @@ class GroundSegmentSystem {
   updateScroll(zoneZ) {
     if (!this.meshes || this.meshes.length === 0) return;
 
-    // Update each segment position with proper edge-based wrapping
+    // Define wrap threshold: segment is fully behind when its trailing edge passes this
+    const wrapBehindZ = -this.segmentLength;
+
+    // Find the maximum baseZ among all segments (the rightmost segment)
+    let maxBaseZ = -Infinity;
+    for (const mesh of this.meshes) {
+      maxBaseZ = Math.max(maxBaseZ, mesh.userData.baseZ);
+    }
+
+    // Update each segment position with baseZ-based wrapping
     for (let i = 0; i < this.meshes.length; i++) {
       const mesh = this.meshes[i];
 
-      // Compute visual position
+      // Compute visual position: baseZ + world scroll offset
       const visualZ = mesh.userData.baseZ + zoneZ;
 
-      // Check if trailing edge has passed wrap threshold (behind player)
-      // Wrap when (visualZ + segmentLength/2) < 0 (center-based approximation)
-      // This ensures the segment is fully behind before wrapping
-      if (visualZ + this.segmentLength / 2 < 0) {
-        // Find the other segment to position ahead of it
-        const otherSegment = this.meshes[(i + 1) % 2];
-        const otherVisualZ = otherSegment.userData.baseZ + zoneZ;
+      // Check if segment needs to wrap (entirely behind player)
+      if (visualZ < wrapBehindZ) {
+        // Wrap this segment ahead of the current rightmost segment
+        const newBaseZ = maxBaseZ + this.segmentLength;
+        mesh.userData.baseZ = newBaseZ;
 
-        // Position this segment ahead of the other segment
-        const newPositionZ = otherVisualZ + this.segmentLength;
-        mesh.position.z = newPositionZ;
-        mesh.userData.baseZ = newPositionZ - zoneZ;
-      } else {
-        // Normal scrolling
-        mesh.position.z = visualZ;
+        // Update maxBaseZ for subsequent segments in this frame
+        maxBaseZ = newBaseZ;
       }
+
+      // Update visual position based on (possibly updated) baseZ
+      mesh.position.z = mesh.userData.baseZ + zoneZ;
+    }
+
+    // Assert that segments maintain proper spacing after updates
+    this.assertSegmentInvariants();
+  }
+
+  // Assert that segments maintain proper spacing invariant
+  assertSegmentInvariants() {
+    if (this.meshes.length < 2) return; // Need at least 2 segments to check
+
+    // Sort segments by baseZ for consistent checking
+    const sortedMeshes = [...this.meshes].sort((a, b) => a.userData.baseZ - b.userData.baseZ);
+
+    // Check that each consecutive pair is exactly segmentLength apart
+    for (let i = 0; i < sortedMeshes.length - 1; i++) {
+      const spacing = sortedMeshes[i + 1].userData.baseZ - sortedMeshes[i].userData.baseZ;
+      console.assert(
+        Math.abs(spacing - this.segmentLength) < 0.001,
+        `[GroundSegmentSystem] Segment spacing invariant violated: expected ${this.segmentLength}, got ${spacing}`
+      );
     }
   }
 
