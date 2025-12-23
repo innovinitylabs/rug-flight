@@ -4,6 +4,8 @@
 // - No self-movement logic - Z position controlled externally
 // - Only syncs mesh position to current state
 
+import DebugConfig from '/core/config/DebugConfig.js';
+
 class ObstacleEntity {
   constructor(id, laneIndex, baseZ, mesh = null, laneSystem = null, worldScrollerSystem = null) {
     this.id = id;
