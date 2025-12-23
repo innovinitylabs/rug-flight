@@ -581,18 +581,32 @@ class GroundSegmentSystem {
   // - visualZ = baseZ + zoneZ (computed each frame from world scroll)
   // - Trailing edge = visualZ - segmentLength/2 (segment center minus half length)
   // - Leading edge = visualZ + segmentLength/2 (segment center plus half length)
-  // - We wrap based on TRAILING EDGE passing Z=0 to ensure seamless edge-to-edge connection
+  // - We wrap based on TRAILING EDGE passing behind camera view (camera-relative, NOT world-zero-relative)
   // - When wrapping: new segment center = maxBaseZ + segmentLength
   //   This positions wrapped segment so its trailing edge meets the leading edge of rightmost segment
   // - This works for ANY mesh geometry because we use the visual's declared segmentLength
   updateScroll(zoneZ) {
     if (!this.meshes || this.meshes.length === 0) return;
 
-    // Wrap threshold: wrap when trailing edge passes behind player (Z=0)
-    // This ensures seamless edge-to-edge connection - no gaps, no overlaps
-    // trailingEdgeZ = visualZ - segmentLength/2
-    // Wrap when trailingEdgeZ < 0, which means visualZ < segmentLength/2
-    const wrapThreshold = 0;
+    // Wrap threshold: camera-relative (NOT world-zero-relative)
+    // Camera Z is locked at a positive value (~200), all ground segments live in +Z space
+    // Wrap when trailing edge is fully behind camera view frustum
+    const cameraZ = this.world.camera.position.z;
+    const wrapThreshold = cameraZ - this.segmentLength;
+
+    // TEMPORARY DEBUG: Remove after verification
+    if (this.meshes.length > 0) {
+      const firstMesh = this.meshes[0];
+      const visualZ = firstMesh.userData.baseZ + zoneZ;
+      const trailingEdgeZ = visualZ - this.segmentLength / 2;
+      console.log(
+        '[GROUND]',
+        'baseZ:', firstMesh.userData.baseZ.toFixed(1),
+        'visualZ:', visualZ.toFixed(1),
+        'trail:', trailingEdgeZ.toFixed(1),
+        'cameraZ:', cameraZ.toFixed(1)
+      );
+    }
 
     // First pass: identify segments that need wrapping
     const segmentsToWrap = [];
@@ -613,7 +627,7 @@ class GroundSegmentSystem {
       // Compute trailing edge position (segment center - half length)
       const trailingEdgeZ = visualZ - this.segmentLength / 2;
 
-      // Wrap ONLY when trailing edge passes threshold (fully behind player)
+      // Wrap ONLY when trailing edge passes threshold (fully behind camera view)
       if (trailingEdgeZ < wrapThreshold) {
         segmentsToWrap.push(mesh);
       }
