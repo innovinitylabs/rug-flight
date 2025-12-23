@@ -23,18 +23,27 @@ class PlayerMovementPipelineSystem {
     // 2. Update action state system for cooldowns
     this.playerActionStateSystem.update(deltaTime);
 
-    // 3. Process intents through action state gating
+    // 3. Process axis-based intent with selective gating
     const intents = this.playerIntentSystem.getIntents();
     if (intents.length > 0) {
       const intent = intents[0];
 
-      // Check if action can be executed (cooldowns, state, etc.)
-      if (this.playerActionStateSystem.canExecute(intent.type)) {
-        // Execute the intent
+      // Check if horizontal axis can be executed (subject to cooldown)
+      const canExecuteHorizontal = (intent.horizontal === 0) ||
+        this.playerActionStateSystem.canExecute(intent.horizontal > 0 ? 'MOVE_RIGHT' : 'MOVE_LEFT');
+
+      // Vertical axis is always allowed (no cooldown)
+      const canExecuteVertical = true;
+
+      // Execute intent if at least one axis is allowed
+      if (canExecuteHorizontal || canExecuteVertical) {
         this.playerController.processIntent(intent);
 
-        // Notify action state system that intent was executed
-        this.playerActionStateSystem.onIntentExecuted(intent.type);
+        // Notify action state system only for horizontal movement
+        if (intent.horizontal !== 0 && canExecuteHorizontal) {
+          const intentType = intent.horizontal > 0 ? 'MOVE_RIGHT' : 'MOVE_LEFT';
+          this.playerActionStateSystem.onIntentExecuted(intentType);
+        }
       }
     }
 

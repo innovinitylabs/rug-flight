@@ -877,37 +877,30 @@ class PlayerIntentSystem {
     console.log('[PlayerIntent] Semantic intent interpretation established');
   }
 
-  // Convert raw input into semantic gameplay intent
+  // Convert raw input into axis-based gameplay intent
   update(input, deltaTime) {
-    if (!input) {
-      this.currentIntent = {
-        type: 'HOLD',
-        strength: 0,
-        timestamp: performance.now()
-      };
-      return;
+    let horizontal = 0;
+    let vertical = 0;
+
+    if (input) {
+      // Keyboard-only logic for Endless mode (no mouse support)
+      if (input.isKeyDown('ArrowLeft')) {
+        horizontal = -1;
+      } else if (input.isKeyDown('ArrowRight')) {
+        horizontal = 1;
+      }
+
+      if (input.isKeyDown('ArrowUp')) {
+        vertical = 1;
+      } else if (input.isKeyDown('ArrowDown')) {
+        vertical = -1;
+      }
     }
 
-    let intentType;
-    let strength = 1.0; // Keyboard input is always full strength
-
-    // Keyboard-only logic for Endless mode (no mouse support)
-    if (input.isKeyDown('ArrowLeft')) {
-      intentType = 'MOVE_LEFT';
-    } else if (input.isKeyDown('ArrowRight')) {
-      intentType = 'MOVE_RIGHT';
-    } else if (input.isKeyDown('ArrowUp')) {
-      intentType = 'MOVE_UP';
-    } else if (input.isKeyDown('ArrowDown')) {
-      intentType = 'MOVE_DOWN';
-    } else {
-      intentType = 'HOLD';
-    }
-
-    // Create intent (at most one per frame)
+    // Create axis-based intent (allows diagonal movement)
     this.currentIntent = {
-      type: intentType,
-      strength: Math.min(strength, 1.0), // Clamp to 0-1
+      horizontal: horizontal,
+      vertical: vertical,
       timestamp: performance.now()
     };
   }
@@ -930,7 +923,7 @@ class PlayerIntentSystem {
 
 // PlayerActionStateSystem class - manages player action states and cooldowns
 class PlayerActionStateSystem {
-  constructor(laneSwitchCooldownMs = 200) {
+  constructor(laneSwitchCooldownMs = 100) { // Reduced from 200ms to 100ms
     this.laneSwitchCooldownMs = laneSwitchCooldownMs;
 
     // States: 'READY', 'LANE_SWITCH_COOLDOWN', 'STUNNED'
@@ -961,7 +954,7 @@ class PlayerActionStateSystem {
       this.stunRemaining -= deltaMs;
     }
 
-    // State transitions
+    // State transitions (no logging for cooldown ending - only when it starts)
     if (this.currentState === 'STUNNED' && this.stunRemaining <= 0) {
       this.currentState = 'READY';
       if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
@@ -969,9 +962,7 @@ class PlayerActionStateSystem {
       }
     } else if (this.currentState === 'LANE_SWITCH_COOLDOWN' && this.cooldownRemaining <= 0) {
       this.currentState = 'READY';
-      if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
-        console.log('[PlayerActionState] LANE_SWITCH_COOLDOWN → READY: Cooldown ended');
-      }
+      // Note: No logging when cooldown ends (only when it starts)
     }
     // Note: No "else" clause that resets flags - we only log on actual transitions
   }
@@ -4094,7 +4085,13 @@ class EndlessMode {
     // Get obstacle info
     const obstacle = this.singleObstacleSpawnerSystem.getObstacle();
     const obstacleInfo = obstacle ?
-      `Lane: ${obstacle.laneIndex}, Z: ${obstacle.z.toFixed(1)}` :
+      `Lane: ${obstacle.laneIndex}, Z: ${obstacle.z.toFixed(1)}, Y: ${obstacle.y.toFixed(1)}` :
+      'None';
+
+    // Get intent info
+    const intents = this.playerIntentSystem.getIntents();
+    const intentInfo = intents.length > 0 ?
+      `H:${intents[0].horizontal}, V:${intents[0].vertical}` :
       'None';
 
     // Get phase timing
@@ -4104,7 +4101,8 @@ class EndlessMode {
     this.debugOverlay.innerHTML = `
       <strong>Player:</strong><br>
       Lane: ${this.playerMovementPipeline.getCurrentLane()} → ${this.playerMovementPipeline.getTargetLane()}<br>
-      X: ${playerPos.x.toFixed(1)}<br>
+      X: ${playerPos.x.toFixed(1)}, Y: ${playerPos.y.toFixed(1)}<br>
+      Intent: ${intentInfo}<br>
       <strong>World:</strong><br>
       Ground Z: ${groundZ.toFixed(1)}<br>
       Progress: ${worldProgress.toFixed(0)}<br>
@@ -4182,26 +4180,8 @@ class EndlessMode {
     // Update lane debug visualization
     this.laneDebugVisualSystem.update(deltaTime);
 
-    // Clear intent
+    // PlayerMovementPipelineSystem handles all input processing now
     this.playerIntentSystem.clear();
-
-    // 4. Lane controller processes approved player intents into lane changes (legacy)
-    const rawPlayerIntents = this.playerIntentSystem.getIntents();
-    const approvedIntents = rawPlayerIntents.filter(intent =>
-      this.playerActionStateSystem.canExecute(intent.type)
-    );
-    const laneIntent = this.laneController.processIntents(approvedIntents);
-
-    // 5. Notify action state system of executed intents
-    if (approvedIntents.length > 0 && laneIntent.targetLaneIndex !== laneIntent.currentLaneIndex) {
-      // Lane change was executed - notify action state system
-      const executedIntent = approvedIntents.find(intent =>
-        intent.type === 'MOVE_LEFT' || intent.type === 'MOVE_RIGHT'
-      );
-      if (executedIntent) {
-        this.playerActionStateSystem.onIntentExecuted(executedIntent.type);
-      }
-    }
 
 
     // 4. World axis system updates (DistanceSystem first)
