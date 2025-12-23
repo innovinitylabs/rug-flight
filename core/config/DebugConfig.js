@@ -13,7 +13,10 @@ const DebugConfig = {
   ENABLE_OBSTACLE_LOGS: false,
 
   // Lane switching and movement logs
-  ENABLE_LANE_LOGS: false
+  ENABLE_LANE_LOGS: false,
+
+  // Player action state and cooldown logs
+  ENABLE_ACTION_STATE_LOGS: false
 };
 
 export default DebugConfig;

@@ -944,22 +944,21 @@ class PlayerActionStateSystem {
 
     // States: 'READY', 'LANE_SWITCH_COOLDOWN', 'STUNNED'
     this.currentState = 'READY';
+    this.previousState = 'READY'; // Track state changes for logging
 
     // Timers in milliseconds
     this.cooldownRemaining = 0;
     this.stunRemaining = 0;
 
-    // Logging guards (one-time per state transition)
-    this._recoveryLogged = false;
-    this._cooldownLogged = false;
-    this._laneSwitchLogged = false;
-    this._stunLogged = false;
-
-    console.log('[PlayerActionState] Action state management established');
+    if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+      console.log('[PlayerActionState] Action state management established');
+    }
   }
 
   // Update timers and state transitions
   update(deltaTime) {
+    this.previousState = this.currentState; // Track for state change detection
+
     const deltaMs = deltaTime * 1000; // Convert to milliseconds
 
     // Update timers
@@ -974,23 +973,16 @@ class PlayerActionStateSystem {
     // State transitions
     if (this.currentState === 'STUNNED' && this.stunRemaining <= 0) {
       this.currentState = 'READY';
-      if (!this._recoveryLogged) {
-        console.log('[PlayerActionState] Recovered from stun');
-        this._recoveryLogged = true;
+      if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+        console.log('[PlayerActionState] STUNNED → READY: Recovered from stun');
       }
     } else if (this.currentState === 'LANE_SWITCH_COOLDOWN' && this.cooldownRemaining <= 0) {
       this.currentState = 'READY';
-      if (!this._cooldownLogged) {
-        console.log('[PlayerActionState] Lane switch cooldown ended');
-        this._cooldownLogged = true;
+      if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+        console.log('[PlayerActionState] LANE_SWITCH_COOLDOWN → READY: Cooldown ended');
       }
-  } else {
-      // Reset flags when not in these states
-      this._recoveryLogged = false;
-      this._cooldownLogged = false;
-      this._laneSwitchLogged = false;
-      this._stunLogged = false;
     }
+    // Note: No "else" clause that resets flags - we only log on actual transitions
   }
 
   // Check if an intent type can be executed in current state
@@ -1015,22 +1007,24 @@ class PlayerActionStateSystem {
   onIntentExecuted(intentType) {
     if (intentType === 'MOVE_LEFT' || intentType === 'MOVE_RIGHT') {
       // Enter lane switch cooldown
+      this.previousState = this.currentState;
       this.currentState = 'LANE_SWITCH_COOLDOWN';
       this.cooldownRemaining = this.laneSwitchCooldownMs;
-      if (!this._laneSwitchLogged) {
-        console.log(`[PlayerActionState] Lane switch executed - cooldown ${this.laneSwitchCooldownMs}ms`);
-        this._laneSwitchLogged = true;
+
+      if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+        console.log(`[PlayerActionState] ${this.previousState} → LANE_SWITCH_COOLDOWN: Lane switch executed (${this.laneSwitchCooldownMs}ms cooldown)`);
       }
     }
   }
 
   // Apply stun state (for future use)
   applyStun(durationMs) {
+    this.previousState = this.currentState;
     this.currentState = 'STUNNED';
     this.stunRemaining = durationMs;
-    if (!this._stunLogged) {
-      console.log(`[PlayerActionState] Stunned for ${durationMs}ms`);
-      this._stunLogged = true;
+
+    if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+      console.log(`[PlayerActionState] ${this.previousState} → STUNNED: Stunned for ${durationMs}ms`);
     }
   }
 
