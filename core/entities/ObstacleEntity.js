@@ -27,10 +27,10 @@ class ObstacleEntity {
   // Only syncs mesh position - no self-movement logic
   update(deltaTime) {
     if (this.mesh) {
-      // Compute visual Z position: baseZ - world scroll offset
-      // This makes obstacles appear to move toward player as world scrolls
+      // Compute visual Z position: baseZ + world scroll offset
+      // This makes obstacles appear to move toward player as world scrolls forward (+Z)
       if (this.worldScrollerSystem) {
-        const visualZ = this.baseZ - this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
+        const visualZ = this.baseZ + this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
         this.mesh.position.z = visualZ;
         this.z = visualZ; // Update z property to satisfy EntityRegistry contract
       } else {
