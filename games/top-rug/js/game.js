@@ -9,6 +9,108 @@ const GAME_PHASES = {
   GAME_OVER: 'GAME_OVER'    // Player died (input disabled)
 };
 
+// SeaVisual - Handles sea mesh creation and wave animation
+class SeaVisual {
+  constructor() {
+    this.geometry = null;
+    this.material = null;
+    this.basePositions = null; // Store original vertex positions
+    this.vertexWaves = []; // Per-vertex wave data
+    this.debugMode = true; // Wireframe for visibility
+  }
+
+  // Create and return a sea mesh
+  createMesh() {
+    const SEA_RADIUS = 600;
+    const SEA_LENGTH = 2000;
+
+    // Create cylindrical geometry for horizon curvature
+    this.geometry = new THREE.CylinderGeometry(
+      SEA_RADIUS,     // top radius
+      SEA_RADIUS,     // bottom radius
+      SEA_LENGTH,     // height
+      40,             // radial segments
+      10              // height segments
+    );
+
+    // Debug material for visibility
+    this.material = new THREE.MeshLambertMaterial({
+      color: 0x006994,
+      transparent: true,
+      opacity: 0.8,
+      wireframe: this.debugMode
+    });
+
+    // Create mesh and apply rotation
+    const mesh = new THREE.Mesh(this.geometry, this.material);
+    mesh.rotation.x = -Math.PI / 2; // Rotate to lie along Z axis
+
+    // Position sea so player sits just above inner surface
+    mesh.position.y = -SEA_RADIUS + 50; // Player sits ~50 units above sea surface
+
+    // Store original vertex positions for wave animation
+    this.basePositions = this.geometry.attributes.position.array.slice();
+
+    // Initialize wave animation data
+    this.initWaves();
+
+    return mesh;
+  }
+
+  // Get the geometry for segment length calculation
+  getGeometry() {
+    return this.geometry;
+  }
+
+  initWaves() {
+    // Initialize wave data for each vertex
+    this.vertexWaves = [];
+
+    // For each vertex in the geometry
+    for (let i = 0; i < this.basePositions.length; i += 3) {
+      this.vertexWaves.push({
+        angle: Math.random() * Math.PI * 2,  // Random starting angle
+        amplitude: 3 + Math.random() * 4,     // 3-7 units amplitude (exaggerated for visibility)
+        speed: 0.5 + Math.random() * 1.5      // 0.5-2.0 speed
+      });
+    }
+  }
+
+  // Update wave animation for this delta time
+  updateWaves(deltaTime) {
+    if (!this.geometry || !this.basePositions || !this.vertexWaves) return;
+
+    const positions = this.geometry.attributes.position.array;
+
+    // Animate each vertex with its own wave data
+    for (let i = 0; i < positions.length; i += 3) {
+      const vertexIndex = i / 3;
+      const wave = this.vertexWaves[vertexIndex];
+
+      // Update wave angle
+      wave.angle += wave.speed * deltaTime;
+
+      // Get base position
+      const baseX = this.basePositions[i];
+      const baseY = this.basePositions[i + 1];
+      const baseZ = this.basePositions[i + 2];
+
+      // Apply exaggerated wave motion for visibility
+      const waveOffsetX = Math.cos(wave.angle) * wave.amplitude * 0.5;
+      const waveOffsetY = Math.sin(wave.angle) * wave.amplitude;
+      const waveOffsetZ = Math.sin(wave.angle + baseX * 0.05) * wave.amplitude * 1.2;
+
+      // Apply offsets to current position
+      positions[i] = baseX + waveOffsetX;         // X coordinate
+      positions[i + 1] = baseY + waveOffsetY;     // Y coordinate
+      positions[i + 2] = baseZ + waveOffsetZ;     // Z coordinate with flow illusion
+    }
+
+    // Recompute vertex normals for proper lighting
+    this.geometry.computeVertexNormals();
+  }
+}
+
 // Import modern abstractions
 import PlayerEntity from '/core/entities/PlayerEntity.js';
 import ObstacleEntity from '/core/entities/ObstacleEntity.js';
@@ -411,56 +513,29 @@ class CameraRig {
 }
 
 // SeaSystem class - animated sea visual system
-class SeaSystem {
-  constructor(world) {
+// GroundSegmentSystem - Manages ground segment scrolling and recycling
+// Visual representation is provided by swappable visual objects
+class GroundSegmentSystem {
+  constructor(world, visual) {
     this.world = world;
-    this.meshes = []; // Array of 2 sea segment meshes
-    this.material = null;
-    this.geometry = null;
-    this.basePositions = null; // Store original vertex positions
-    this.vertexWaves = []; // Per-vertex wave data
-    this.segmentLength = 0; // Computed from geometry bounding box
-
-    // Debug flag for visibility
-    this.DEBUG_SEA = true;
+    this.visual = visual; // Swappable visual object (e.g., SeaVisual)
+    this.meshes = []; // Array of segment meshes
+    this.segmentLength = 0; // Computed from visual geometry
   }
 
   init() {
-    const SEA_RADIUS = 600;
-    const SEA_LENGTH = 2000; // Initial creation size
+    // Get mesh template from visual object
+    const templateMesh = this.visual.createMesh();
 
-    // Create cylindrical geometry for horizon curvature
-    this.geometry = new THREE.CylinderGeometry(
-      SEA_RADIUS,     // top radius
-      SEA_RADIUS,     // bottom radius
-      SEA_LENGTH,     // height (initial creation size)
-      40,             // radial segments
-      10              // height segments
-    );
+    // Compute segment length from visual geometry after rotation
+    const geometry = this.visual.getGeometry();
+    geometry.computeBoundingBox();
+    this.segmentLength = geometry.boundingBox.max.z - geometry.boundingBox.min.z;
 
-    // Compute actual segment length from geometry bounding box after rotation
-    const tempMesh = new THREE.Mesh(this.geometry);
-    tempMesh.rotation.x = -Math.PI / 2; // Apply rotation like real meshes
-    this.geometry.computeBoundingBox();
-    this.segmentLength = this.geometry.boundingBox.max.z - this.geometry.boundingBox.min.z;
-
-    // Debug material for visibility
-    this.material = new THREE.MeshLambertMaterial({
-      color: 0x006994,
-      transparent: true,
-      opacity: 0.8,
-      wireframe: this.DEBUG_SEA // Wireframe for debug visibility
-    });
-
-    // Create 2 identical sea segment meshes positioned edge-to-edge
+    // Create 2 segment meshes positioned edge-to-edge
     for (let i = 0; i < 2; i++) {
-      const mesh = new THREE.Mesh(this.geometry, this.material);
-
-      // Rotate cylinder to lie along Z axis (sea extends forward/backward)
-      mesh.rotation.x = -Math.PI / 2;
-
-      // Position sea so player sits just above inner surface
-      mesh.position.y = -SEA_RADIUS + 50; // Player sits ~50 units above sea surface
+      // Clone the template mesh for each segment
+      const mesh = templateMesh.clone();
 
       // Position segments edge-to-edge: segment0 at 0, segment1 at segmentLength
       mesh.position.z = i * this.segmentLength;
@@ -472,32 +547,10 @@ class SeaSystem {
       this.world.add(mesh);
     }
 
-    // Store original vertex positions for wave animation (use first mesh's geometry)
-    this.basePositions = this.geometry.attributes.position.array.slice();
-
-    // Initialize wave animation data
-    this.initWaves();
-
-    console.log(`[SeaSystem] Initialized - 2-segment sea (length: ${this.segmentLength.toFixed(1)})`);
+    console.log(`[GroundSegmentSystem] Initialized - 2 segments (length: ${this.segmentLength.toFixed(1)})`);
   }
 
-  initWaves() {
-    // Initialize wave data for each vertex
-    this.vertexWaves = [];
-
-    // For each vertex in the geometry
-    for (let i = 0; i < this.basePositions.length; i += 3) {
-      this.vertexWaves.push({
-        angle: Math.random() * Math.PI * 2,  // Random starting angle
-        amplitude: 3 + Math.random() * 4,     // 3-7 units amplitude (exaggerated for visibility)
-        speed: 0.5 + Math.random() * 1.5      // 0.5-2.0 speed
-      });
-    }
-
-    console.log(`[SeaSystem] Initialized ${this.vertexWaves.length} vertex waves`);
-  }
-
-  // WorldScrollConsumer contract
+    // WorldScrollConsumer contract
   updateScroll(zoneZ) {
     if (!this.meshes || this.meshes.length === 0) return;
 
@@ -527,53 +580,27 @@ class SeaSystem {
     }
   }
 
+  // Cleanup method
+  destroy() {
+    // Remove meshes from world
+    for (const mesh of this.meshes) {
+      if (mesh.parent) {
+        mesh.parent.remove(mesh);
+      }
+    }
+    this.meshes = [];
+  }
+
   update(deltaTime, zoneZ) {
     if (!this.meshes || this.meshes.length === 0) return;
 
-    // Apply scrolling and animation
+    // Apply scrolling
     this.updateScroll(zoneZ);
-    this.animateWaves(deltaTime);
+
+    // Update visual animation (waves, etc.)
+    this.visual.updateWaves(deltaTime);
   }
 
-  animateWaves(deltaTime) {
-    if (!this.geometry || !this.basePositions || !this.vertexWaves) return;
-
-    const positions = this.geometry.attributes.position.array;
-
-    // Animate each vertex with its own wave data
-    for (let i = 0; i < positions.length; i += 3) {
-      const vertexIndex = i / 3;
-      const wave = this.vertexWaves[vertexIndex];
-
-      // Update wave angle
-      wave.angle += wave.speed * deltaTime;
-
-      // Get base position
-      const baseX = this.basePositions[i];
-      const baseY = this.basePositions[i + 1];
-      const baseZ = this.basePositions[i + 2];
-
-      // Apply exaggerated wave motion for visibility
-      const waveOffsetX = Math.cos(wave.angle) * wave.amplitude * 0.5;
-      const waveOffsetY = Math.sin(wave.angle) * wave.amplitude;
-
-      // Exaggerated Z offset for forward flow illusion (phase-based, time-dependent)
-      // Creates clear parallax effect without moving camera
-      const waveOffsetZ = Math.sin(wave.angle + baseX * 0.05) * wave.amplitude * 1.2;
-
-      // Apply offsets to current position
-      positions[i] = baseX + waveOffsetX;         // X coordinate
-      positions[i + 1] = baseY + waveOffsetY;     // Y coordinate
-      positions[i + 2] = baseZ + waveOffsetZ;     // Z coordinate with flow illusion
-    }
-
-    // Recompute vertex normals for proper lighting
-    this.geometry.computeVertexNormals();
-
-    // Mark attributes for update
-    this.geometry.attributes.position.needsUpdate = true;
-    this.geometry.attributes.normal.needsUpdate = true;
-  }
 
   destroy() {
 
@@ -3823,7 +3850,7 @@ class EndlessMode {
     this.playerController = null;
     this.playerMovementPipeline = null;
     this.laneDebugVisualSystem = null;
-    this.seaSystem = null;
+    this.groundSegmentSystem = null;
     this.skySystem = null;
     this.distanceSystem = null;
     this.worldAxisSystem = null;
@@ -3888,7 +3915,8 @@ class EndlessMode {
     this.laneController = new LaneController(this.laneSystem); // Intent → lane target
 
     // ===== VISUAL-ONLY SYSTEMS ===== (presentation layer, no gameplay logic)
-    this.seaSystem = new SeaSystem(world); // Animated sea surface
+    const seaVisual = new SeaVisual(); // Sea visual with wave animation
+    this.groundSegmentSystem = new GroundSegmentSystem(world, seaVisual); // Segment management with sea visuals
     this.skySystem = new SkySystem(world); // Parallax cloud layer
     this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
 
@@ -4048,8 +4076,8 @@ class EndlessMode {
     }
 
 
-    // Initialize sea system
-    this.seaSystem.init();
+    // Initialize ground segment system
+    this.groundSegmentSystem.init();
 
     // Initialize sky system
     this.skySystem.init();
@@ -4196,7 +4224,7 @@ class EndlessMode {
     const skyZ = this.worldScrollerSystem.getZoneZ('SKY_FAR');
 
     // 4. Apply movement to visuals (WorldScrollConsumer pattern)
-    this.seaSystem.updateScroll(groundZ);
+    this.groundSegmentSystem.updateScroll(groundZ);
     this.skySystem.updateScroll(skyZ);
 
     // Execute complete player movement pipeline (disabled in GAME_OVER phase)
@@ -4402,9 +4430,9 @@ class EndlessMode {
 
     // Clean up all references and remove from world
 
-    if (this.seaSystem) {
-      this.seaSystem.destroy();
-      this.seaSystem = null;
+    if (this.groundSegmentSystem) {
+      this.groundSegmentSystem.destroy();
+      this.groundSegmentSystem = null;
     }
 
     if (this.skySystem) {
@@ -4426,7 +4454,7 @@ class EndlessMode {
     this.world = null;
     this.input = null;
     this.cameraRig = null;
-    this.seaSystem = null;
+    this.groundSegmentSystem = null;
     this.skySystem = null;
     this.worldAxisSystem = null;
     this.viewProfileSystem = null;
