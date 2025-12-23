@@ -18,21 +18,22 @@ class SeaVisual {
     this.vertexWaves = []; // Per-vertex wave data
     this.debugMode = true; // Wireframe for visibility
 
-    // Explicit segment length declaration (no runtime geometry inspection)
-    this.segmentLength = 2000; // Matches SEA_LENGTH constant used in geometry creation
+    // Segment length will be computed ONCE from geometry bounding box
+    this.segmentLength = 0; // Computed after geometry creation
   }
 
   // Create and return a sea mesh
   createMesh() {
     const SEA_RADIUS = 600;
+    const SEA_LENGTH = 2000; // Initial creation size
 
     // Create cylindrical geometry for horizon curvature
     this.geometry = new THREE.CylinderGeometry(
-      SEA_RADIUS,        // top radius
-      SEA_RADIUS,        // bottom radius
-      this.segmentLength, // height (matches declared segment length)
-      40,                // radial segments
-      10                 // height segments
+      SEA_RADIUS,     // top radius
+      SEA_RADIUS,     // bottom radius
+      SEA_LENGTH,      // height
+      40,              // radial segments
+      10               // height segments
     );
 
     // Debug material for visibility
@@ -43,7 +44,15 @@ class SeaVisual {
       wireframe: this.debugMode
     });
 
-    // Create mesh and apply rotation
+    // Create temporary mesh to compute actual segment length after rotation
+    const tempMesh = new THREE.Mesh(this.geometry, this.material);
+    tempMesh.rotation.x = -Math.PI / 2; // Apply same rotation as real meshes
+
+    // Compute bounding box to get actual Z extent after rotation
+    const boundingBox = new THREE.Box3().setFromObject(tempMesh);
+    this.segmentLength = boundingBox.max.z - boundingBox.min.z;
+
+    // Create actual mesh and apply rotation
     const mesh = new THREE.Mesh(this.geometry, this.material);
     mesh.rotation.x = -Math.PI / 2; // Rotate to lie along Z axis
 
@@ -531,22 +540,27 @@ class GroundSegmentSystem {
   }
 
   init() {
-    // Get segment length from visual (accounts for rotation and geometry)
-    this.segmentLength = this.visual.getSegmentLength();
-
-    // Get mesh template from visual object
+    // Get mesh template from visual object (this also computes segmentLength)
     const templateMesh = this.visual.createMesh();
 
-    // Create 2 segment meshes positioned edge-to-edge
+    // Get authoritative segment length from visual
+    // This length accounts for geometry type, size, and rotation
+    this.segmentLength = this.visual.getSegmentLength();
+
+    // Create 2 segment meshes positioned so their CENTERS are exactly segmentLength apart
+    // baseZ represents SEGMENT CENTER position
+    // Segment 0 center at 0, Segment 1 center at segmentLength
+    // This ensures edge-to-edge placement regardless of mesh geometry
     for (let i = 0; i < 2; i++) {
       // Clone the template mesh for each segment
       const mesh = templateMesh.clone();
 
-      // Set authoritative baseZ positions: segment0 at 0, segment1 at segmentLength
+      // Set authoritative baseZ: segment CENTER positions
+      // Segment centers are spaced exactly segmentLength apart
       const baseZ = i * this.segmentLength;
       mesh.userData.baseZ = baseZ;
 
-      // Initial visual position
+      // Initial visual position (no world scroll offset yet)
       mesh.position.z = baseZ;
 
       this.meshes.push(mesh);
@@ -559,37 +573,56 @@ class GroundSegmentSystem {
     console.log(`[GroundSegmentSystem] Initialized - 2 segments (length: ${this.segmentLength.toFixed(1)})`);
   }
 
-    // WorldScrollConsumer contract
+  // WorldScrollConsumer contract
+  // CRITICAL SPATIAL LOGIC:
+  // - baseZ represents SEGMENT CENTER position (authoritative)
+  // - visualZ = baseZ + zoneZ (computed each frame)
+  // - Trailing edge = visualZ - segmentLength/2
+  // - We wrap based on TRAILING EDGE, not center, to ensure seamless looping
+  // - This works for ANY mesh geometry because we use the visual's declared segmentLength
   updateScroll(zoneZ) {
     if (!this.meshes || this.meshes.length === 0) return;
 
-    // Define wrap threshold: segment is fully behind when its trailing edge passes this
-    const wrapBehindZ = -this.segmentLength;
+    // Wrap threshold: trailing edge must be at least segmentLength/2 behind origin
+    // This ensures segment is fully behind before wrapping
+    const wrapThreshold = -this.segmentLength / 2;
 
-    // Find the maximum baseZ among all segments (the rightmost segment)
+    // First pass: identify segments that need wrapping
+    const segmentsToWrap = [];
+
+    // Find current maximum baseZ (rightmost segment) BEFORE any wraps
     let maxBaseZ = -Infinity;
     for (const mesh of this.meshes) {
       maxBaseZ = Math.max(maxBaseZ, mesh.userData.baseZ);
     }
 
-    // Update each segment position with baseZ-based wrapping
+    // Check each segment for wrap condition based on TRAILING EDGE
     for (let i = 0; i < this.meshes.length; i++) {
       const mesh = this.meshes[i];
 
-      // Compute visual position: baseZ + world scroll offset
+      // Compute visual position: segment CENTER position + world scroll offset
       const visualZ = mesh.userData.baseZ + zoneZ;
 
-      // Check if segment needs to wrap (entirely behind player)
-      if (visualZ < wrapBehindZ) {
-        // Wrap this segment ahead of the current rightmost segment
-        const newBaseZ = maxBaseZ + this.segmentLength;
-        mesh.userData.baseZ = newBaseZ;
+      // Compute trailing edge position (segment center - half length)
+      const trailingEdgeZ = visualZ - this.segmentLength / 2;
 
-        // Update maxBaseZ for subsequent segments in this frame
-        maxBaseZ = newBaseZ;
+      // Wrap ONLY when trailing edge passes threshold (fully behind player)
+      if (trailingEdgeZ < wrapThreshold) {
+        segmentsToWrap.push(mesh);
       }
+    }
 
-      // Update visual position based on (possibly updated) baseZ
+    // Second pass: apply wraps sequentially, updating maxBaseZ after each wrap
+    // This ensures proper spacing even if multiple segments wrap in one frame
+    for (const mesh of segmentsToWrap) {
+      // Position wrapped segment ahead of current rightmost segment
+      const newBaseZ = maxBaseZ + this.segmentLength;
+      mesh.userData.baseZ = newBaseZ;
+      maxBaseZ = newBaseZ; // Update max for next potential wrap
+    }
+
+    // Update visual positions for all segments (including wrapped ones)
+    for (const mesh of this.meshes) {
       mesh.position.z = mesh.userData.baseZ + zoneZ;
     }
 
@@ -597,7 +630,8 @@ class GroundSegmentSystem {
     this.assertSegmentInvariants();
   }
 
-  // Assert that segments maintain proper spacing invariant
+  // Verify that segments maintain proper spacing invariant
+  // This is a diagnostic check - spacing errors indicate wrap logic bugs
   assertSegmentInvariants() {
     if (this.meshes.length < 2) return; // Need at least 2 segments to check
 
@@ -607,10 +641,14 @@ class GroundSegmentSystem {
     // Check that each consecutive pair is exactly segmentLength apart
     for (let i = 0; i < sortedMeshes.length - 1; i++) {
       const spacing = sortedMeshes[i + 1].userData.baseZ - sortedMeshes[i].userData.baseZ;
-      console.assert(
-        Math.abs(spacing - this.segmentLength) < 0.001,
-        `[GroundSegmentSystem] Segment spacing invariant violated: expected ${this.segmentLength}, got ${spacing}`
-      );
+      const spacingError = Math.abs(spacing - this.segmentLength);
+      
+      // Log warning if spacing is off (but don't break execution)
+      if (spacingError >= 0.001) {
+        console.warn(
+          `[GroundSegmentSystem] Segment spacing error: expected ${this.segmentLength.toFixed(2)}, got ${spacing.toFixed(2)} (error: ${spacingError.toFixed(3)})`
+        );
+      }
     }
   }
 
