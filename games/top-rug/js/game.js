@@ -16,7 +16,7 @@ class SeaVisual {
     this.material = null;
     this.basePositions = null; // Store original vertex positions
     this.vertexWaves = []; // Per-vertex wave data
-    this.debugMode = true; // Wireframe for visibility
+    this.debugMode = false; // Wireframe disabled - use solid material
 
     // Segment length will be computed ONCE from geometry bounding box
     this.segmentLength = 0; // Computed after geometry creation
@@ -36,12 +36,13 @@ class SeaVisual {
       10               // height segments
     );
 
-    // Debug material for visibility
+    // Material for ground visibility
     this.material = new THREE.MeshLambertMaterial({
-      color: 0x006994,
-      transparent: true,
-      opacity: 0.8,
-      wireframe: this.debugMode
+      color: 0x4a90e2, // Brighter blue for visibility
+      transparent: false, // Solid material for better visibility
+      opacity: 1.0,
+      wireframe: this.debugMode,
+      side: THREE.DoubleSide // Ensure both sides render
     });
 
     // Create temporary mesh to compute actual segment length after rotation
@@ -56,8 +57,9 @@ class SeaVisual {
     const mesh = new THREE.Mesh(this.geometry, this.material);
     mesh.rotation.x = -Math.PI / 2; // Rotate to lie along Z axis
 
-    // Position sea so player sits just above inner surface
-    mesh.position.y = -SEA_RADIUS + 50; // Player sits ~50 units above sea surface
+    // Position sea so ground surface is visible
+    // Cylinder radius is 600, so center at y=-500 puts top surface at y=100 (visible in camera view)
+    mesh.position.y = -500; // Ground surface will be at y=100, player at y=60 sits below it
 
     // Visibility fixes: ensure mesh is always visible
     mesh.frustumCulled = false; // Prevent frustum culling issues
@@ -68,6 +70,14 @@ class SeaVisual {
 
     // Initialize wave animation data
     this.initWaves();
+
+    console.log('[SEA] Mesh created:', {
+      position: `(${mesh.position.x}, ${mesh.position.y}, ${mesh.position.z})`,
+      rotation: `(${mesh.rotation.x.toFixed(2)}, ${mesh.rotation.y.toFixed(2)}, ${mesh.rotation.z.toFixed(2)})`,
+      material: mesh.material.type,
+      wireframe: mesh.material.wireframe,
+      frustumCulled: mesh.frustumCulled
+    });
 
     return mesh;
   }
@@ -561,6 +571,12 @@ class GroundSegmentSystem {
       // Clone the template mesh for each segment
       const mesh = templateMesh.clone();
 
+      // Ensure visibility fixes are applied to cloned mesh
+      mesh.frustumCulled = false;
+      if (mesh.material) {
+        mesh.material.side = THREE.DoubleSide;
+      }
+
       // Set authoritative baseZ: segment CENTER positions for edge-to-edge placement
       // Each segment center is positioned so segments connect seamlessly
       const baseZ = (i * this.segmentLength) + (this.segmentLength / 2);
@@ -568,6 +584,8 @@ class GroundSegmentSystem {
 
       // Initial visual position (no world scroll offset yet)
       mesh.position.z = baseZ;
+
+      console.log(`[GROUND] Segment ${i} created: baseZ=${baseZ.toFixed(1)}, position=(${mesh.position.x.toFixed(1)}, ${mesh.position.y.toFixed(1)}, ${mesh.position.z.toFixed(1)})`);
 
       this.meshes.push(mesh);
       this.world.add(mesh);
@@ -946,7 +964,7 @@ class WorldScrollerSystem {
         const skyChanged = Math.abs(this.scrollOffsets.SKY_FAR - this._lastLoggedSky) > 10;
 
         if (groundChanged || skyChanged) {
-          console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}, SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
+    console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}, SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
           this._lastLoggedGround = this.scrollOffsets.GROUND_PLANE;
           this._lastLoggedSky = this.scrollOffsets.SKY_FAR;
         }
@@ -1042,9 +1060,9 @@ class PlayerIntentSystem {
 
     if (input) {
       // Keyboard-only logic for Endless mode (no mouse support)
-      if (input.isKeyDown('ArrowLeft')) {
+    if (input.isKeyDown('ArrowLeft')) {
         horizontal = -1;
-      } else if (input.isKeyDown('ArrowRight')) {
+    } else if (input.isKeyDown('ArrowRight')) {
         horizontal = 1;
       }
 
@@ -1093,7 +1111,7 @@ class PlayerActionStateSystem {
     this.stunRemaining = 0;
 
     if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
-      console.log('[PlayerActionState] Action state management established');
+    console.log('[PlayerActionState] Action state management established');
     }
   }
 
@@ -1778,7 +1796,7 @@ class CollisionIntentSystem {
 
         // Log collision intent
         if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
-          console.log(`[CollisionIntent] COLLISION: Plane vs ${entity.type} entity ${entity.id} (lane ${planeLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
+        console.log(`[CollisionIntent] COLLISION: Plane vs ${entity.type} entity ${entity.id} (lane ${planeLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
         }
       }
     }
@@ -4328,7 +4346,7 @@ class EndlessMode {
 
     // Execute complete player movement pipeline (disabled in GAME_OVER phase)
     if (!this.isInPhase(GAME_PHASES.GAME_OVER)) {
-      this.playerMovementPipeline.update(this.input, deltaTime);
+    this.playerMovementPipeline.update(this.input, deltaTime);
     }
 
     // g) this.cameraRig.update()
@@ -4357,12 +4375,12 @@ class EndlessMode {
     // Log distance every ~500 units (skip initial 0)
     if (this.lastDistanceLog === null && currentDistance >= 500) {
       if (DebugConfig.ENABLE_FRAME_LOGS) {
-        console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
       }
       this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
     } else if (this.lastDistanceLog !== null && currentDistance - this.lastDistanceLog >= 500) {
       if (DebugConfig.ENABLE_FRAME_LOGS) {
-        console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
       }
       this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
     }
@@ -4401,10 +4419,10 @@ class EndlessMode {
     let collisionIntents = [];
 
     if (this.isInPhase(GAME_PHASES.PLAYING)) {
-      const activeObstacles = this.obstacleSpawnSystem.getActiveObstacles();
+    const activeObstacles = this.obstacleSpawnSystem.getActiveObstacles();
       obstacleCollisionEvents = this.laneObstacleCollisionSystem.process(this.playerEntity, activeObstacles);
 
-      // 10. Collision intent system processes (deterministic collision detection)
+    // 10. Collision intent system processes (deterministic collision detection)
       collisionIntents = this.collisionIntentSystem.process(this.playerEntity, this.entityRegistrySystem, this.spawnBandSystem, this.playerMovementPipeline, deltaTime);
     }
 
@@ -4502,7 +4520,7 @@ class EndlessMode {
     // Stop updates without mutating state
     this.isPaused = true;
     if (DebugConfig.ENABLE_FRAME_LOGS) {
-      console.log('[EndlessMode] Paused - updates stopped');
+    console.log('[EndlessMode] Paused - updates stopped');
     }
   }
 
@@ -4510,7 +4528,7 @@ class EndlessMode {
     // Continue updates
     this.isPaused = false;
     if (DebugConfig.ENABLE_FRAME_LOGS) {
-      console.log('[EndlessMode] Resumed - updates continued');
+    console.log('[EndlessMode] Resumed - updates continued');
     }
   }
 
