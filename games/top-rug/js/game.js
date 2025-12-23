@@ -17,20 +17,22 @@ class SeaVisual {
     this.basePositions = null; // Store original vertex positions
     this.vertexWaves = []; // Per-vertex wave data
     this.debugMode = true; // Wireframe for visibility
+
+    // Explicit segment length declaration (no runtime geometry inspection)
+    this.segmentLength = 2000; // Matches SEA_LENGTH constant used in geometry creation
   }
 
   // Create and return a sea mesh
   createMesh() {
     const SEA_RADIUS = 600;
-    const SEA_LENGTH = 2000;
 
     // Create cylindrical geometry for horizon curvature
     this.geometry = new THREE.CylinderGeometry(
-      SEA_RADIUS,     // top radius
-      SEA_RADIUS,     // bottom radius
-      SEA_LENGTH,     // height
-      40,             // radial segments
-      10              // height segments
+      SEA_RADIUS,        // top radius
+      SEA_RADIUS,        // bottom radius
+      this.segmentLength, // height (matches declared segment length)
+      40,                // radial segments
+      10                 // height segments
     );
 
     // Debug material for visibility
@@ -62,19 +64,9 @@ class SeaVisual {
     return this.geometry;
   }
 
-  // Get segment length using proper bounding box calculation
+  // Get segment length (explicit declaration, no geometry inspection)
   getSegmentLength() {
-    // Create a temporary mesh with the same geometry and material
-    const tempMesh = new THREE.Mesh(this.geometry, this.material);
-
-    // Apply the same rotation as used in the real meshes
-    tempMesh.rotation.x = -Math.PI / 2;
-
-    // Compute bounding box from the rotated mesh
-    const boundingBox = new THREE.Box3().setFromObject(tempMesh);
-
-    // Return the Z extent (length along the scrolling axis)
-    return boundingBox.max.z - boundingBox.min.z;
+    return this.segmentLength;
   }
 
   initWaves() {
