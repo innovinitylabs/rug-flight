@@ -12,6 +12,11 @@ class PlayerEntity {
     // Movement parameters
     this.lerpSpeed = 8.0; // Units per second interpolation speed
     this.targetX = 0; // Target X position set by external systems
+    this.targetY = 100; // Target Y position set by external systems
+
+    // Vertical movement bounds
+    this.minY = 60;
+    this.maxY = 160;
 
     // Position state (player always at Z=0, world moves around them)
     this.position = { x: 0, y: 100, z: 0 };
@@ -24,7 +29,12 @@ class PlayerEntity {
     this.targetX = x;
   }
 
-  // Smooth interpolation toward target X
+  // Set target Y position (called by external controller systems)
+  setTargetY(y) {
+    this.targetY = Math.max(this.minY, Math.min(this.maxY, y));
+  }
+
+  // Smooth interpolation toward target X and Y
   update(deltaTime) {
     if (!this.mesh) return;
 
@@ -32,7 +42,10 @@ class PlayerEntity {
     const lerpAmount = Math.min(this.lerpSpeed * deltaTime, 1.0);
     this.position.x += (this.targetX - this.position.x) * lerpAmount;
 
-    // Apply to mesh (Y and Z stay fixed)
+    // Smooth lerp toward target Y
+    this.position.y += (this.targetY - this.position.y) * lerpAmount;
+
+    // Apply to mesh (Z stays fixed at 0)
     this.mesh.position.x = this.position.x;
     this.mesh.position.y = this.position.y;
     this.mesh.position.z = this.position.z;

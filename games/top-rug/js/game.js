@@ -891,26 +891,17 @@ class PlayerIntentSystem {
     let intentType;
     let strength = 1.0; // Keyboard input is always full strength
 
-    // Keyboard override logic (Arrow keys take precedence)
+    // Keyboard-only logic for Endless mode (no mouse support)
     if (input.isKeyDown('ArrowLeft')) {
       intentType = 'MOVE_LEFT';
     } else if (input.isKeyDown('ArrowRight')) {
       intentType = 'MOVE_RIGHT';
+    } else if (input.isKeyDown('ArrowUp')) {
+      intentType = 'MOVE_UP';
+    } else if (input.isKeyDown('ArrowDown')) {
+      intentType = 'MOVE_DOWN';
     } else {
-      // Fall back to existing mouse-based intent logic
-      const mouse = input.getMouse();
-      const mouseX = mouse.x;
-
-      // Determine intent based on mouse position
-      strength = Math.abs(mouseX); // Strength based on how far from center
-
-      if (mouseX < -0.33) {
-        intentType = 'MOVE_LEFT';
-      } else if (mouseX > 0.33) {
-        intentType = 'MOVE_RIGHT';
-      } else {
-        intentType = 'HOLD';
-      }
+      intentType = 'HOLD';
     }
 
     // Create intent (at most one per frame)
@@ -1618,15 +1609,20 @@ class CollisionIntentSystem {
       // Calculate Z distance (plane is always at Z=0)
       const zDistance = Math.abs(entity.z - planeZ);
 
-      // Check if within collision threshold from profile
-      if (zDistance <= collisionProfile.zCollisionThreshold) {
+      // Calculate Y distance (entity.y vs plane Y position)
+      const planeY = planeEntity.position.y;
+      const yDistance = Math.abs(entity.y - planeY);
+
+      // Check if within collision thresholds from profile
+      if (zDistance <= collisionProfile.zCollisionThreshold && yDistance <= collisionProfile.collisionHeight) {
         // Create collision intent
         const intent = {
           type: 'COLLISION',
           source: planeEntity,
           target: entity,
           laneIndex: planeLaneIndex,
-          zDistance: zDistance
+          zDistance: zDistance,
+          yDistance: yDistance
         };
 
         this.currentFrameIntents.push(intent);

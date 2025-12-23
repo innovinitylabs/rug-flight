@@ -7,18 +7,20 @@
 import DebugConfig from '/core/config/DebugConfig.js';
 
 class ObstacleEntity {
-  constructor(id, laneIndex, baseZ, mesh = null, laneSystem = null, worldScrollerSystem = null) {
+  constructor(id, laneIndex, baseZ, spawnY, mesh = null, laneSystem = null, worldScrollerSystem = null) {
     this.id = id;
     this.type = 'OBSTACLE';
     this.laneIndex = laneIndex;
     this.baseZ = baseZ; // Fixed Z position at spawn time
+    this.spawnY = spawnY; // Fixed Y position at spawn time
     this.z = baseZ; // Current Z position (satisfies EntityRegistry contract)
+    this.y = spawnY; // Current Y position (for collision detection)
     this.mesh = mesh; // Optional visual representation
     this.laneSystem = laneSystem; // For proper lane positioning
     this.worldScrollerSystem = worldScrollerSystem; // For computing visual Z position
 
     if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
-      console.log(`[ObstacleEntity] Created obstacle ${id} at lane ${laneIndex}, baseZ=${baseZ}`);
+      console.log(`[ObstacleEntity] Created obstacle ${id} at lane ${laneIndex}, baseZ=${baseZ}, spawnY=${spawnY}`);
     }
   }
 
@@ -46,8 +48,8 @@ class ObstacleEntity {
         this.mesh.position.x = this.laneIndex;
       }
 
-      // Y position - same height as player collision envelope
-      this.mesh.position.y = 100; // Match player height
+      // Y position - fixed at spawn height
+      this.mesh.position.y = this.y;
     }
   }
 

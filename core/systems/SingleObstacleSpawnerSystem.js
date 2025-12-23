@@ -20,6 +20,10 @@ class SingleObstacleSpawnerSystem {
     this.spawnLane = 1; // Fixed lane index
     this.spawnZ = 250; // Fixed spawn Z position
 
+    // Vertical positioning - base height with lane-based variation
+    this.baseY = 100; // Base obstacle height
+    this.laneHeightVariation = 20; // Height variation between lanes
+
     // State tracking
     this.hasSpawned = false;
     this.spawnedObstacleId = null;
@@ -64,12 +68,16 @@ class SingleObstacleSpawnerSystem {
     // Create highly visible debug mesh
     const obstacleMesh = this.createObstacleMesh();
 
+    // Calculate spawn Y position based on lane (deterministic variation)
+    const spawnY = this.baseY + (this.spawnLane * this.laneHeightVariation);
+
     // Create obstacle entity with mesh, lane system, and world scroller for positioning
     const obstacleId = `obstacle_single_${Date.now()}`;
     const obstacle = new ObstacleEntity(
       obstacleId,
       this.spawnLane,
       this.spawnZ, // This is now baseZ
+      spawnY,
       obstacleMesh,
       this.laneSystem,
       this.worldScrollerSystem
