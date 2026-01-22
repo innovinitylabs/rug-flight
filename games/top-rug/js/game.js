@@ -9,135 +9,49 @@ const GAME_PHASES = {
   GAME_OVER: 'GAME_OVER'    // Player died (input disabled)
 };
 
-// SeaVisual - Handles sea mesh creation and wave animation
+// SeaVisual - Flat ground plane visual
 class SeaVisual {
   constructor() {
-    this.geometry = null;
-    this.material = null;
-    this.basePositions = null; // Store original vertex positions
-    this.vertexWaves = []; // Per-vertex wave data
-    this.debugMode = false; // Wireframe disabled - use solid material
-
-    // Segment length will be computed ONCE from geometry bounding box
-    this.segmentLength = 0; // Computed after geometry creation
+    this.segmentLength = 0; // Will be set to 2000 in createMesh
   }
 
-  // Create and return a sea mesh
+  // Create and return a flat ground mesh
   createMesh() {
-    const SEA_RADIUS = 600;
-    const SEA_LENGTH = 2000; // Initial creation size
+    // Create flat plane geometry
+    this.geometry = new THREE.PlaneGeometry(2000, 2000, 1, 1);
 
-    // Create cylindrical geometry for horizon curvature
-    this.geometry = new THREE.CylinderGeometry(
-      SEA_RADIUS,     // top radius
-      SEA_RADIUS,     // bottom radius
-      SEA_LENGTH,      // height
-      40,              // radial segments
-      10               // height segments
-    );
+    // Set segmentLength equal to geometry height (2000)
+    this.segmentLength = 2000;
 
-    // Material for ground visibility
+    // Create material - solid blue, no transparency, no wireframe
     this.material = new THREE.MeshLambertMaterial({
-      color: 0x4a90e2, // Brighter blue for visibility
-      transparent: false, // Solid material for better visibility
-      opacity: 1.0,
-      wireframe: this.debugMode,
-      side: THREE.DoubleSide // Ensure both sides render
+      color: 0x4444ff,
+      side: THREE.DoubleSide
     });
 
-    // Create temporary mesh to compute actual segment length after rotation
-    const tempMesh = new THREE.Mesh(this.geometry, this.material);
-    tempMesh.rotation.x = -Math.PI / 2; // Apply same rotation as real meshes
-
-    // Compute bounding box to get actual Z extent after rotation
-    const boundingBox = new THREE.Box3().setFromObject(tempMesh);
-    this.segmentLength = boundingBox.max.z - boundingBox.min.z;
-
-    // Create actual mesh and apply rotation
+    // Create mesh
     const mesh = new THREE.Mesh(this.geometry, this.material);
-    mesh.rotation.x = -Math.PI / 2; // Rotate to lie along Z axis
 
-    // Position sea so ground surface is visible
-    // Cylinder radius is 600, so center at y=-500 puts top surface at y=100 (visible in camera view)
-    mesh.position.y = -500; // Ground surface will be at y=100, player at y=60 sits below it
+    // Rotate X by -Math.PI / 2 to lie flat
+    mesh.rotation.x = -Math.PI / 2;
 
-    // Visibility fixes: ensure mesh is always visible
-    mesh.frustumCulled = false; // Prevent frustum culling issues
-    mesh.material.side = THREE.DoubleSide; // Render both sides
+    // Position ground at y = 0
+    mesh.position.y = 0;
 
-    // Store original vertex positions for wave animation
-    this.basePositions = this.geometry.attributes.position.array.slice();
-
-    // Initialize wave animation data
-    this.initWaves();
-
-    console.log('[SEA] Mesh created:', {
-      position: `(${mesh.position.x}, ${mesh.position.y}, ${mesh.position.z})`,
-      rotation: `(${mesh.rotation.x.toFixed(2)}, ${mesh.rotation.y.toFixed(2)}, ${mesh.rotation.z.toFixed(2)})`,
-      material: mesh.material.type,
-      wireframe: mesh.material.wireframe,
-      frustumCulled: mesh.frustumCulled
-    });
+    // Ensure visibility
+    mesh.frustumCulled = false;
 
     return mesh;
   }
 
-  // Get the geometry for segment length calculation
-  getGeometry() {
-    return this.geometry;
-  }
-
-  // Get segment length (explicit declaration, no geometry inspection)
+  // Get segment length
   getSegmentLength() {
     return this.segmentLength;
   }
 
-  initWaves() {
-    // Initialize wave data for each vertex
-    this.vertexWaves = [];
-
-    // For each vertex in the geometry
-    for (let i = 0; i < this.basePositions.length; i += 3) {
-      this.vertexWaves.push({
-        angle: Math.random() * Math.PI * 2,  // Random starting angle
-        amplitude: 3 + Math.random() * 4,     // 3-7 units amplitude (exaggerated for visibility)
-        speed: 0.5 + Math.random() * 1.5      // 0.5-2.0 speed
-      });
-    }
-  }
-
-  // Update wave animation for this delta time
+  // Empty updateWaves - no animation
   updateWaves(deltaTime) {
-    if (!this.geometry || !this.basePositions || !this.vertexWaves) return;
-
-    const positions = this.geometry.attributes.position.array;
-
-    // Animate each vertex with its own wave data
-    for (let i = 0; i < positions.length; i += 3) {
-      const vertexIndex = i / 3;
-      const wave = this.vertexWaves[vertexIndex];
-
-      // Update wave angle
-      wave.angle += wave.speed * deltaTime;
-
-      // Get base position
-      const baseX = this.basePositions[i];
-      const baseY = this.basePositions[i + 1];
-      const baseZ = this.basePositions[i + 2];
-
-      // Apply exaggerated wave motion for visibility
-      const waveOffsetX = Math.cos(wave.angle) * wave.amplitude * 0.5;
-      const waveOffsetY = Math.sin(wave.angle) * wave.amplitude;
-      const waveOffsetZ = Math.sin(wave.angle + baseX * 0.05) * wave.amplitude * 1.2;
-
-      // Apply offsets to current position
-      positions[i] = baseX + waveOffsetX;         // X coordinate
-      positions[i + 1] = baseY + waveOffsetY;     // Y coordinate
-      positions[i + 2] = baseZ + waveOffsetZ;     // Z coordinate with flow illusion
-    }
-
-    // Recompute vertex normals for proper lighting
-    this.geometry.computeVertexNormals();
+    // No waves, no animation
   }
 }
 
@@ -558,15 +472,12 @@ class GroundSegmentSystem {
     const templateMesh = this.visual.createMesh();
 
     // Get authoritative segment length from visual
-    // This length accounts for geometry type, size, and rotation
     this.segmentLength = this.visual.getSegmentLength();
 
-    // Create 2 segment meshes positioned edge-to-edge
-    // baseZ represents SEGMENT CENTER position
-    // For seamless edge-to-edge placement:
-    // - Segment 0 center at segmentLength/2 (extends from 0 to segmentLength)
-    // - Segment 1 center at segmentLength + segmentLength/2 (extends from segmentLength to 2*segmentLength)
-    // This ensures trailing edge of segment 0 meets leading edge of segment 1
+    // Create exactly 2 segments
+    // baseZ is CENTER POSITION
+    // Segment 0 baseZ = segmentLength / 2
+    // Segment 1 baseZ = segmentLength * 1.5
     for (let i = 0; i < 2; i++) {
       // Clone the template mesh for each segment
       const mesh = templateMesh.clone();
@@ -577,61 +488,28 @@ class GroundSegmentSystem {
         mesh.material.side = THREE.DoubleSide;
       }
 
-      // Set authoritative baseZ: segment CENTER positions for edge-to-edge placement
-      // Each segment center is positioned so segments connect seamlessly
-      const baseZ = (i * this.segmentLength) + (this.segmentLength / 2);
+      // Set baseZ: CENTER POSITION
+      // Segment 0: baseZ = segmentLength / 2 (1000)
+      // Segment 1: baseZ = segmentLength * 1.5 (3000)
+      const baseZ = i === 0 ? this.segmentLength / 2 : this.segmentLength * 1.5;
       mesh.userData.baseZ = baseZ;
 
-      // Initial visual position (no world scroll offset yet)
+      // Initial visual position
       mesh.position.z = baseZ;
-
-      console.log(`[GROUND] Segment ${i} created: baseZ=${baseZ.toFixed(1)}, position=(${mesh.position.x.toFixed(1)}, ${mesh.position.y.toFixed(1)}, ${mesh.position.z.toFixed(1)})`);
+      mesh.position.y = 0;
 
       this.meshes.push(mesh);
       this.world.add(mesh);
     }
 
-    // Assert invariant: segments are exactly segmentLength apart
-    this.assertSegmentInvariants();
-
-    console.log(`[GroundSegmentSystem] Initialized - 2 segments (length: ${this.segmentLength.toFixed(1)})`);
+    console.log(`[GROUND] flat ground initialized, segmentLength = ${this.segmentLength}`);
   }
 
   // WorldScrollConsumer contract
-  // CRITICAL SPATIAL LOGIC FOR SEAMLESS LOOPING:
-  // - baseZ represents SEGMENT CENTER position (authoritative, never changes except on wrap)
-  // - visualZ = baseZ + zoneZ (computed each frame from world scroll)
-  // - Trailing edge = visualZ - segmentLength/2 (segment center minus half length)
-  // - Leading edge = visualZ + segmentLength/2 (segment center plus half length)
-  // - We wrap based on TRAILING EDGE passing behind camera view (camera-relative, NOT world-zero-relative)
-  // - When wrapping: new segment center = maxBaseZ + segmentLength
-  //   This positions wrapped segment so its trailing edge meets the leading edge of rightmost segment
-  // - This works for ANY mesh geometry because we use the visual's declared segmentLength
   updateScroll(zoneZ) {
     if (!this.meshes || this.meshes.length === 0) return;
 
-    // Wrap threshold: camera-relative (NOT world-zero-relative)
-    // Camera Z is locked at a positive value (~200), all ground segments live in +Z space
-    // Wrap when trailing edge is fully behind camera view frustum
     const cameraZ = this.world.camera.position.z;
-    const wrapThreshold = cameraZ - this.segmentLength;
-
-    // TEMPORARY DEBUG: Remove after verification
-    if (this.meshes.length > 0) {
-      const firstMesh = this.meshes[0];
-      const visualZ = firstMesh.userData.baseZ + zoneZ;
-      const trailingEdgeZ = visualZ - this.segmentLength / 2;
-      console.log(
-        '[GROUND]',
-        'baseZ:', firstMesh.userData.baseZ.toFixed(1),
-        'visualZ:', visualZ.toFixed(1),
-        'trail:', trailingEdgeZ.toFixed(1),
-        'cameraZ:', cameraZ.toFixed(1)
-      );
-    }
-
-    // First pass: identify segments that need wrapping
-    const segmentsToWrap = [];
 
     // Find current maximum baseZ (rightmost segment) BEFORE any wraps
     let maxBaseZ = -Infinity;
@@ -639,40 +517,25 @@ class GroundSegmentSystem {
       maxBaseZ = Math.max(maxBaseZ, mesh.userData.baseZ);
     }
 
-    // Check each segment for wrap condition based on TRAILING EDGE
-    for (let i = 0; i < this.meshes.length; i++) {
-      const mesh = this.meshes[i];
-
-      // Compute visual position: segment CENTER position + world scroll offset
+    // Update visual positions and check for wrapping
+    for (const mesh of this.meshes) {
+      // visualZ = baseZ + zoneZ
       const visualZ = mesh.userData.baseZ + zoneZ;
+      
+      // Update mesh position
+      mesh.position.z = visualZ;
 
-      // Compute trailing edge position (segment center - half length)
-      const trailingEdgeZ = visualZ - this.segmentLength / 2;
-
-      // Wrap ONLY when trailing edge passes threshold (fully behind camera view)
-      if (trailingEdgeZ < wrapThreshold) {
-        segmentsToWrap.push(mesh);
+      // Wrap when: visualZ + segmentLength / 2 < cameraZ - segmentLength
+      // This checks if leading edge has passed behind camera view
+      if (visualZ + this.segmentLength / 2 < cameraZ - this.segmentLength) {
+        // On wrap: baseZ = maxBaseZ + segmentLength
+        mesh.userData.baseZ = maxBaseZ + this.segmentLength;
+        maxBaseZ = mesh.userData.baseZ; // Update max for next potential wrap
+        
+        // Update position immediately after wrap
+        mesh.position.z = mesh.userData.baseZ + zoneZ;
       }
     }
-
-    // Second pass: apply wraps sequentially, updating maxBaseZ after each wrap
-    // This ensures proper spacing even if multiple segments wrap in one frame
-    // Each wrapped segment is positioned so its trailing edge meets the leading edge of the rightmost segment
-    for (const mesh of segmentsToWrap) {
-      // Position wrapped segment ahead of current rightmost segment
-      // New center = maxBaseZ + segmentLength ensures edge-to-edge connection
-      const newBaseZ = maxBaseZ + this.segmentLength;
-      mesh.userData.baseZ = newBaseZ;
-      maxBaseZ = newBaseZ; // Update max for next potential wrap in this frame
-    }
-
-    // Update visual positions for all segments (including wrapped ones)
-    for (const mesh of this.meshes) {
-      mesh.position.z = mesh.userData.baseZ + zoneZ;
-    }
-
-    // Assert that segments maintain proper spacing after updates
-    this.assertSegmentInvariants();
   }
 
   // Verify that segments maintain proper spacing invariant
@@ -717,33 +580,6 @@ class GroundSegmentSystem {
     // Update visual animation (waves, etc.)
     this.visual.updateWaves(deltaTime);
   }
-
-
-  destroy() {
-
-    // Pure renderer: read Z offset from WorldScrollerSystem
-    // No movement logic here - WorldScrollerSystem owns all Z motion
-    this.mesh.position.z = this.baseZ + zoneZ;
-  }
-
-  destroy() {
-    if (this.mesh) {
-      this.world.remove(this.mesh);
-      this.mesh = null;
-    }
-
-    if (this.geometry) {
-      this.geometry.dispose();
-      this.geometry = null;
-    }
-
-    if (this.material) {
-      this.material.dispose();
-      this.material = null;
-    }
-
-    console.log('[SeaSystem] Destroyed - sea mesh removed and resources disposed');
-  }
 }
 
 // DistanceSystem class - creates forward motion illusion
@@ -763,7 +599,14 @@ class DistanceSystem {
     // Forward velocity: 60 units per second for proper motion scaling
     const SPEED = 60;
     this.lastDelta = SPEED * deltaTime;
-    this.distance += this.lastDelta;
+    // World scrolls backward, so distance decreases
+    this.distance -= this.lastDelta;
+
+    // HARD ASSERT: prevent regression
+    console.assert(
+      this.distance <= 0,
+      '[DISTANCE] distance must be negative (world moves backward)'
+    );
   }
 
   getDistance() {
@@ -3405,7 +3248,8 @@ class WorldAxisSystem {
   }
 
   update(deltaTime) {
-    this.baseDeltaZ = this.speed * deltaTime;
+    // World scrolls backward, so baseDeltaZ is negative
+    this.baseDeltaZ = -this.speed * deltaTime;
 
     // Throttled world scroll logging (500ms intervals)
     if (DebugConfig.ENABLE_WORLD_SCROLL_LOGS) {
@@ -3433,6 +3277,7 @@ class SkySystem {
     this.cloudGroup = null;
     this.clouds = [];
     this.cloudCount = 20; // Number of clouds
+    this.depthMultiplier = 0.5; // CLOUDS layer multiplier (slower than ground)
   }
 
   init() {
@@ -3527,11 +3372,12 @@ class SkySystem {
   }
 
   // WorldScrollConsumer contract
-  updateScroll(zoneZ) {
+  updateScroll(groundZoneZ) {
     if (!this.cloudGroup) return;
 
-    // Apply Z scrolling - world illusion through mesh translation
-    this.cloudGroup.position.z = this.baseZ + zoneZ;
+    // Clouds use same zoneZ as ground, only multiplier changes speed
+    // Same sign as ground, never flip direction
+    this.cloudGroup.position.z = this.baseZ + groundZoneZ * this.depthMultiplier;
   }
 
   update(deltaTime, zoneZ) {
@@ -4338,11 +4184,11 @@ class EndlessMode {
 
     // 3. Fetch zone offsets
     const groundZ = this.worldScrollerSystem.getZoneZ('GROUND_PLANE');
-    const skyZ = this.worldScrollerSystem.getZoneZ('SKY_FAR');
 
     // 4. Apply movement to visuals (WorldScrollConsumer pattern)
     this.groundSegmentSystem.updateScroll(groundZ);
-    this.skySystem.updateScroll(skyZ);
+    // Clouds use same groundZ with multiplier (same direction, slower speed)
+    this.skySystem.updateScroll(groundZ);
 
     // Execute complete player movement pipeline (disabled in GAME_OVER phase)
     if (!this.isInPhase(GAME_PHASES.GAME_OVER)) {
@@ -4351,6 +4197,9 @@ class EndlessMode {
 
     // g) this.cameraRig.update()
     this.cameraRig.update();
+
+    // TEMP CAMERA SAFETY: Force lookAt after camera update
+    this.world.camera.lookAt(0, 0, 0);
 
     // Update debug overlay
     this.updateDebugOverlay();
