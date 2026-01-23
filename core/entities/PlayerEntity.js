@@ -54,8 +54,11 @@
     this.mesh.position.z = this.position.z;
 
     // Update airplane animations (propeller, pilot hairs, etc.)
-    if (this.mesh.updateAnimation) {
-      this.mesh.updateAnimation(deltaTime);
+    if (this.mesh.propeller) {
+      this.mesh.propeller.rotation.z += deltaTime * 10; // Propeller rotation
+    }
+    if (this.mesh.pilot && this.mesh.pilot.updateHairs) {
+      this.mesh.pilot.updateHairs(deltaTime); // Pilot hair animation
     }
 
     // Simple rotation for visual feedback

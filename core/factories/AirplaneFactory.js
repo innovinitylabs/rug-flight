@@ -1,10 +1,10 @@
-// AirplaneFactory - Extracts and ports the airplane model from the legacy combat game
-// Ports the complex airplane model from games/top-rug-maverick/js/game.js
+// AirplaneFactory - Authentic airplane model from The Aviator 2 (Badestrand/TheAviator2)
+// Ports the original airplane creation code from the base game reference/the-aviator-base/
 
 (function() {
   'use strict';
 
-  // Extracted Colors from legacy game
+  // Colors from the original The Aviator 2 game
   const Colors = {
     red: 0xf25346,
     orange: 0xffa500,
@@ -16,7 +16,30 @@
     blue: 0x68c3c0,
   };
 
-  // Extracted Pilot class from legacy game
+  // Utility functions from the original game
+  const utils = {
+    normalize: function (v, vmin, vmax, tmin, tmax) {
+      var nv = Math.max(Math.min(v,vmax), vmin);
+      var dv = vmax-vmin;
+      var pc = (nv-vmin)/dv;
+      var dt = tmax-tmin;
+      var tv = tmin + (pc*dt);
+      return tv;
+    },
+
+    makeTetrahedron: function (a, b, c, d) {
+      return [
+        a[0], a[1], a[2], // 0
+        b[0], b[1], b[2], // 1
+        c[0], c[1], c[2], // 2
+        b[0], b[1], b[2], // 3 (duplicate for next triangle)
+        c[0], c[1], c[2], // 4
+        d[0], d[1], d[2], // 5
+      ];
+    }
+  };
+
+  // Pilot class from the original game
   class Pilot {
     constructor() {
       this.mesh = new THREE.Object3D();
@@ -102,48 +125,31 @@
     }
   }
 
-  // Utility function for creating tetrahedrons (extracted from legacy utils)
-  function makeTetrahedron(a, b, c, d) {
-    return [
-      a[0], a[1], a[2], // 0
-      b[0], b[1], b[2], // 1
-      c[0], c[1], c[2], // 2
-      a[0], a[1], a[2], // 3 (duplicate for next triangle)
-      c[0], c[1], c[2], // 4
-      d[0], d[1], d[2], // 5
-    ];
-  }
-
   class AirplaneFactory {
-    // Ported createAirplaneMesh function from legacy game
+    // Authentic createAirplaneMesh function from The Aviator 2 (ported)
     static createAirplane() {
       const mesh = new THREE.Object3D();
 
       // Cabin - complex geometry made from tetrahedrons
-      var matCabin = new THREE.MeshPhongMaterial({
-        color: Colors.red,
-        flatShading: true,
-        side: THREE.DoubleSide,
-      });
+      var matCabin = new THREE.MeshPhongMaterial({color: Colors.red, flatShading: true, side: THREE.DoubleSide});
 
-      const frontUR = [40, 25, -25];
-      const frontUL = [40, 25, 25];
-      const frontLR = [40, -25, -25];
-      const frontLL = [40, -25, 25];
-      const backUR = [-40, 15, -5];
-      const backUL = [-40, 15, 5];
-      const backLR = [-40, 5, -5];
-      const backLL = [-40, 5, 5];
+      const frontUR = [ 40,  25, -25];
+      const frontUL = [ 40,  25,  25];
+      const frontLR = [ 40, -25, -25];
+      const frontLL = [ 40, -25,  25];
+      const backUR  = [-40,  15,  -5];
+      const backUL  = [-40,  15,   5];
+      const backLR  = [-40,   5,  -5];
+      const backLL  = [-40,   5,   5];
 
       const vertices = new Float32Array(
-        makeTetrahedron(frontUL, frontUR, frontLL, frontLR).concat( // front
-          makeTetrahedron(backUL, backUR, backLL, backLR)).concat( // back
-          makeTetrahedron(backUR, backLR, frontUR, frontLR)).concat( // right side
-          makeTetrahedron(backUL, backLL, frontUL, frontLL)).concat( // left side
-          makeTetrahedron(frontUL, backUL, frontUR, backUR)).concat( // top
-          makeTetrahedron(frontLL, backLL, frontLR, backLR)) // bottom
+        utils.makeTetrahedron(frontUL, frontUR, frontLL, frontLR).concat(   // front
+        utils.makeTetrahedron(backUL, backUR, backLL, backLR)).concat(      // back
+        utils.makeTetrahedron(backUR, backLR, frontUR, frontLR)).concat(    // side
+        utils.makeTetrahedron(backUL, backLL, frontUL, frontLL)).concat(    // side
+        utils.makeTetrahedron(frontUL, backUL, frontUR, backUR)).concat(    // top
+        utils.makeTetrahedron(frontLL, backLL, frontLR, backLR))            // bottom
       );
-
       const geomCabin = new THREE.BufferGeometry();
       geomCabin.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
       geomCabin.computeVertexNormals();
@@ -154,11 +160,8 @@
       mesh.add(cabin);
 
       // Engine
-      var geomEngine = new THREE.BoxGeometry(20, 50, 50, 1, 1, 1);
-      var matEngine = new THREE.MeshPhongMaterial({
-        color: Colors.white,
-        flatShading: true,
-      });
+      var geomEngine = new THREE.BoxGeometry(20,50,50,1,1,1);
+      var matEngine = new THREE.MeshPhongMaterial({color:Colors.white, flatShading:true,});
       var engine = new THREE.Mesh(geomEngine, matEngine);
       engine.position.x = 50;
       engine.castShadow = true;
@@ -166,110 +169,76 @@
       mesh.add(engine);
 
       // Tail Plane
-      var geomTailPlane = new THREE.BoxGeometry(15, 20, 5, 1, 1, 1);
-      var matTailPlane = new THREE.MeshPhongMaterial({
-        color: Colors.red,
-        flatShading: true,
-      });
+      var geomTailPlane = new THREE.BoxGeometry(15,20,5,1,1,1);
+      var matTailPlane = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true,});
       var tailPlane = new THREE.Mesh(geomTailPlane, matTailPlane);
-      tailPlane.position.set(-40, 20, 0);
+      tailPlane.position.set(-40,20,0);
       tailPlane.castShadow = true;
       tailPlane.receiveShadow = true;
       mesh.add(tailPlane);
 
       // Wings
-      var geomSideWing = new THREE.BoxGeometry(30, 5, 120, 1, 1, 1);
-      var matSideWing = new THREE.MeshPhongMaterial({
-        color: Colors.red,
-        flatShading: true,
-      });
+      var geomSideWing = new THREE.BoxGeometry(30,5,120,1,1,1);
+      var matSideWing = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true,});
       var sideWing = new THREE.Mesh(geomSideWing, matSideWing);
-      sideWing.position.set(0, 15, 0);
+      sideWing.position.set(0,15,0);
       sideWing.castShadow = true;
       sideWing.receiveShadow = true;
       mesh.add(sideWing);
 
-      // Windshield
-      var geomWindshield = new THREE.BoxGeometry(3, 15, 20, 1, 1, 1);
-      var matWindshield = new THREE.MeshPhongMaterial({
-        color: Colors.white,
-        transparent: true,
-        opacity: 0.3,
-        flatShading: true,
-      });
+      var geomWindshield = new THREE.BoxGeometry(3,15,20,1,1,1);
+      var matWindshield = new THREE.MeshPhongMaterial({color:Colors.white,transparent:true, opacity:.3, flatShading:true,});
       var windshield = new THREE.Mesh(geomWindshield, matWindshield);
-      windshield.position.set(20, 27, 0);
+      windshield.position.set(20,27,0);
       windshield.castShadow = true;
       windshield.receiveShadow = true;
       mesh.add(windshield);
 
-      // Propeller
       var geomPropeller = new THREE.BoxGeometry(20, 10, 10, 1, 1, 1);
-      // Distort propeller hub
-      const positions = geomPropeller.attributes.position.array;
-      positions[4 * 3 + 1] -= 5;
-      positions[4 * 3 + 2] += 5;
-      positions[5 * 3 + 1] -= 5;
-      positions[5 * 3 + 2] -= 5;
-      positions[6 * 3 + 1] += 5;
-      positions[6 * 3 + 2] += 5;
-      positions[7 * 3 + 1] += 5;
-      positions[7 * 3 + 2] -= 5;
-      geomPropeller.attributes.position.needsUpdate = true;
-
-      var matPropeller = new THREE.MeshPhongMaterial({
-        color: Colors.brown,
-        flatShading: true,
-      });
+      geomPropeller.attributes.position.array[4*3+1] -= 5;
+      geomPropeller.attributes.position.array[4*3+2] += 5;
+      geomPropeller.attributes.position.array[5*3+1] -= 5;
+      geomPropeller.attributes.position.array[5*3+2] -= 5;
+      geomPropeller.attributes.position.array[6*3+1] += 5;
+      geomPropeller.attributes.position.array[6*3+2] += 5;
+      geomPropeller.attributes.position.array[7*3+1] += 5;
+      geomPropeller.attributes.position.array[7*3+2] -= 5;
+      var matPropeller = new THREE.MeshPhongMaterial({color:Colors.brown, flatShading:true,});
       const propeller = new THREE.Mesh(geomPropeller, matPropeller);
       propeller.castShadow = true;
       propeller.receiveShadow = true;
 
-      // Propeller blades
-      var geomBlade = new THREE.BoxGeometry(1, 80, 10, 1, 1, 1);
-      var matBlade = new THREE.MeshPhongMaterial({
-        color: Colors.brownDark,
-        flatShading: true,
-      });
+      var geomBlade = new THREE.BoxGeometry(1,80,10,1,1,1);
+      var matBlade = new THREE.MeshPhongMaterial({color:Colors.brownDark, flatShading:true,});
       var blade1 = new THREE.Mesh(geomBlade, matBlade);
-      blade1.position.set(8, 0, 0);
+      blade1.position.set(8,0,0);
       blade1.castShadow = true;
       blade1.receiveShadow = true;
 
       var blade2 = blade1.clone();
-      blade2.rotation.x = Math.PI / 2;
+      blade2.rotation.x = Math.PI/2;
       blade2.castShadow = true;
       blade2.receiveShadow = true;
 
       propeller.add(blade1);
       propeller.add(blade2);
-      propeller.position.set(60, 0, 0);
+      propeller.position.set(60,0,0);
       mesh.add(propeller);
 
-      // Wheels
-      var wheelProtecGeom = new THREE.BoxGeometry(30, 15, 10, 1, 1, 1);
-      var wheelProtecMat = new THREE.MeshPhongMaterial({
-        color: Colors.red,
-        flatShading: true,
-      });
-      var wheelProtecR = new THREE.Mesh(wheelProtecGeom, wheelProtecMat);
-      wheelProtecR.position.set(25, -20, 25);
+      var wheelProtecGeom = new THREE.BoxGeometry(30,15,10,1,1,1);
+      var wheelProtecMat = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true,});
+      var wheelProtecR = new THREE.Mesh(wheelProtecGeom,wheelProtecMat);
+      wheelProtecR.position.set(25,-20,25);
       mesh.add(wheelProtecR);
 
-      var wheelTireGeom = new THREE.BoxGeometry(24, 24, 4);
-      var wheelTireMat = new THREE.MeshPhongMaterial({
-        color: Colors.brownDark,
-        flatShading: true,
-      });
-      var wheelTireR = new THREE.Mesh(wheelTireGeom, wheelTireMat);
-      wheelTireR.position.set(25, -28, 25);
+      var wheelTireGeom = new THREE.BoxGeometry(24,24,4);
+      var wheelTireMat = new THREE.MeshPhongMaterial({color:Colors.brownDark, flatShading:true,});
+      var wheelTireR = new THREE.Mesh(wheelTireGeom,wheelTireMat);
+      wheelTireR.position.set(25,-28,25);
 
-      var wheelAxisGeom = new THREE.BoxGeometry(10, 10, 6);
-      var wheelAxisMat = new THREE.MeshPhongMaterial({
-        color: Colors.brown,
-        flatShading: true,
-      });
-      var wheelAxis = new THREE.Mesh(wheelAxisGeom, wheelAxisMat);
+      var wheelAxisGeom = new THREE.BoxGeometry(10,10,6);
+      var wheelAxisMat = new THREE.MeshPhongMaterial({color:Colors.brown, flatShading:true,});
+      var wheelAxis = new THREE.Mesh(wheelAxisGeom,wheelAxisMat);
       wheelTireR.add(wheelAxis);
       mesh.add(wheelTireR);
 
@@ -282,31 +251,25 @@
       mesh.add(wheelTireL);
 
       var wheelTireB = wheelTireR.clone();
-      wheelTireB.scale.set(0.5, 0.5, 0.5);
-      wheelTireB.position.set(-35, -5, 0);
+      wheelTireB.scale.set(.5,.5,.5);
+      wheelTireB.position.set(-35,-5,0);
       mesh.add(wheelTireB);
 
-      // Suspension
-      var suspensionGeom = new THREE.BoxGeometry(4, 20, 4);
-      suspensionGeom.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 10, 0));
-      var suspensionMat = new THREE.MeshPhongMaterial({
-        color: Colors.red,
-        flatShading: true,
-      });
-      var suspension = new THREE.Mesh(suspensionGeom, suspensionMat);
-      suspension.position.set(-35, -5, 0);
-      suspension.rotation.z = -0.3;
+      var suspensionGeom = new THREE.BoxGeometry(4,20,4);
+      suspensionGeom.applyMatrix4(new THREE.Matrix4().makeTranslation(0,10,0));
+      var suspensionMat = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true,});
+      var suspension = new THREE.Mesh(suspensionGeom,suspensionMat);
+      suspension.position.set(-35,-5,0);
+      suspension.rotation.z = -.3;
       mesh.add(suspension);
 
-      // Pilot
       const pilot = new Pilot();
-      pilot.mesh.position.set(5, 27, 0);
+      pilot.mesh.position.set(5,27,0);
       mesh.add(pilot.mesh);
 
       mesh.castShadow = true;
       mesh.receiveShadow = true;
 
-      // Return mesh and propeller for animation
       return {
         mesh: mesh,
         propeller: propeller,

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentic Airplane Model Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        #container {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ccc;
+            background: #ffffff;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Authentic Airplane Model Demo</h1>
+    <p>This demo shows the authentic airplane model extracted from The Aviator 2 (Badestrand/TheAviator2).</p>
+
+    <div class="controls">
+        <button onclick="showBasicAirplane()">Basic Airplane (Endless Mode)</button>
+        <button onclick="showFullAirplane()">Full Airplane (Combat Mode)</button>
+        <button onclick="startAnimation()">Start Animation</button>
+        <button onclick="stopAnimation()">Stop Animation</button>
+    </div>
+
+    <div id="container"></div>
+
+    <div class="info">
+        <h3>Authentic Model Details:</h3>
+        <ul>
+            <li><strong>Source:</strong> The Aviator 2 by Badestrand (https://github.com/Badestrand/TheAviator2)</li>
+            <li><strong>Cabin:</strong> Complex tetrahedron-based geometry for organic fuselage shape</li>
+            <li><strong>Engine:</strong> Large box geometry positioned at nose</li>
+            <li><strong>Tail:</strong> Horizontal stabilizer for stability</li>
+            <li><strong>Wings:</strong> Main wing surfaces for lift</li>
+            <li><strong>Windshield:</strong> Transparent cockpit glass</li>
+            <li><strong>Propeller:</strong> Custom geometry with animated blades</li>
+            <li><strong>Landing Gear:</strong> Wheels, protection covers, suspension</li>
+            <li><strong>Pilot:</strong> Detailed pilot model with animated hair</li>
+            <li><strong>Materials:</strong> Authentic colors and Phong shading from original game</li>
+        </ul>
+    </div>
+
+    <script type="text/javascript" src="shared/js/TweenMax.min.js"></script>
+    <script type="text/javascript" src="shared/js/three.min.js"></script>
+    <!-- Load core modules globally -->
+    <script src="shared/js/utils.js"></script>
+    <script src="shared/js/logger.js"></script>
+    <script src="core/config/DebugConfig.js"></script>
+    <script src="core/MovementModel.js"></script>
+    <script src="core/factories/AirplaneFactory.js"></script>
+
+    <script>
+        let scene, camera, renderer, airplane, isAnimating = false;
+
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky blue
+
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / 600, 0.1, 1000);
+            camera.position.set(80, 40, 80);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth - 40, 600);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(30, 30, 20);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            // Add ground plane
+            const groundGeometry = new THREE.PlaneGeometry(150, 150);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Show basic airplane by default
+            showBasicAirplane();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function showBasicAirplane() {
+            clearAirplane();
+            airplane = window.AirplaneFactory.createBasicAirplane();
+            airplane.position.set(0, 15, 0);
+            airplane.castShadow = true;
+            scene.add(airplane);
+            updateInfo('Basic Airplane - Authentic model from The Aviator 2');
+        }
+
+        function showFullAirplane() {
+            clearAirplane();
+            const result = window.AirplaneFactory.createAirplane();
+            airplane = result.mesh;
+            airplane.position.set(0, 15, 0);
+            airplane.scale.set(0.08, 0.08, 0.08); // Scale down for better viewing
+            airplane.castShadow = true;
+            scene.add(airplane);
+
+            // Add propeller and pilot references for animation
+            airplane.propeller = result.propeller;
+            airplane.pilot = result.pilot;
+
+            updateInfo('Full Airplane - Complete authentic model from The Aviator 2');
+        }
+
+        function clearAirplane() {
+            if (airplane) {
+                scene.remove(airplane);
+                airplane = null;
+            }
+        }
+
+        function startAnimation() {
+            isAnimating = true;
+            animate();
+        }
+
+        function stopAnimation() {
+            isAnimating = false;
+        }
+
+        function animate() {
+            if (!isAnimating) return;
+
+            requestAnimationFrame(animate);
+
+            // Rotate airplane slowly for viewing
+            if (airplane) {
+                airplane.rotation.y += 0.003;
+
+                // Update airplane animations (propeller, pilot)
+                if (airplane.propeller) {
+                    airplane.propeller.rotation.z += 0.016 * 15; // Fast propeller rotation
+                }
+                if (airplane.pilot && airplane.pilot.updateHairs) {
+                    airplane.pilot.updateHairs(0.016); // Pilot hair animation
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = (window.innerWidth - 40) / 600;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth - 40, 600);
+        }
+
+        function updateInfo(text) {
+            // Update the info display if needed
+            console.log('Current model:', text);
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', init);
+
+        // Start rendering loop
+        function render() {
+            requestAnimationFrame(render);
+            if (!isAnimating) {
+                renderer.render(scene, camera);
+            }
+        }
+        render();
+    </script>
+</body>
+</html>
