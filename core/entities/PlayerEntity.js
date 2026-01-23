@@ -5,7 +5,10 @@
 // - Can swap mesh implementation easily
 // - Handles smooth X position interpolation toward any target
 
-class PlayerEntity {
+(function() {
+  'use strict';
+
+  class PlayerEntity {
   constructor(mesh) {
     this.mesh = mesh;
 
@@ -73,5 +76,8 @@ class PlayerEntity {
   }
 }
 
-export default PlayerEntity;
+  // Expose globally
+  window.PlayerEntity = PlayerEntity;
+
+})();
 

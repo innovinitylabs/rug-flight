@@ -1,4 +1,7 @@
-class FreeFlightMovement {
+(function() {
+  'use strict';
+
+  class FreeFlightMovement {
     constructor() {
         // No initialization needed for now
     }
@@ -53,12 +56,12 @@ class FreeFlightMovement {
     }
 }
 
-// Simple test to verify movement calculations match original logic
-if (typeof window !== 'undefined' && window.console) {
-    console.log('[MovementModel] FreeFlightMovement class loaded successfully');
-}
+  // Expose globally
+  window.FreeFlightMovement = FreeFlightMovement;
 
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { FreeFlightMovement }
-}
+  // Simple test to verify movement calculations match original logic
+  if (typeof window !== 'undefined' && window.console) {
+    console.log('[MovementModel] FreeFlightMovement class loaded successfully');
+  }
+
+})();

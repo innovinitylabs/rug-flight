@@ -6,10 +6,10 @@
 // - Monitors recycling to know when to spawn next obstacle
 // - No collision awareness, no health logic, no randomness
 
-import DebugConfig from '/core/config/DebugConfig.js';
-import ObstacleEntity from '/core/entities/ObstacleEntity.js';
+(function() {
+  'use strict';
 
-class SingleObstacleSpawnerSystem {
+  class SingleObstacleSpawnerSystem {
   constructor(entityRegistrySystem, laneSystem, worldScrollerSystem, spawnBandSystem, world) {
     this.entityRegistrySystem = entityRegistrySystem;
     this.laneSystem = laneSystem;
@@ -28,7 +28,7 @@ class SingleObstacleSpawnerSystem {
     this.hasSpawned = false;
     this.spawnedObstacleId = null;
 
-    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+    if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
       console.log('[SingleObstacleSpawner] Deterministic single obstacle spawner established');
       console.log(`[SingleObstacleSpawner] Will spawn one obstacle at lane ${this.spawnLane}, Z=${this.spawnZ}`);
     }
@@ -49,7 +49,7 @@ class SingleObstacleSpawnerSystem {
     // Position at origin initially (will be updated by ObstacleEntity)
     mesh.position.set(0, 0, 0);
 
-    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+    if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
       console.log('[SingleObstacleSpawner] Created highly visible yellow obstacle mesh (12x8x6)');
     }
 
@@ -59,7 +59,7 @@ class SingleObstacleSpawnerSystem {
   // Spawn the single obstacle if not already spawned
   spawnObstacle() {
     if (this.hasSpawned) {
-      if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
         console.log('[SingleObstacleSpawner] Obstacle already spawned, skipping');
       }
       return null;
@@ -76,7 +76,7 @@ class SingleObstacleSpawnerSystem {
 
     // Create obstacle entity with mesh, lane system, and world scroller for positioning
     const obstacleId = `obstacle_single_${Date.now()}`;
-    const obstacle = new ObstacleEntity(
+    const obstacle = new window.ObstacleEntity(
       obstacleId,
       this.spawnLane,
       baseZ, // Player-relative spawn position from spawn band system
@@ -94,7 +94,7 @@ class SingleObstacleSpawnerSystem {
     this.spawnedObstacleId = obstacleId;
     this.hasSpawned = true;
 
-    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+    if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
       console.log(`[SingleObstacleSpawner] Spawned single obstacle ${obstacleId} at lane ${this.spawnLane}, Z=${this.spawnZ}`);
     }
     return obstacle;
@@ -125,7 +125,7 @@ class SingleObstacleSpawnerSystem {
       if (spawnBandSystem.shouldRecycle(obstacle.z)) {
         // Obstacle should be recycled - unregister it
         this.entityRegistrySystem.unregister(this.spawnedObstacleId);
-        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+        if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
           console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} recycled in BEHIND_CLEANUP`);
         }
 
@@ -137,7 +137,7 @@ class SingleObstacleSpawnerSystem {
       return false;
     } else {
       // Obstacle no longer exists in registry (already cleaned up)
-      if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
         console.log(`[SingleObstacleSpawner] Obstacle ${this.spawnedObstacleId} already cleaned up`);
       }
 
@@ -164,7 +164,7 @@ class SingleObstacleSpawnerSystem {
           obstacle.destroy();
         }
 
-        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+        if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
           console.log(`[SingleObstacleSpawner] Reset: destroyed obstacle ${this.spawnedObstacleId}`);
         }
       }
@@ -174,10 +174,13 @@ class SingleObstacleSpawnerSystem {
     this.hasSpawned = false;
     this.spawnedObstacleId = null;
 
-    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+    if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
       console.log('[SingleObstacleSpawner] Reset complete - ready for new game run');
     }
   }
 }
 
-export default SingleObstacleSpawnerSystem;
+  // Expose globally
+  window.SingleObstacleSpawnerSystem = SingleObstacleSpawnerSystem;
+
+})();

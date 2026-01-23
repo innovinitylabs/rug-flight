@@ -1,4 +1,5 @@
 // Game Controller - Mode selection for unified game
+// Logger will be loaded globally
 
 (function() {
   'use strict';
@@ -8,13 +9,14 @@
     selectedMode: null, // 'endless' or 'combat'
 
     init: function() {
-      console.log('[Game Controller] Initializing mode selection...');
+      window.logger.info('Initializing mode selection...');
 
-      // Load additional dependencies first
+      // Load additional dependencies first (using local npm versions when available)
       var scriptsToLoad = [
-        'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/loaders/OBJLoader.js',
-        'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/controls/OrbitControls.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.10.2/gsap.min.js'
+        // Three.js addons - try local first, fallback to CDN
+        '/node_modules/three/examples/js/loaders/OBJLoader.js',
+        '/node_modules/three/examples/js/controls/OrbitControls.js',
+        '/node_modules/gsap/dist/gsap.min.js'
       ];
 
       // Load CSS
@@ -47,18 +49,18 @@
         GameController.setupModeSelection();
       });
 
-      console.log('[Game Controller] Initialization complete');
+      window.logger.info('Initialization complete');
     },
 
     setupModeSelection: function() {
-      console.log('[Game Controller] Setting up mode selection...');
+      window.logger.info('Setting up mode selection...');
 
       var endlessBtn = document.getElementById('endless-mode-btn');
       var combatBtn = document.getElementById('combat-mode-btn');
       var modeScreen = document.getElementById('mode-selection-screen');
 
       if (!endlessBtn || !combatBtn || !modeScreen) {
-        console.error('[Game Controller] Mode selection elements not found');
+        window.logger.error('Mode selection elements not found');
         return;
       }
 
@@ -84,11 +86,11 @@
       modeScreen.style.pointerEvents = 'auto';
       modeScreen.style.background = 'rgba(0,0,0,0.6)';
 
-      console.log('[Game Controller] Mode selection screen ready');
+      window.logger.info('Mode selection screen ready');
     },
 
     selectMode: function(mode) {
-      console.log('[Game Controller] Mode selected:', mode);
+      window.logger.info('Mode selected:', mode);
       this.selectedMode = mode;
 
       // Hide mode selection screen
@@ -113,7 +115,7 @@
         // Endless mode uses ES modules only - no script path needed
         gameScriptPath = null;
       } else {
-        console.error('[Game Controller] Unknown game mode:', mode);
+        window.logger.error('Unknown game mode:', mode);
         return;
       }
 
@@ -126,15 +128,36 @@
           introScreen.classList.add('visible');
         }
 
-        // Load Endless mode as ES module
-        import('/games/top-rug/js/game.js')
-          .then(module => {
-            console.log('[Game Controller] Endless module loaded correctly');
-            module.default.init();
-          })
-          .catch(err => {
-            console.error('[Game Controller] Failed to load Endless module', err);
-          });
+        // Load Endless mode as script (fallback for browsers without full ES module support)
+      var endlessScript = document.createElement('script');
+      endlessScript.src = 'games/top-rug/js/game.js';
+      endlessScript.onload = function() {
+        window.logger.info('Endless script loaded correctly');
+        try {
+          // Assume the script creates a global AviatorEndlessGame
+          if (typeof AviatorEndlessGame !== 'undefined') {
+            AviatorEndlessGame.init();
+          } else {
+            throw new Error('AviatorEndlessGame global not found');
+          }
+        } catch (initError) {
+          window.logger.error('Failed to initialize Endless mode', initError);
+          GameController.showError('Failed to start Endless mode. Falling back to Combat mode...', initError.message);
+          // Fallback to combat mode
+          setTimeout(() => {
+            GameController.selectMode('combat');
+          }, 2000);
+        }
+      };
+      endlessScript.onerror = function() {
+        window.logger.error('Failed to load Endless script');
+        GameController.showError('Endless mode failed to load. Starting Combat mode instead...', 'Script loading failed');
+        // Fallback to combat mode
+        setTimeout(() => {
+          GameController.selectMode('combat');
+        }, 2000);
+      };
+      document.head.appendChild(endlessScript);
 
       } else if (mode === 'combat') {
         // Combat mode: Legacy script loading
@@ -142,19 +165,19 @@
         var utilsScript = document.createElement('script');
         utilsScript.src = 'shared/js/utils.js';
         utilsScript.onload = function() {
-          console.log('[Game Controller] utils loaded');
+          window.logger.info('utils loaded');
 
           // Now load MovementModel
         var movementScript = document.createElement('script');
         movementScript.src = 'core/MovementModel.js';
         movementScript.onload = function() {
-          console.log('[Game Controller] MovementModel loaded');
+          window.logger.info('MovementModel loaded');
 
           // Now load the game script
           var script = document.createElement('script');
           script.src = gameScriptPath;
           script.onload = function() {
-            console.log('[Game Controller] Game loaded for mode:', mode);
+            window.logger.info('Game loaded for mode:', mode);
 
             // Show intro screen
             var introScreen = document.getElementById('intro-screen');
@@ -164,23 +187,32 @@
 
             // Initialize the game
             if (typeof window.Aviator2Game !== 'undefined') {
-              window.Aviator2Game.init();
+              try {
+                window.Aviator2Game.init();
+              } catch (initError) {
+                console.error('[Game Controller] Failed to initialize combat mode', initError);
+                GameController.showError('Failed to start Combat mode. Please refresh the page.', initError.message);
+              }
             } else {
               console.error('[Game Controller] Game namespace not found for mode:', mode);
+              GameController.showError('Combat mode failed to load. Please refresh the page.', 'Game namespace not found');
             }
           };
           script.onerror = function() {
             console.error('[Game Controller] Failed to load game script for mode:', mode, 'path:', gameScriptPath);
+            GameController.showError('Failed to load ' + mode + ' mode. Please refresh the page.', 'Script loading failed: ' + gameScriptPath);
           };
           document.head.appendChild(script);
         };
         movementScript.onerror = function() {
           console.error('[Game Controller] Failed to load MovementModel script');
+          GameController.showError('Failed to load movement system. Please refresh the page.', 'MovementModel script loading failed');
         };
         document.head.appendChild(movementScript);
         };
         utilsScript.onerror = function() {
           console.error('[Game Controller] Failed to load utils script');
+          GameController.showError('Failed to load game utilities. Please refresh the page.', 'Utils script loading failed');
         };
         document.head.appendChild(utilsScript);
       }
@@ -200,7 +232,7 @@
       // Check if CSS is already loaded
       var existingLink = document.querySelector('link[href="' + cssPath + '"]');
       if (existingLink) {
-        console.log('[Game Controller] CSS already loaded for mode:', mode);
+        window.logger.info('CSS already loaded for mode:', mode);
         return;
       }
 
@@ -210,55 +242,89 @@
       link.type = 'text/css';
       link.href = cssPath;
       document.head.appendChild(link);
-      console.log('[Game Controller] CSS loaded for mode:', mode, 'path:', cssPath);
+      window.logger.info('CSS loaded for mode:', mode, 'path:', cssPath);
     },
 
     showModeUI: function(mode) {
-      // Hide all game UIs first
-      var unifiedUI = document.getElementById('score-toprug');
-      var endlessUI = document.getElementById('score-toprug1');
-      var combatUI = document.getElementById('score-toprug2');
-      var unifiedWorld = document.getElementById('world-toprug');
-      var endlessWorld = document.getElementById('world-toprug1');
-      var combatWorld = document.getElementById('world-toprug2');
-      var unifiedReplay = document.getElementById('replayMessage-toprug');
-      var endlessReplay = document.getElementById('replayMessage-toprug1');
-      var combatReplay = document.getElementById('replayMessage-toprug2');
+      window.logger.info('Configuring UI for mode:', mode);
 
-      if (unifiedUI) unifiedUI.style.display = 'none';
-      if (endlessUI) endlessUI.style.display = 'none';
-      if (combatUI) combatUI.style.display = 'none';
-      if (unifiedWorld) unifiedWorld.style.display = 'none';
-      if (endlessWorld) endlessWorld.style.display = 'none';
-      if (combatWorld) combatWorld.style.display = 'none';
-      if (unifiedReplay) unifiedReplay.style.display = 'none';
-      if (endlessReplay) endlessReplay.style.display = 'none';
-      if (combatReplay) combatReplay.style.display = 'none';
+      // Get unified UI elements
+      var gameUI = document.getElementById('game-ui');
+      var gameWorld = document.getElementById('game-world');
+      var replayMessage = document.getElementById('replayMessage');
+      var secondaryUI = document.getElementById('secondary-ui');
+      var secondaryLabel = document.getElementById('secondaryLabel');
+      var energyBar = document.getElementById('energyBar');
+      var header = document.querySelector('.header');
 
-      // Show the appropriate UI based on mode
+      // Configure UI based on mode
       if (mode === 'endless') {
-        if (endlessUI) endlessUI.style.display = 'flex';
-        if (endlessWorld) endlessWorld.style.display = 'block';
-        if (endlessReplay) endlessReplay.style.display = 'block';
+        // Endless mode: show coins, hide energy bar
+        if (secondaryLabel) secondaryLabel.textContent = 'coins';
+        if (energyBar) energyBar.style.display = 'none';
+        if (secondaryUI) secondaryUI.style.display = 'block';
       } else if (mode === 'combat') {
-        if (combatUI) combatUI.style.display = 'flex';
-        if (combatWorld) combatWorld.style.display = 'block';
-        if (combatReplay) combatReplay.style.display = 'block';
+        // Combat mode: show coins, keep energy bar hidden
+        if (secondaryLabel) secondaryLabel.textContent = 'coins';
+        if (energyBar) energyBar.style.display = 'none';
+        if (secondaryUI) secondaryUI.style.display = 'block';
       }
 
-      // Enforce world layering with z-index and pointer-events
-      if (unifiedWorld) {
-        unifiedWorld.style.zIndex = '0';
-        unifiedWorld.style.pointerEvents = 'none';
+      // Hide header for clean game view (show only game world)
+      if (header) header.style.display = 'none';
+
+      // Show unified UI elements
+      if (gameUI) gameUI.style.display = 'none'; // Hide UI overlays for clean view
+      if (gameWorld) {
+        gameWorld.style.display = 'block';
+        gameWorld.style.zIndex = '10';
+        gameWorld.style.pointerEvents = 'auto';
       }
-      if (endlessWorld) {
-        endlessWorld.style.zIndex = mode === 'endless' ? '10' : '0';
-        endlessWorld.style.pointerEvents = mode === 'endless' ? 'auto' : 'none';
+      if (replayMessage) replayMessage.style.display = 'none';
+
+      window.logger.info('UI configured for mode:', mode);
+
+      // Create compatibility aliases for existing game code
+      this.createUIAliases(mode);
+    },
+
+    createUIAliases: function(mode) {
+      window.logger.info('Creating UI aliases for mode:', mode);
+
+      // Map old IDs to new unified IDs based on mode
+      var idMappings = {};
+
+      if (mode === 'endless') {
+        idMappings = {
+          'world-toprug1': 'game-world',
+          'distValue-toprug1': 'distValue',
+          'levelValue-toprug1': 'levelValue',
+          'levelCircleStroke-toprug1': 'levelCircleStroke',
+          'coinsValue-toprug1': 'secondaryValue',
+          'replayMessage-toprug1': 'replayMessage'
+        };
+      } else if (mode === 'combat') {
+        idMappings = {
+          'world-toprug2': 'game-world',
+          'distValue-toprug2': 'distValue',
+          'levelValue-toprug2': 'levelValue',
+          'levelCircleStroke-toprug2': 'levelCircleStroke',
+          'coinsValue-toprug2': 'secondaryValue',
+          'replayMessage-toprug2': 'replayMessage'
+        };
       }
-      if (combatWorld) {
-        combatWorld.style.zIndex = mode === 'combat' ? '10' : '0';
-        combatWorld.style.pointerEvents = mode === 'combat' ? 'auto' : 'none';
-      }
+
+      // Create aliases by overriding getElementById temporarily
+      var originalGetElementById = document.getElementById;
+      document.getElementById = function(id) {
+        if (idMappings[id]) {
+          window.logger.debug('UI alias:', id, '->', idMappings[id]);
+          return originalGetElementById.call(document, idMappings[id]);
+        }
+        return originalGetElementById.call(document, id);
+      };
+
+      window.logger.info('UI aliases created for mode:', mode);
     },
 
     loadScriptsSequentially: function(scripts, callback) {
@@ -270,13 +336,56 @@
       var script = document.createElement('script');
       script.src = scripts[0];
       script.onload = function() {
+        window.logger.info('Loaded script:', scripts[0]);
         this.loadScriptsSequentially(scripts.slice(1), callback);
       }.bind(this);
       script.onerror = function() {
-        console.warn('Failed to load script:', scripts[0]);
-        this.loadScriptsSequentially(scripts.slice(1), callback);
+        window.logger.warn('Failed to load script:', scripts[0], '- trying CDN fallback');
+        // Try CDN fallback for failed local scripts
+        var fallbackUrls = {
+          '/node_modules/three/examples/js/loaders/OBJLoader.js': 'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/loaders/OBJLoader.js',
+          '/node_modules/three/examples/js/controls/OrbitControls.js': 'https://cdn.jsdelivr.net/npm/three@0.139.2/examples/js/controls/OrbitControls.js',
+          '/node_modules/gsap/dist/gsap.min.js': 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.10.2/gsap.min.js'
+        };
+
+        if (fallbackUrls[scripts[0]]) {
+          window.logger.info('Trying CDN fallback for:', scripts[0]);
+          script.src = fallbackUrls[scripts[0]];
+          script.onerror = function() {
+            window.logger.error('CDN fallback also failed for:', scripts[0]);
+            this.loadScriptsSequentially(scripts.slice(1), callback);
+          }.bind(this);
+          // Re-append the script with new src
+          document.head.appendChild(script);
+        } else {
+          this.loadScriptsSequentially(scripts.slice(1), callback);
+        }
       }.bind(this);
       document.head.appendChild(script);
+    },
+
+    showError: function(message, details) {
+      console.error('[Game Controller] Error:', message, details);
+
+      // Show error in the error display element
+      var errorElement = document.getElementById('error-message');
+      var errorContainer = document.getElementById('error');
+
+      if (errorElement && errorContainer) {
+        errorElement.textContent = message + (details ? '\nDetails: ' + details : '');
+        errorContainer.style.display = 'block';
+
+        // Auto-hide error after 5 seconds
+        setTimeout(function() {
+          errorContainer.style.display = 'none';
+        }, 5000);
+      }
+
+      // Also show in console with more details
+      console.error('[Game Controller] User-visible error:', message);
+      if (details) {
+        console.error('[Game Controller] Error details:', details);
+      }
     }
   };
 

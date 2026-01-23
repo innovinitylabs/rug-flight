@@ -5,7 +5,10 @@
 // - Colors target lane yellow
 // - Updates colors every frame based on player state
 
-class LaneDebugVisualSystem {
+(function() {
+  'use strict';
+
+  class LaneDebugVisualSystem {
   constructor(laneSystem, playerMovementPipeline, world) {
     this.laneSystem = laneSystem;
     this.playerMovementPipeline = playerMovementPipeline;
@@ -74,4 +77,7 @@ class LaneDebugVisualSystem {
   }
 }
 
-export default LaneDebugVisualSystem;
+  // Expose globally
+  window.LaneDebugVisualSystem = LaneDebugVisualSystem;
+
+})();

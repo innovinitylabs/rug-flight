@@ -5,9 +5,10 @@
 // - Processes intents from PlayerIntentSystem
 // - Commands PlayerEntity to move
 
-import DebugConfig from '/core/config/DebugConfig.js';
+(function() {
+  'use strict';
 
-class PlayerController {
+  class PlayerController {
   constructor(playerEntity, laneSystem) {
     this.playerEntity = playerEntity;
     this.laneSystem = laneSystem;
@@ -18,7 +19,7 @@ class PlayerController {
     // Vertical movement step size
     this.verticalStep = 15;
 
-    if (DebugConfig.ENABLE_LANE_LOGS) {
+    if (window.DebugConfig && window.DebugConfig.ENABLE_LANE_LOGS) {
       console.log('[PlayerController] Player controller created');
     }
   }
@@ -46,7 +47,7 @@ class PlayerController {
         this.playerEntity.setTargetX(targetX);
 
         // Log lane changes when enabled
-        if (DebugConfig.ENABLE_LANE_LOGS) {
+        if (window.DebugConfig && window.DebugConfig.ENABLE_LANE_LOGS) {
           console.log(`[PlayerController] Lane ${this.currentLaneIndex} → ${this.targetLaneIndex} (X: ${targetX})`);
         }
       }
@@ -62,7 +63,7 @@ class PlayerController {
       this.playerEntity.setTargetY(targetY);
 
       // Log vertical movement when enabled
-      if (DebugConfig.ENABLE_LANE_LOGS) {
+      if (window.DebugConfig && window.DebugConfig.ENABLE_LANE_LOGS) {
         console.log(`[PlayerController] Vertical ${currentY} → ${targetY}`);
       }
     }
@@ -88,4 +89,7 @@ class PlayerController {
   }
 }
 
-export default PlayerController;
+  // Expose globally
+  window.PlayerController = PlayerController;
+
+})();

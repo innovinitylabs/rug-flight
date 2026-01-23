@@ -1,0 +1,28 @@
+{
+  "name": "rug-flight",
+  "version": "1.0.0",
+  "description": "Top Rug - Lane-Based Endless Runner with NFT banner support",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "python3 -m http.server 8080"
+  },
+  "dependencies": {
+    "three": "^0.139.2",
+    "gsap": "^3.10.2"
+  },
+  "devDependencies": {
+    "vite": "^4.0.0"
+  },
+  "keywords": [
+    "game",
+    "three.js",
+    "webgl",
+    "endless-runner",
+    "javascript"
+  ],
+  "author": "Karim Maaloul / Innovinity Labs",
+  "license": "See LICENSE"
+}

@@ -38,7 +38,7 @@ function createAirplaneMesh() {
 	var geomEngine = new THREE.BoxGeometry(20,50,50,1,1,1);
 	var matEngine = new THREE.MeshPhongMaterial({color:Colors.white, flatShading:true,});
 	var engine = new THREE.Mesh(geomEngine, matEngine);
-	//Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ñ
+	// Position
 	engine.position.x = 50;
 	engine.castShadow = true;
 	engine.receiveShadow = true;
@@ -48,7 +48,7 @@ function createAirplaneMesh() {
 	var geomTailPlane = new THREE.BoxGeometry(15,20,5,1,1,1);
 	var matTailPlane = new THREE.MeshPhongMaterial({color:Colors.red, flatShading:true,});
 	var tailPlane = new THREE.Mesh(geomTailPlane, matTailPlane);
-	//Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ñ
+	// Position
 	tailPlane.position.set(-40,20,0);
 	tailPlane.castShadow = true;
 	tailPlane.receiveShadow = true;
@@ -93,7 +93,7 @@ function createAirplaneMesh() {
 	var geomBlade = new THREE.BoxGeometry(1,80,10,1,1,1);
 	var matBlade = new THREE.MeshPhongMaterial({color:Colors.brownDark, flatShading:true,});
 	var blade1 = new THREE.Mesh(geomBlade, matBlade);
-	//Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ñ
+	// Position
 	blade1.position.set(8,0,0);
 
 	blade1.castShadow = true;
@@ -430,33 +430,11 @@ function createScene() {
 		camera.aspect = ui.width / ui.height
 		camera.updateProjectionMatrix()
 
-		// setTimeout(() => {
-		// 	const rayCaster = new THREE.Raycaster()
-		// 	rayCaster.setFromCamera(new THREE.Vector2(1, 1), camera)
-		// 	const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
-		// 	const intersectPoint = new THREE.Vector3()
-		// 	rayCaster.ray.intersectPlane(plane, intersectPoint)
-		// 	console.log('max world x:', intersectPoint.x)
-		// 	// MAX_WORLD_X = intersectPoint.x  doesn't work with first person view
-		// }, 500)
 	}
 
 	setupCamera()
 	ui.onResize(setupCamera)
 
-	// const controls = new THREE.OrbitControls(camera, renderer.domElement)
-	// controls.minPolarAngle = -Math.PI / 2
-	// controls.maxPolarAngle = Math.PI
-	// controls.addEventListener('change', () => {
-	// 	console.log('camera changed', 'camera=', camera.position, ', airplane=', airplane.position, 'camera.rotation=', camera.rotation)
-	// })
-	// setTimeout(() => {
-	// 	camera.lookAt(airplane.mesh.position)
-	// 	controls.target.copy(airplane.mesh.position)
-	// }, 100)
-
-	// controls.noZoom = true
-	//controls.noPan = true
 
 	// handleWindowResize()
 }

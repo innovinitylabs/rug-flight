@@ -5,7 +5,10 @@
 // - Coordinates PlayerController and PlayerEntity updates
 // - Maintains strict update order for deterministic behavior
 
-class PlayerMovementPipelineSystem {
+(function() {
+  'use strict';
+
+  class PlayerMovementPipelineSystem {
   constructor(playerIntentSystem, playerActionStateSystem, playerController, playerEntity) {
     this.playerIntentSystem = playerIntentSystem;
     this.playerActionStateSystem = playerActionStateSystem;
@@ -64,4 +67,7 @@ class PlayerMovementPipelineSystem {
   }
 }
 
-export default PlayerMovementPipelineSystem;
+  // Expose globally
+  window.PlayerMovementPipelineSystem = PlayerMovementPipelineSystem;
+
+})();

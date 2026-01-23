@@ -12,8 +12,21 @@
 		<link rel="stylesheet" type="text/css" href="shared/css/ui.css" />
 		<script type="text/javascript" src="shared/js/TweenMax.min.js"></script>
 		<script type="text/javascript" src="shared/js/three.min.js"></script>
-		<!-- Game mode selector will be loaded first, then game scripts on demand -->
-		<script type="module" src="shared/js/game-mode-controller.js"></script>
+		<!-- Load shared utilities -->
+		<script src="shared/js/utils.js"></script>
+		<!-- Load core modules globally -->
+		<script src="shared/js/logger.js"></script>
+		<script src="core/config/DebugConfig.js"></script>
+		<script src="core/MovementModel.js"></script>
+		<script src="core/entities/PlayerEntity.js"></script>
+		<script src="core/entities/ObstacleEntity.js"></script>
+		<script src="core/factories/PlaneFactory.js"></script>
+		<script src="core/controllers/PlayerController.js"></script>
+		<script src="core/systems/PlayerMovementPipelineSystem.js"></script>
+		<script src="core/systems/LaneDebugVisualSystem.js"></script>
+		<script src="core/systems/SingleObstacleSpawnerSystem.js"></script>
+		<!-- Game mode selector will be loaded after core modules -->
+		<script src="shared/js/game-mode-controller.js"></script>
 		<!--[if IE]>
 		  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
 		<![endif]-->
@@ -29,97 +42,42 @@
 					</h1>
 					<h2 class="header__tagline">Flight game with NFT banner support</h2>
 				</div>
-				<div class="score" id="score-toprug">
-					<div class="score__content" id="level-toprug">
+				<!-- Unified Game UI - dynamically configured per mode -->
+				<div class="score" id="game-ui">
+					<div class="score__content" id="level-ui">
 						<div class="score__label">level</div>
-						<div class="score__value score__value--level" id="levelValue-toprug">1</div>
-						<svg class="level-circle" id="levelCircle-toprug" viewbox="0 0 200 200">
-							<circle id="levelCircleBgr-toprug" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
-							<circle id="levelCircleStroke-toprug" r="80" cx="100" cy="100" fill="none" stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
+						<div class="score__value score__value--level" id="levelValue">1</div>
+						<svg class="level-circle" id="levelCircle" viewbox="0 0 200 200">
+							<circle id="levelCircleBgr" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
+							<circle id="levelCircleStroke" r="80" cx="100" cy="100" fill="none" stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
 						</svg>
 					</div>
-					<div class="score__content score__content--fixed" id="dist-toprug">
+					<div class="score__content score__content--fixed" id="dist-ui">
 						<div class="score__label">distance</div>
-						<div class="score__value score__value--dist" id="distValue-toprug">0</div>
+						<div class="score__value score__value--dist" id="distValue">0</div>
 					</div>
-					<div class="score__content score__content--fixed" id="coins-toprug">
-						<div class="score__label">coins</div>
-						<div class="score__value score__value--dist" id="coinsValue-toprug">0</div>
+					<div class="score__content score__content--fixed" id="secondary-ui">
+						<div class="score__label" id="secondaryLabel">coins</div>
+						<div class="score__value score__value--dist" id="secondaryValue">0</div>
+						<!-- Energy bar for endless mode (hidden by default) -->
+						<div class="energy-bar" id="energyBar" style="display: none;">
+							<div class="energy-bar-fill" id="energyBarFill"></div>
+						</div>
 					</div>
-					<div class="score__content score__content--fixed" id="lifes-toprug">
+					<div class="score__content score__content--fixed" id="lifes-ui">
 						<div class="score__label">life</div>
-						<div class="score__value score__value--lifes" id="lifes-toprug">
+						<div class="score__value score__value--lifes" id="lifes">
 							<img class="heart visible" src="games/top-rug/assets/images/heart.png"/>
 							<img class="heart visible" src="games/top-rug/assets/images/heart.png"/>
 							<img class="heart visible" src="games/top-rug/assets/images/heart.png"/>
 						</div>
 					</div>
 				</div>
-
-				<!-- Hidden UI elements for individual games -->
-				<!-- Top Rug (Endless Mode) UI -->
-				<div class="score" id="score-toprug1" style="display: none;">
-					<div class="score__content" id="level-toprug1">
-						<div class="score__label">level</div>
-						<div class="score__value score__value--level" id="levelValue-toprug1">1</div>
-						<svg class="level-circle" id="levelCircle-toprug1" viewbox="0 0 200 200">
-							<circle id="levelCircleBgr-toprug1" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
-							<circle id="levelCircleStroke-toprug1" r="80" cx="100" cy="100" fill="none" stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
-						</svg>
-					</div>
-					<div class="score__content score__content--fixed" id="dist-toprug1">
-						<div class="score__label">distance</div>
-						<div class="score__value score__value--dist" id="distValue-toprug1">0</div>
-					</div>
-					<div class="score__content score__content--fixed" id="energy-toprug1">
-						<div class="score__label">energy</div>
-						<div class="energy-bar">
-							<div class="energy-bar-fill" id="energyBar-toprug1"></div>
-						</div>
-					</div>
-				</div>
-
-				<!-- Top Rug Maverick (Combat Mode) UI -->
-				<div class="score" id="score-toprug2" style="display: none;">
-					<div class="score__content" id="level-toprug2">
-						<div class="score__label">level</div>
-						<div class="score__value score__value--level" id="levelValue-toprug2">1</div>
-						<svg class="level-circle" id="levelCircle-toprug2" viewbox="0 0 200 200">
-							<circle id="levelCircleBgr-toprug2" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
-							<circle id="levelCircleStroke-toprug2" r="80" cx="100" cy="100" fill="none" stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
-						</svg>
-					</div>
-					<div class="score__content score__content--fixed" id="dist-toprug2">
-						<div class="score__label">distance</div>
-						<div class="score__value score__value--dist" id="distValue-toprug2">0</div>
-					</div>
-					<div class="score__content score__content--fixed" id="coins-toprug2">
-						<div class="score__label">coins</div>
-						<div class="score__value score__value--dist" id="coinsValue-toprug2">0</div>
-					</div>
-					<div class="score__content score__content--fixed" id="lifes-toprug2">
-						<div class="score__label">life</div>
-						<div class="score__value score__value--lifes" id="lifes-toprug2">
-							<img class="heart visible" src="games/top-rug-maverick/assets/images/heart.png"/>
-							<img class="heart visible" src="games/top-rug-maverick/assets/images/heart.png"/>
-							<img class="heart visible" src="games/top-rug-maverick/assets/images/heart.png"/>
-						</div>
-					</div>
-				</div>
 			</div>
-			<div class="world" id="world-toprug">
+			<!-- Unified game world container -->
+			<div class="world" id="game-world">
 			</div>
-			<div class="world" id="world-toprug1" style="display: none;">
-			</div>
-			<div class="world" id="world-toprug2" style="display: none;">
-			</div>
-			<div class="message--replay" id="replayMessage-toprug">
-				Click to Replay
-			</div>
-			<div class="message--replay" id="replayMessage-toprug1" style="display: none;">
-				Click to Replay
-			</div>
-			<div class="message--replay" id="replayMessage-toprug2" style="display: none;">
+			<div class="message--replay" id="replayMessage">
 				Click to Replay
 			</div>
 			<div id="error">

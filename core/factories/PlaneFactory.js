@@ -1,7 +1,10 @@
 // PlaneFactory - Creates visual placeholders for player
 // No gameplay logic, pure visual factory
 
-class PlaneFactory {
+(function() {
+  'use strict';
+
+  class PlaneFactory {
   static createBasicPlane() {
     // Create elongated capsule-like geometry for player
     const geometry = new THREE.CapsuleGeometry(2, 8, 4, 8); // Radius 2, height 8, capsule shape
@@ -39,5 +42,8 @@ class PlaneFactory {
   }
 }
 
-export default PlaneFactory;
+  // Expose globally
+  window.PlaneFactory = PlaneFactory;
+
+})();
 

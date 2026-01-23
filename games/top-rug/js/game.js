@@ -55,15 +55,8 @@ class SeaVisual {
   }
 }
 
-// Import modern abstractions
-import PlayerEntity from '/core/entities/PlayerEntity.js';
-import ObstacleEntity from '/core/entities/ObstacleEntity.js';
-import PlaneFactory from '/core/factories/PlaneFactory.js';
-import PlayerController from '/core/controllers/PlayerController.js';
-import PlayerMovementPipelineSystem from '/core/systems/PlayerMovementPipelineSystem.js';
-import LaneDebugVisualSystem from '/core/systems/LaneDebugVisualSystem.js';
-import SingleObstacleSpawnerSystem from '/core/systems/SingleObstacleSpawnerSystem.js';
-import DebugConfig from '/core/config/DebugConfig.js';
+// Use global variables instead of imports
+// All core modules are loaded globally
 
 // ModeSupervisor class - manages mode lifecycle
 class ModeSupervisor {
@@ -77,7 +70,7 @@ class ModeSupervisor {
   setMode(mode) {
     // Health check: warn if setting mode while another is active
     if (this.hasActiveMode) {
-      console.warn('[ModeSupervisor] WARNING: Setting new mode while previous mode is still active');
+      logger.warn('[ModeSupervisor] WARNING: Setting new mode while previous mode is still active');
     }
 
     this.currentMode = mode;
@@ -123,7 +116,7 @@ class ModeSupervisor {
 
 const AviatorEndlessGame = {
   init() {
-    console.log('[AviatorEndlessGame] Initializing clean architecture...');
+    logger.info('Initializing clean architecture...');
 
     // Create GameState
     const gameState = {
@@ -174,7 +167,7 @@ const AviatorEndlessGame = {
 
     requestAnimationFrame(loop);
 
-    console.log('[Aviator1Game] Clean architecture initialized successfully');
+    logger.info('Clean architecture initialized successfully');
   }
 };
 
@@ -211,7 +204,7 @@ class Input {
 
   handleKeyDown(event) {
     this.keys[event.code] = true;
-    console.log('[INPUT] keydown', event.code);
+    logger.info('[INPUT] keydown', event.code);
   }
 
   handleKeyUp(event) {
@@ -363,7 +356,7 @@ class World {
     // Clear lights array
     this.lights.length = 0;
 
-    console.log(`[World] Destroyed - removed ${objectsToRemove.length} scene objects`);
+    logger.info(`[World] Destroyed - removed ${objectsToRemove.length} scene objects`);
   }
 }
 
@@ -386,7 +379,7 @@ class ViewProfileSystem {
 
   setProfile(profile) {
     this.currentProfile = profile;
-    console.log(`[ViewProfile] Active profile: ${profile.name} - ${profile.description}`);
+    logger.info(`[ViewProfile] Active profile: ${profile.name} - ${profile.description}`);
   }
 
   getProfile() {
@@ -410,7 +403,7 @@ class CameraRig {
 
   follow(entity) {
     this.targetEntity = entity;
-    console.log('[CameraRig] Now following entity - Z axis locked');
+    logger.info('[CameraRig] Now following entity - Z axis locked');
   }
 
   update() {
@@ -438,7 +431,7 @@ class CameraRig {
     // Camera Z position assertion - camera NEVER moves in Z
     if (this.world.camera.position.z !== this._initialCameraZ) {
       if (!this._zViolationLogged) {
-        console.error('[CameraRig] ERROR: Camera Z position changed - Z axis locked!');
+        logger.error('[CameraRig] ERROR: Camera Z position changed - Z axis locked!');
         this._zViolationLogged = true;
       }
       this.world.camera.position.z = this._initialCameraZ;
@@ -452,7 +445,7 @@ class CameraRig {
 
   clear() {
     this.targetEntity = null;
-    console.log('[CameraRig] Cleared follow target');
+    logger.info('[CameraRig] Cleared follow target');
   }
 }
 
@@ -502,7 +495,7 @@ class GroundSegmentSystem {
       this.world.add(mesh);
     }
 
-    console.log(`[GROUND] flat ground initialized, segmentLength = ${this.segmentLength}`);
+    logger.info(`[GROUND] flat ground initialized, segmentLength = ${this.segmentLength}`);
   }
 
   // WorldScrollConsumer contract
@@ -553,7 +546,7 @@ class GroundSegmentSystem {
       
       // Log warning if spacing is off (but don't break execution)
       if (spacingError >= 0.001) {
-        console.warn(
+        logger.warn(
           `[GroundSegmentSystem] Segment spacing error: expected ${this.segmentLength.toFixed(2)}, got ${spacing.toFixed(2)} (error: ${spacingError.toFixed(3)})`
         );
       }
@@ -630,7 +623,7 @@ class DifficultyCurveSystem {
     this.lastDistanceCheckpoint = 0;
     this.distancePerLevel = 500; // Distance units needed for level increase
 
-    console.log('[DifficultyCurve] Centralized difficulty progression established');
+    logger.info('[DifficultyCurve] Centralized difficulty progression established');
   }
 
   // Update difficulty based on current distance traveled
@@ -641,7 +634,7 @@ class DifficultyCurveSystem {
     // Update level if we've progressed
     if (targetLevel > this.currentLevel) {
       this.currentLevel = targetLevel;
-      console.log(`[DifficultyCurve] LEVEL UP! Reached level ${this.currentLevel} at distance ${distance.toFixed(0)}`);
+      logger.info(`[DifficultyCurve] LEVEL UP! Reached level ${this.currentLevel} at distance ${distance.toFixed(0)}`);
 
       // Update checkpoint for smooth progression
       this.lastDistanceCheckpoint = (this.currentLevel - 1) * this.distancePerLevel;
@@ -674,7 +667,7 @@ class DifficultyCurveSystem {
     this.currentLevel = 1;
     this.difficultyScalar = 1.0;
     this.lastDistanceCheckpoint = 0;
-    console.log('[DifficultyCurve] Difficulty reset for new game');
+    logger.info('[DifficultyCurve] Difficulty reset for new game');
   }
 
   // Get current level
@@ -695,7 +688,7 @@ class DepthLayerSystem {
       SEA: { name: 'SEA', speedMultiplier: 1.0 },
       CLOUDS: { name: 'CLOUDS', speedMultiplier: 0.5 }
     };
-    console.log('[DepthLayer] Active layers:', Object.keys(this.layers).join(', '));
+    logger.info('[DepthLayer] Active layers:', Object.keys(this.layers).join(', '));
   }
 
   getLayer(layerName) {
@@ -743,14 +736,14 @@ class WorldLayoutSystem {
     // Track system registrations
     this.registeredSystems = {};
 
-    console.log('[WorldLayout] Active layout - Forward:Z, Vertical:Y, Lateral:X');
-    console.log('[WorldLayout] Zones:', Object.keys(this.zones).join(', '));
+    logger.info('[WorldLayout] Active layout - Forward:Z, Vertical:Y, Lateral:X');
+    logger.info('[WorldLayout] Zones:', Object.keys(this.zones).join(', '));
   }
 
   registerSystem(systemName, zoneName) {
     if (this.zones[zoneName]) {
       this.registeredSystems[systemName] = zoneName;
-      console.log(`[WorldLayout] ${systemName} registered as ${zoneName}`);
+      logger.info(`[WorldLayout] ${systemName} registered as ${zoneName}`);
     }
   }
 
@@ -786,7 +779,7 @@ class WorldScrollerSystem {
     this._lastLoggedGround = 0;
     this._lastLoggedSky = 0;
 
-    console.log('[WorldScroller] Single source of truth for forward motion established');
+    logger.info('[WorldScroller] Single source of truth for forward motion established');
   }
 
   update(deltaTime) {
@@ -798,7 +791,7 @@ class WorldScrollerSystem {
     this.updateZoneOffset('SKY_FAR', baseDeltaZ);
 
     // Gated, throttled logging for debug purposes
-    if (DebugConfig.ENABLE_WORLD_SCROLL_LOGS) {
+    if (window.DebugConfig && window.DebugConfig.ENABLE_WORLD_SCROLL_LOGS) {
       this._logTimer += deltaTime;
 
       // Log at most once every 500ms and only if offsets changed significantly
@@ -807,7 +800,7 @@ class WorldScrollerSystem {
         const skyChanged = Math.abs(this.scrollOffsets.SKY_FAR - this._lastLoggedSky) > 10;
 
         if (groundChanged || skyChanged) {
-    console.log(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}, SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
+    logger.info(`[WorldScroller] GROUND_PLANE offset: ${this.scrollOffsets.GROUND_PLANE.toFixed(2)}, SKY_FAR offset: ${this.scrollOffsets.SKY_FAR.toFixed(2)}`);
           this._lastLoggedGround = this.scrollOffsets.GROUND_PLANE;
           this._lastLoggedSky = this.scrollOffsets.SKY_FAR;
         }
@@ -829,7 +822,7 @@ class WorldScrollerSystem {
     const zone = this.worldLayoutSystem.getZone(zoneName);
     if (zone && Math.abs(this.scrollOffsets[zoneName]) > zone.zWrapLimit) {
       this.scrollOffsets[zoneName] = this.scrollOffsets[zoneName] % zone.zWrapReset;
-      console.log(`[WorldScroller] ${zoneName} wrapped at limit ${zone.zWrapLimit}`);
+      logger.info(`[WorldScroller] ${zoneName} wrapped at limit ${zone.zWrapLimit}`);
     }
   }
 
@@ -854,7 +847,7 @@ class LaneSystem {
       this.laneCenters[i] = startX + (i * laneWidth);
     }
 
-    console.log(`[LaneSystem] ${laneCount} lanes configured:`, this.laneCenters);
+    logger.info(`[LaneSystem] ${laneCount} lanes configured:`, this.laneCenters);
   }
 
   getLaneCenter(laneIndex) {
@@ -893,7 +886,7 @@ class PlayerIntentSystem {
 
     this.currentIntent = null;
 
-    console.log('[PlayerIntent] Semantic intent interpretation established');
+    logger.info('[PlayerIntent] Semantic intent interpretation established');
   }
 
   // Convert raw input into axis-based gameplay intent
@@ -953,8 +946,8 @@ class PlayerActionStateSystem {
     this.cooldownRemaining = 0;
     this.stunRemaining = 0;
 
-    if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
-    console.log('[PlayerActionState] Action state management established');
+    if (window.DebugConfig && window.DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+    logger.info('[PlayerActionState] Action state management established');
     }
   }
 
@@ -976,8 +969,8 @@ class PlayerActionStateSystem {
     // State transitions (no logging for cooldown ending - only when it starts)
     if (this.currentState === 'STUNNED' && this.stunRemaining <= 0) {
       this.currentState = 'READY';
-      if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
-        console.log('[PlayerActionState] STUNNED → READY: Recovered from stun');
+      if (window.DebugConfig && window.DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+        logger.info('[PlayerActionState] STUNNED → READY: Recovered from stun');
       }
     } else if (this.currentState === 'LANE_SWITCH_COOLDOWN' && this.cooldownRemaining <= 0) {
       this.currentState = 'READY';
@@ -1012,8 +1005,8 @@ class PlayerActionStateSystem {
       this.currentState = 'LANE_SWITCH_COOLDOWN';
       this.cooldownRemaining = this.laneSwitchCooldownMs;
 
-      if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
-        console.log(`[PlayerActionState] ${this.previousState} → LANE_SWITCH_COOLDOWN: Lane switch executed (${this.laneSwitchCooldownMs}ms cooldown)`);
+      if (window.DebugConfig && window.DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+        logger.info(`[PlayerActionState] ${this.previousState} → LANE_SWITCH_COOLDOWN: Lane switch executed (${this.laneSwitchCooldownMs}ms cooldown)`);
       }
     }
   }
@@ -1024,8 +1017,8 @@ class PlayerActionStateSystem {
     this.currentState = 'STUNNED';
     this.stunRemaining = durationMs;
 
-    if (DebugConfig.ENABLE_ACTION_STATE_LOGS) {
-      console.log(`[PlayerActionState] ${this.previousState} → STUNNED: Stunned for ${durationMs}ms`);
+    if (window.DebugConfig && window.DebugConfig.ENABLE_ACTION_STATE_LOGS) {
+      logger.info(`[PlayerActionState] ${this.previousState} → STUNNED: Stunned for ${durationMs}ms`);
     }
   }
 
@@ -1056,7 +1049,7 @@ class CollisionImpactSystem {
     this.playerActionStateSystem = playerActionStateSystem;
     this.lastStunLog = 0;
 
-    console.log('[CollisionImpact] Collision consequence processing established');
+    logger.info('[CollisionImpact] Collision consequence processing established');
   }
 
   // Process domain events and apply collision consequences
@@ -1091,7 +1084,7 @@ class CollisionImpactSystem {
       // Log stun application (throttled to avoid spam)
       const now = performance.now();
       if (now - this.lastStunLog > 1000) { // Log at most once per second
-        console.log(`[CollisionImpact] Player stunned for ${maxStunDuration.toFixed(0)}ms (${collisionEvents.length} collision(s))`);
+        logger.info(`[CollisionImpact] Player stunned for ${maxStunDuration.toFixed(0)}ms (${collisionEvents.length} collision(s))`);
         this.lastStunLog = now;
       }
     }
@@ -1105,7 +1098,7 @@ class HealthSystem {
     this.currentLives = initialLives;
     this.isAlive = true;
 
-    console.log(`[Health] Player starts with ${initialLives} lives`);
+    logger.info(`[Health] Player starts with ${initialLives} lives`);
   }
 
   // Apply damage to player health
@@ -1117,9 +1110,9 @@ class HealthSystem {
 
     if (this.currentLives <= 0) {
       this.isAlive = false;
-      console.log('[Health] Player died');
+      logger.info('[Health] Player died');
     } else {
-      console.log(`[Health] Life lost, remaining: ${this.currentLives}`);
+      logger.info(`[Health] Life lost, remaining: ${this.currentLives}`);
     }
 
     return damageApplied;
@@ -1139,7 +1132,7 @@ class HealthSystem {
   reset() {
     this.currentLives = this.initialLives;
     this.isAlive = true;
-    console.log(`[Health] Health reset to ${this.initialLives} lives`);
+    logger.info(`[Health] Health reset to ${this.initialLives} lives`);
   }
 
   // Get health state for debugging
@@ -1162,7 +1155,7 @@ class CollisionDamageSystem {
     this.healthSystem = healthSystem;
     this.lastDamageFrame = -1; // Track frame-based damage throttling
 
-    console.log('[CollisionDamage] Collision damage processing established');
+    logger.info('[CollisionDamage] Collision damage processing established');
   }
 
   // Process domain events and apply damage for collisions
@@ -1200,7 +1193,7 @@ class LaneController {
     this.laneSystem = laneSystem;
     this.currentLaneIndex = 1; // Start in middle lane for 3-lane setup
     this.targetLaneIndex = 1;
-    console.log(`[LaneController] Initialized on lane ${this.currentLaneIndex}`);
+    logger.info(`[LaneController] Initialized on lane ${this.currentLaneIndex}`);
   }
 
   processIntents(intents) {
@@ -1314,10 +1307,10 @@ class SpawnBandSystem {
     // Logging guard for periodic progress updates
     this._lastProgressLog = 0;
 
-    console.log('[SpawnBandSystem] Spatial spawn rules established');
-    console.log('[SpawnBandSystem] Bands relative to player Z=0:');
+    logger.info('[SpawnBandSystem] Spatial spawn rules established');
+    logger.info('[SpawnBandSystem] Bands relative to player Z=0:');
     Object.values(this.bands).forEach(band => {
-      console.log(`  ${band.name}: Z[${band.minZ}, ${band.maxZ}] - ${band.description}`);
+      logger.info(`  ${band.name}: Z[${band.minZ}, ${band.maxZ}] - ${band.description}`);
     });
   }
 
@@ -1332,9 +1325,9 @@ class SpawnBandSystem {
       const isInBand = this.isInBand(worldZ, bandKey);
 
       if (!wasInBand && isInBand) {
-        console.log(`[SpawnBandSystem] Entered ${bandKey} at world progress ${this.worldProgress.toFixed(0)}`);
+        logger.info(`[SpawnBandSystem] Entered ${bandKey} at world progress ${this.worldProgress.toFixed(0)}`);
       } else if (wasInBand && !isInBand) {
-        console.log(`[SpawnBandSystem] Exited ${bandKey} at world progress ${this.worldProgress.toFixed(0)}`);
+        logger.info(`[SpawnBandSystem] Exited ${bandKey} at world progress ${this.worldProgress.toFixed(0)}`);
       }
 
       this.lastBandCrossings[bandKey] = isInBand;
@@ -1343,7 +1336,7 @@ class SpawnBandSystem {
     // Log world progress periodically (not every frame)
     const now = performance.now();
     if (!this._lastProgressLog || now - this._lastProgressLog > 5000) { // Log every 5 seconds
-      console.log(`[SpawnBandSystem] World progress: ${this.worldProgress.toFixed(0)}, Player Z: ${worldZ.toFixed(2)}`);
+      logger.info(`[SpawnBandSystem] World progress: ${this.worldProgress.toFixed(0)}, Player Z: ${worldZ.toFixed(2)}`);
       this._lastProgressLog = now;
     }
   }
@@ -1386,7 +1379,7 @@ class EntityRegistrySystem {
     this.nextId = 1;
     this.lastLogTime = 0;
 
-    console.log('[EntityRegistry] Authoritative entity registry established');
+    logger.info('[EntityRegistry] Authoritative entity registry established');
   }
 
   // Register an entity in the registry
@@ -1397,7 +1390,7 @@ class EntityRegistrySystem {
     console.assert(typeof entity.z === 'number', '[EntityRegistry] ERROR: Entity must have numeric z property');
 
     if (this.entities.has(entity.id)) {
-      console.warn(`[EntityRegistry] WARNING: Entity ${entity.id} already registered, updating`);
+      logger.warn(`[EntityRegistry] WARNING: Entity ${entity.id} already registered, updating`);
     }
 
     this.entities.set(entity.id, entity);
@@ -1408,7 +1401,7 @@ class EntityRegistrySystem {
     }
     this.entitiesByType.get(entity.type).add(entity);
 
-    console.log(`[EntityRegistry] Registered ${entity.type} entity ${entity.id} at Z=${entity.z.toFixed(2)}`);
+    logger.info(`[EntityRegistry] Registered ${entity.type} entity ${entity.id} at Z=${entity.z.toFixed(2)}`);
     return entity.id;
   }
 
@@ -1418,7 +1411,7 @@ class EntityRegistrySystem {
     const entity = this.entities.get(id);
 
     if (!entity) {
-      console.warn(`[EntityRegistry] WARNING: Entity ${id} not found for unregister`);
+      logger.warn(`[EntityRegistry] WARNING: Entity ${id} not found for unregister`);
       return false;
     }
 
@@ -1432,7 +1425,7 @@ class EntityRegistrySystem {
     }
 
     this.entities.delete(id);
-    console.log(`[EntityRegistry] Unregistered ${entity.type} entity ${id}`);
+    logger.info(`[EntityRegistry] Unregistered ${entity.type} entity ${id}`);
     return true;
   }
 
@@ -1476,7 +1469,7 @@ class EntityRegistrySystem {
     }
 
     if (entitiesToRemove.length > 0) {
-      console.log(`[EntityRegistry] Cleaned up ${entitiesToRemove.length} entities`);
+      logger.info(`[EntityRegistry] Cleaned up ${entitiesToRemove.length} entities`);
     }
 
     return entitiesToRemove.length;
@@ -1502,7 +1495,7 @@ class EntityRegistrySystem {
         countsByType[type] = entities.size;
       }
 
-      console.log(`[EntityRegistry] Registry size: ${this.entities.size} entities`, countsByType);
+      logger.info(`[EntityRegistry] Registry size: ${this.entities.size} entities`, countsByType);
       this.lastLogTime = now;
     }
 
@@ -1552,7 +1545,7 @@ class EntityRegistrySystem {
     this.nextId = 1;
 
     if (count > 0) {
-      console.log(`[EntityRegistry] Cleared ${count} entities`);
+      logger.info(`[EntityRegistry] Cleared ${count} entities`);
     }
 
     return count;
@@ -1569,9 +1562,9 @@ class CollisionIntentSystem {
     this.gracePeriodSeconds = 2.0; // First 2 seconds
     this.elapsedTime = 0; // Track total elapsed time
 
-    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
-      console.log('[CollisionIntent] Deterministic collision detection layer established');
-      console.log(`[CollisionIntent] Grace period: ${this.gracePeriodWorldUnits} world units OR ${this.gracePeriodSeconds}s`);
+    if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
+      logger.info('[CollisionIntent] Deterministic collision detection layer established');
+      logger.info(`[CollisionIntent] Grace period: ${this.gracePeriodWorldUnits} world units OR ${this.gracePeriodSeconds}s`);
     }
   }
 
@@ -1638,8 +1631,8 @@ class CollisionIntentSystem {
         this.currentFrameIntents.push(intent);
 
         // Log collision intent
-        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
-        console.log(`[CollisionIntent] COLLISION: Plane vs ${entity.type} entity ${entity.id} (lane ${planeLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
+        if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
+        logger.info(`[CollisionIntent] COLLISION: Plane vs ${entity.type} entity ${entity.id} (lane ${planeLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
         }
       }
     }
@@ -1702,7 +1695,7 @@ class CollisionIntentSystem {
     this.currentFrameIntents = [];
 
     if (clearedCount > 0 && DebugConfig.ENABLE_OBSTACLE_LOGS) {
-      console.log(`[CollisionIntent] Cleared ${clearedCount} intents for next frame`);
+      logger.info(`[CollisionIntent] Cleared ${clearedCount} intents for next frame`);
     }
 
     return clearedCount;
@@ -1712,7 +1705,7 @@ class CollisionIntentSystem {
   setZCollisionThreshold(threshold) {
     console.assert(threshold > 0, '[CollisionIntent] ERROR: Z threshold must be positive');
     this.zCollisionThreshold = threshold;
-    console.log(`[CollisionIntent] Z collision threshold updated to ${threshold}`);
+    logger.info(`[CollisionIntent] Z collision threshold updated to ${threshold}`);
   }
 
   getZCollisionThreshold() {
@@ -1729,7 +1722,7 @@ class CoinEntity {
     this.z = z;
     this.visualOffsetZ = 0; // Default visual offset for coordination between visual systems
 
-    console.log(`[CoinEntity] Created coin ${id} at lane ${laneIndex}, Z=${z.toFixed(2)}`);
+    logger.info(`[CoinEntity] Created coin ${id} at lane ${laneIndex}, Z=${z.toFixed(2)}`);
   }
 
   // Optional update method (does nothing for now)
@@ -1739,7 +1732,7 @@ class CoinEntity {
 
   // Cleanup method
   destroy() {
-    console.log(`[CoinEntity] Destroyed coin ${this.id}`);
+    logger.info(`[CoinEntity] Destroyed coin ${this.id}`);
   }
 }
 
@@ -1769,7 +1762,7 @@ class LaneObstacleEntity {
     // Create mesh
     this.createMesh(world);
 
-    console.log(`[LaneObstacleEntity] Created obstacle ${id} in lane ${laneIndex} at (${laneCenterX.toFixed(1)}, ${baselineY}, 600)`);
+    logger.info(`[LaneObstacleEntity] Created obstacle ${id} in lane ${laneIndex} at (${laneCenterX.toFixed(1)}, ${baselineY}, 600)`);
   }
 
   createMesh(world) {
@@ -1829,7 +1822,7 @@ class LaneObstacleEntity {
       this.mesh.material.dispose();
       this.mesh = null;
     }
-    console.log(`[LaneObstacleEntity] Destroyed obstacle ${this.id}`);
+    logger.info(`[LaneObstacleEntity] Destroyed obstacle ${this.id}`);
   }
 }
 
@@ -1843,7 +1836,7 @@ class LaneObstacleCollisionSystem {
     this.zCollisionThreshold = zCollisionThreshold;
     this.domainEvents = []; // Domain events for current frame
 
-    console.log(`[LaneObstacleCollision] Lane obstacle collision detection established (Z threshold: ${zCollisionThreshold})`);
+    logger.info(`[LaneObstacleCollision] Lane obstacle collision detection established (Z threshold: ${zCollisionThreshold})`);
   }
 
   // Process collision detection and emit domain events
@@ -1888,7 +1881,7 @@ class LaneObstacleCollisionSystem {
         this.domainEvents.push(collisionEvent);
 
         // Log collision detection (will be consumed by other systems)
-        console.log(`[LaneObstacleCollision] COLLISION: Player vs obstacle ${obstacle.id} (lane ${playerLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
+        logger.info(`[LaneObstacleCollision] COLLISION: Player vs obstacle ${obstacle.id} (lane ${playerLaneIndex}, Z dist ${zDistance.toFixed(2)})`);
       }
     }
 
@@ -1912,7 +1905,7 @@ class SimpleObstacleSpawnSystem {
     // Active obstacles
     this.activeObstacles = [];
 
-    console.log('[SimpleObstacleSpawn] Minimal obstacle spawning system established');
+    logger.info('[SimpleObstacleSpawn] Minimal obstacle spawning system established');
   }
 
   update(deltaTime) {
@@ -1957,7 +1950,7 @@ class SimpleObstacleSpawnSystem {
     // Add to active obstacles
     this.activeObstacles.push(obstacle);
 
-    console.log(`[SimpleObstacleSpawn] Spawned obstacle in lane ${randomLane}`);
+    logger.info(`[SimpleObstacleSpawn] Spawned obstacle in lane ${randomLane}`);
   }
 
   getActiveObstacles() {
@@ -1992,7 +1985,7 @@ class ObstacleSpawnSystem {
     // Debug logging
     this.lastMultiplier = 1.0; // Track multiplier changes
 
-    console.log('[ObstacleSpawn] Lane-based obstacle spawning system established');
+    logger.info('[ObstacleSpawn] Lane-based obstacle spawning system established');
   }
 
   update() {
@@ -2011,7 +2004,7 @@ class ObstacleSpawnSystem {
     // Update all active obstacles
     // Log multiplier only when it changes
     if (DebugConfig.ENABLE_OBSTACLE_LOGS && difficultyState.speedMultiplier !== this.lastMultiplier) {
-      console.log(`[ObstacleSpeed] multiplier changed: ${this.lastMultiplier} → ${difficultyState.speedMultiplier}`);
+      logger.info(`[ObstacleSpeed] multiplier changed: ${this.lastMultiplier} → ${difficultyState.speedMultiplier}`);
       this.lastMultiplier = difficultyState.speedMultiplier;
     }
 
@@ -2050,7 +2043,7 @@ class ObstacleSpawnSystem {
     // Track last spawn lane
     this.lastSpawnLane = chosenLane;
 
-    console.log(`[ObstacleSpawn] Spawned obstacle in lane ${chosenLane} at distance ${this.distanceSystem.getDistance().toFixed(0)}`);
+    logger.info(`[ObstacleSpawn] Spawned obstacle in lane ${chosenLane} at distance ${this.distanceSystem.getDistance().toFixed(0)}`);
   }
 
   selectLane() {
@@ -2108,7 +2101,7 @@ class ObstacleSpawnSystem {
     for (const event of obstacleCollisionEvents) {
       const removed = this.removeObstacle(event.entityId);
       if (removed) {
-        console.log(`[ObstacleSpawn] Removed collided obstacle ${event.entityId}`);
+        logger.info(`[ObstacleSpawn] Removed collided obstacle ${event.entityId}`);
       }
     }
   }
@@ -2124,7 +2117,7 @@ class SpawnSystem {
 
     this.lastSpawnProgress = 0;
 
-    console.log(`[SpawnSystem] Rule-driven spawning established (interval: ${spawnInterval} world units)`);
+    logger.info(`[SpawnSystem] Rule-driven spawning established (interval: ${spawnInterval} world units)`);
   }
 
   update() {
@@ -2153,14 +2146,14 @@ class SpawnSystem {
     // Register with entity registry
     this.entityRegistry.register(coinEntity);
 
-    console.log(`[SpawnSystem] SPAWNED: Coin ${entityId} in lane ${laneIndex} at Z=${spawnZ.toFixed(2)} (progress: ${this.spawnBandSystem.getWorldProgress().toFixed(0)})`);
+    logger.info(`[SpawnSystem] SPAWNED: Coin ${entityId} in lane ${laneIndex} at Z=${spawnZ.toFixed(2)} (progress: ${this.spawnBandSystem.getWorldProgress().toFixed(0)})`);
   }
 
   // Configuration methods
   setSpawnInterval(interval) {
     console.assert(interval > 0, '[SpawnSystem] ERROR: Spawn interval must be positive');
     this.spawnInterval = interval;
-    console.log(`[SpawnSystem] Spawn interval updated to ${interval} world units`);
+    logger.info(`[SpawnSystem] Spawn interval updated to ${interval} world units`);
   }
 
   getSpawnInterval() {
@@ -2184,7 +2177,7 @@ class CollisionConsumptionSystem {
     this.obstacleSpawnSystem = obstacleSpawnSystem;
     this.domainEvents = []; // Domain events for current frame
 
-    console.log('[CollisionConsumption] Intent consumption system established');
+    logger.info('[CollisionConsumption] Intent consumption system established');
   }
 
   // Process collision intents and emit domain events
@@ -2247,9 +2240,9 @@ class CollisionConsumptionSystem {
 
       this.domainEvents.push(domainEvent);
 
-      console.log(`[CollisionConsumption] COIN_COLLECTED: Entity ${entityId} in lane ${laneIndex}`);
+      logger.info(`[CollisionConsumption] COIN_COLLECTED: Entity ${entityId} in lane ${laneIndex}`);
     } else {
-      console.warn(`[CollisionConsumption] WARNING: Failed to unregister coin entity ${entityId}`);
+      logger.warn(`[CollisionConsumption] WARNING: Failed to unregister coin entity ${entityId}`);
     }
   }
 
@@ -2295,7 +2288,7 @@ class CollisionConsumptionSystem {
     this.domainEvents = [];
 
     if (clearedCount > 0) {
-      console.log(`[CollisionConsumption] Cleared ${clearedCount} domain events for next frame`);
+      logger.info(`[CollisionConsumption] Cleared ${clearedCount} domain events for next frame`);
     }
 
     return clearedCount;
@@ -2307,7 +2300,7 @@ class ScoreSystem {
   constructor() {
     this.coinsCollected = 0;
 
-    console.log('[ScoreSystem] Authoritative scoring system established');
+    logger.info('[ScoreSystem] Authoritative scoring system established');
   }
 
   // Consume domain events and update score state
@@ -2327,7 +2320,7 @@ class ScoreSystem {
     // Log score changes
     const coinsGained = this.coinsCollected - coinsBefore;
     if (coinsGained > 0) {
-      console.log(`[ScoreSystem] SCORE: +${coinsGained} coins (Total: ${this.coinsCollected})`);
+      logger.info(`[ScoreSystem] SCORE: +${coinsGained} coins (Total: ${this.coinsCollected})`);
     }
 
     return coinsGained;
@@ -2337,7 +2330,7 @@ class ScoreSystem {
     // Increment coins collected
     this.coinsCollected += 1;
 
-    console.log(`[ScoreSystem] Coin collected in lane ${event.laneIndex} (Entity ${event.entityId})`);
+    logger.info(`[ScoreSystem] Coin collected in lane ${event.laneIndex} (Entity ${event.entityId})`);
   }
 
   // Get current score state
@@ -2359,7 +2352,7 @@ class ScoreSystem {
     this.coinsCollected = 0;
 
     if (previousScore > 0) {
-      console.log(`[ScoreSystem] Score reset from ${previousScore} to 0`);
+      logger.info(`[ScoreSystem] Score reset from ${previousScore} to 0`);
     }
 
     return previousScore;
@@ -2383,7 +2376,7 @@ class PresentationSystem {
     // Cache DOM element reference
     this.initializeDomReferences();
 
-    console.log('[PresentationSystem] Observer-only presentation system established');
+    logger.info('[PresentationSystem] Observer-only presentation system established');
   }
 
   initializeDomReferences() {
@@ -2443,7 +2436,7 @@ class DebugWorldOverlaySystem {
     this.overlayElement = null;
     this.initializeOverlay();
 
-    console.log('[DebugOverlay] Real-time engine state overlay initialized');
+    logger.info('[DebugOverlay] Real-time engine state overlay initialized');
   }
 
   initializeOverlay() {
@@ -2539,7 +2532,7 @@ class PlayerVerticalConstraintSystem {
     // Debug logging guard
     this.driftLogged = false;
 
-    console.log('[PlayerVerticalConstraint] Vertical constraint system established');
+    logger.info('[PlayerVerticalConstraint] Vertical constraint system established');
   }
 
   update(deltaTime) {
@@ -2562,7 +2555,7 @@ class PlayerVerticalConstraintSystem {
 
     if (yDeviation > 5) {
       if (!this.driftLogged) {
-        console.log(`[VerticalConstraint] Correcting Y drift of ${yDeviation.toFixed(1)} units`);
+        logger.info(`[VerticalConstraint] Correcting Y drift of ${yDeviation.toFixed(1)} units`);
         this.driftLogged = true;
       }
     } else {
@@ -2596,13 +2589,13 @@ class LaneEntitySpawnSystem {
     this.baseSpawnInterval = 2000; // Base 2 seconds between spawns
     this.lastSpawnTime = 0;
 
-    console.log('[LaneEntitySpawn] Lane-based entity spawning system established');
+    logger.info('[LaneEntitySpawn] Lane-based entity spawning system established');
   }
 
   update(currentTime) {
     // Defensive guard - exit if required dependencies are missing
     if (!this.difficultyCurveSystem) {
-      console.warn('[LaneEntitySpawn] WARNING: difficultyCurveSystem missing, skipping update');
+      logger.warn('[LaneEntitySpawn] WARNING: difficultyCurveSystem missing, skipping update');
       return;
     }
 
@@ -2611,11 +2604,11 @@ class LaneEntitySpawnSystem {
     try {
       difficultyState = this.difficultyCurveSystem.getDifficultyState();
       if (!difficultyState || typeof difficultyState.spawnRateMultiplier !== 'number') {
-        console.warn('[LaneEntitySpawn] WARNING: Invalid difficulty state, skipping spawn check');
+        logger.warn('[LaneEntitySpawn] WARNING: Invalid difficulty state, skipping spawn check');
         return;
       }
     } catch (error) {
-      console.warn('[LaneEntitySpawn] WARNING: Failed to get difficulty state, skipping update');
+      logger.warn('[LaneEntitySpawn] WARNING: Failed to get difficulty state, skipping update');
       return;
     }
 
@@ -2630,7 +2623,7 @@ class LaneEntitySpawnSystem {
   spawnEntity() {
     // Defensive guards - exit early if required dependencies are missing
     if (!this.laneSystem || !this.worldLayoutSystem || !this.entityRegistrySystem || !this.world) {
-      console.warn('[LaneEntitySpawn] WARNING: Missing required dependencies, skipping spawn');
+      logger.warn('[LaneEntitySpawn] WARNING: Missing required dependencies, skipping spawn');
       return;
     }
 
@@ -2639,12 +2632,12 @@ class LaneEntitySpawnSystem {
     try {
       const laneCount = this.laneSystem.getLaneCount();
       if (typeof laneCount !== 'number' || laneCount <= 0) {
-        console.warn('[LaneEntitySpawn] WARNING: Invalid lane count, skipping spawn');
+        logger.warn('[LaneEntitySpawn] WARNING: Invalid lane count, skipping spawn');
         return;
       }
       laneIndex = Math.floor(Math.random() * laneCount);
     } catch (error) {
-      console.warn('[LaneEntitySpawn] WARNING: Failed to get lane count, skipping spawn');
+      logger.warn('[LaneEntitySpawn] WARNING: Failed to get lane count, skipping spawn');
       return;
     }
 
@@ -2653,11 +2646,11 @@ class LaneEntitySpawnSystem {
     try {
       laneCenterX = this.laneSystem.getLaneCenter(laneIndex);
       if (typeof laneCenterX !== 'number') {
-        console.warn('[LaneEntitySpawn] WARNING: Invalid lane center X, skipping spawn');
+        logger.warn('[LaneEntitySpawn] WARNING: Invalid lane center X, skipping spawn');
         return;
       }
     } catch (error) {
-      console.warn('[LaneEntitySpawn] WARNING: Failed to get lane center, skipping spawn');
+      logger.warn('[LaneEntitySpawn] WARNING: Failed to get lane center, skipping spawn');
       return;
     }
 
@@ -2666,12 +2659,12 @@ class LaneEntitySpawnSystem {
     try {
       const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
       if (!midAirZone || typeof midAirZone.baselineY !== 'number') {
-        console.warn('[LaneEntitySpawn] WARNING: Invalid MID_AIR zone or baselineY, skipping spawn');
+        logger.warn('[LaneEntitySpawn] WARNING: Invalid MID_AIR zone or baselineY, skipping spawn');
         return;
       }
       spawnY = midAirZone.baselineY;
     } catch (error) {
-      console.warn('[LaneEntitySpawn] WARNING: Failed to get MID_AIR zone, skipping spawn');
+      logger.warn('[LaneEntitySpawn] WARNING: Failed to get MID_AIR zone, skipping spawn');
       return;
     }
 
@@ -2684,11 +2677,11 @@ class LaneEntitySpawnSystem {
     try {
       entityId = this.entityRegistrySystem.generateId();
       if (typeof entityId !== 'number') {
-        console.warn('[LaneEntitySpawn] WARNING: Invalid entity ID generated, skipping spawn');
+        logger.warn('[LaneEntitySpawn] WARNING: Invalid entity ID generated, skipping spawn');
         return;
       }
     } catch (error) {
-      console.warn('[LaneEntitySpawn] WARNING: Failed to generate entity ID, skipping spawn');
+      logger.warn('[LaneEntitySpawn] WARNING: Failed to generate entity ID, skipping spawn');
       return;
     }
 
@@ -2711,7 +2704,7 @@ class LaneEntitySpawnSystem {
       // Store mesh reference for cleanup
       coinEntity.mesh = mesh;
     } catch (error) {
-      console.warn('[LaneEntitySpawn] WARNING: Failed to create visual mesh, continuing without visuals');
+      logger.warn('[LaneEntitySpawn] WARNING: Failed to create visual mesh, continuing without visuals');
       // Continue without mesh - entity can still participate in collisions
     }
 
@@ -2719,7 +2712,7 @@ class LaneEntitySpawnSystem {
     try {
       this.entityRegistrySystem.register(coinEntity);
     } catch (error) {
-      console.warn('[LaneEntitySpawn] WARNING: Failed to register entity, skipping spawn');
+      logger.warn('[LaneEntitySpawn] WARNING: Failed to register entity, skipping spawn');
       return;
     }
 
@@ -2727,7 +2720,7 @@ class LaneEntitySpawnSystem {
     const laneCenterXStr = (typeof laneCenterX === 'number') ? laneCenterX.toFixed(1) : 'undefined';
     const spawnYStr = (typeof spawnY === 'number') ? spawnY.toFixed(1) : 'undefined';
 
-    console.log(`[LaneEntitySpawn] SPAWNED: Coin ${entityId} in lane ${laneIndex} at (${laneCenterXStr}, ${spawnYStr}, ${spawnZ})`);
+    logger.info(`[LaneEntitySpawn] SPAWNED: Coin ${entityId} in lane ${laneIndex} at (${laneCenterXStr}, ${spawnYStr}, ${spawnZ})`);
   }
 }
 
@@ -2749,7 +2742,7 @@ class LaneEntityVisualSystem {
     // Debug sphere for testing visual system
     this.debugSphereCreated = false;
 
-    console.log('[LaneEntityVisual] Lane entity visual system established');
+    logger.info('[LaneEntityVisual] Lane entity visual system established');
   }
 
   update() {
@@ -2766,9 +2759,9 @@ class LaneEntityVisualSystem {
         debugSphere.position.set(0, 100, -200); // In front of plane
         this.world.add(debugSphere);
         this.debugSphereCreated = true;
-        console.log('[LaneEntityVisual] DEBUG: Magenta test sphere created at (0, 100, -200)');
+        logger.info('[LaneEntityVisual] DEBUG: Magenta test sphere created at (0, 100, -200)');
       } catch (error) {
-        console.warn('[LaneEntityVisual] WARNING: Failed to create debug sphere');
+        logger.warn('[LaneEntityVisual] WARNING: Failed to create debug sphere');
       }
     }
 
@@ -2816,7 +2809,7 @@ class LaneEntityVisualSystem {
       });
 
     } catch (error) {
-      console.warn(`[LaneEntityVisual] WARNING: Failed to create visual for entity ${entity.id}`);
+      logger.warn(`[LaneEntityVisual] WARNING: Failed to create visual for entity ${entity.id}`);
     }
   }
 
@@ -2864,7 +2857,7 @@ class LaneEntityVisualSystem {
         this.world.remove(visualData.mesh);
       }
     } catch (error) {
-      console.warn(`[LaneEntityVisual] WARNING: Failed to clean up visual for entity ${entityId}`);
+      logger.warn(`[LaneEntityVisual] WARNING: Failed to clean up visual for entity ${entityId}`);
     }
 
     // Remove from our tracking
@@ -2895,7 +2888,7 @@ class LaneEntityApproachSystem {
     // Player plane is always at Z = 0
     this.PLAYER_PLANE_Z = 0;
 
-    console.log('[LaneEntityApproach] Visual approach effect system established');
+    logger.info('[LaneEntityApproach] Visual approach effect system established');
   }
 
   update() {
@@ -2926,7 +2919,7 @@ class LaneEntityApproachSystem {
       // Check if entity has crossed the player plane
       if (approachZ > this.PLAYER_PLANE_Z + 10) {
         // Entity has passed the player, unregister it
-        console.log('[Approach] Entity crossed player plane');
+        logger.info('[Approach] Entity crossed player plane');
         this.entityRegistrySystem.unregister(entity);
       }
     }
@@ -2943,7 +2936,7 @@ class AudioPresentationSystem {
     // Initialize audio context and load sound references
     this.initializeAudio();
 
-    console.log('[AudioPresentation] Observer-only audio feedback system established');
+    logger.info('[AudioPresentation] Observer-only audio feedback system established');
   }
 
   initializeAudio() {
@@ -2990,10 +2983,10 @@ class AudioPresentationSystem {
     try {
       // Placeholder for audio playback
       // this.playSound(this.audioAssets.coinCollect, event.value || 1);
-      console.log(`[AudioPresentation] 🎵 Coin collected sound (value: ${event.value || 1})`);
+      logger.info(`[AudioPresentation] 🎵 Coin collected sound (value: ${event.value || 1})`);
     } catch (error) {
       // Gracefully handle missing audio assets
-      console.warn('[AudioPresentation] Coin collect audio not available');
+      logger.warn('[AudioPresentation] Coin collect audio not available');
     }
   }
 
@@ -3002,10 +2995,10 @@ class AudioPresentationSystem {
     try {
       // Placeholder for audio playback
       // this.playSound(this.audioAssets.collision, event.value || 1);
-      console.log(`[AudioPresentation] 💥 Collision sound (intensity: ${event.value || 1})`);
+      logger.info(`[AudioPresentation] 💥 Collision sound (intensity: ${event.value || 1})`);
     } catch (error) {
       // Gracefully handle missing audio assets
-      console.warn('[AudioPresentation] Collision audio not available');
+      logger.warn('[AudioPresentation] Collision audio not available');
     }
   }
 
@@ -3031,7 +3024,7 @@ class VFXPresentationSystem {
     this.world = world;
     this.activeEffects = []; // Track active visual effects for cleanup
 
-    console.log('[VFXPresentation] Observer-only visual effects system established');
+    logger.info('[VFXPresentation] Observer-only visual effects system established');
   }
 
   // Observer-only update method - reads domain events, spawns temporary visuals
@@ -3252,10 +3245,10 @@ class WorldAxisSystem {
     this.baseDeltaZ = -this.speed * deltaTime;
 
     // Throttled world scroll logging (500ms intervals)
-    if (DebugConfig.ENABLE_WORLD_SCROLL_LOGS) {
+    if (window.DebugConfig && window.DebugConfig.ENABLE_WORLD_SCROLL_LOGS) {
       this.worldScrollLogTimer += deltaTime;
       if (this.worldScrollLogTimer >= 0.5) {
-        console.log('[WorldAxis] baseDeltaZ:', this.baseDeltaZ.toFixed(2));
+        logger.info('[WorldAxis] baseDeltaZ:', this.baseDeltaZ.toFixed(2));
         this.worldScrollLogTimer = 0;
       }
     }
@@ -3308,7 +3301,7 @@ class SkySystem {
     // Add group to world
     this.world.add(this.cloudGroup);
 
-    console.log(`[SkySystem] Initialized - ${this.cloudCount} clouds added to world`);
+    logger.info(`[SkySystem] Initialized - ${this.cloudCount} clouds added to world`);
   }
 
   setWorldLayout(worldLayout) {
@@ -3401,7 +3394,7 @@ class SkySystem {
 
     this.clouds.length = 0;
 
-    console.log('[SkySystem] Destroyed - cloud group removed and resources disposed');
+    logger.info('[SkySystem] Destroyed - cloud group removed and resources disposed');
   }
 }
 
@@ -3426,7 +3419,7 @@ class LaneVisualGuideSystem {
 
     this.createGuideLines(); // Create meshes immediately in constructor
 
-    console.log('[LaneVisualGuide] Presentation-only lane guide system established');
+    logger.info('[LaneVisualGuide] Presentation-only lane guide system established');
   }
 
   createMeshes() {
@@ -3465,7 +3458,7 @@ class LaneVisualGuideSystem {
       this.world.add(line);
     }
 
-    console.log(`[LaneVisualGuide] Created ${laneCount} subtle lane guide lines`);
+    logger.info(`[LaneVisualGuide] Created ${laneCount} subtle lane guide lines`);
   }
 
   update() {
@@ -3509,7 +3502,7 @@ class LaneVisualGuideSystem {
 
     this.guideLines.length = 0;
 
-    console.log('[LaneVisualGuide] Destroyed - guide lines removed and disposed');
+    logger.info('[LaneVisualGuide] Destroyed - guide lines removed and disposed');
   }
 }
 
@@ -3567,7 +3560,7 @@ class PlaneEntity {
     // Z-axis lock assertion - plane NEVER moves in Z
     if (this.position.z !== 0) {
       if (!this._zViolationLogged) {
-        console.error('[PlaneEntity] ERROR: Plane Z position changed - Z axis locked!');
+        logger.error('[PlaneEntity] ERROR: Plane Z position changed - Z axis locked!');
         this._zViolationLogged = true;
       }
       this.position.z = 0; // Force reset
@@ -3583,14 +3576,14 @@ class PlaneEntity {
       // Assert that plane is within reasonable distance of a lane center
       if (distanceFromLane >= this.laneSystem.laneWidth * 0.6) {
         if (!this._laneErrorLogged) {
-          console.error(`[PlaneEntity] ERROR: Plane X=${this.position.x.toFixed(2)} too far from lane center ${laneCenter.toFixed(2)}`);
+          logger.error(`[PlaneEntity] ERROR: Plane X=${this.position.x.toFixed(2)} too far from lane center ${laneCenter.toFixed(2)}`);
           this._laneErrorLogged = true;
         }
       }
 
       if (distanceFromLane > this.laneSystem.laneWidth * 0.4) {
         if (!this._laneDriftLogged) {
-          console.warn(`[PlaneEntity] WARNING: Plane drifting from lane center (distance: ${distanceFromLane.toFixed(2)})`);
+          logger.warn(`[PlaneEntity] WARNING: Plane drifting from lane center (distance: ${distanceFromLane.toFixed(2)})`);
           this._laneDriftLogged = true;
         }
       } else {
@@ -3719,63 +3712,6 @@ class PlaneView {
   }
 }
 
-// PlayerProxy class - minimal visual representation for endless mode
-class PlayerProxy {
-  constructor(world, worldLayoutSystem) {
-    this.world = world;
-    this.worldLayoutSystem = worldLayoutSystem;
-    this.mesh = null;
-
-    this.createMesh();
-  }
-
-  createMesh() {
-    // Simple box geometry for player representation
-    const geometry = new THREE.BoxGeometry(4, 4, 4);
-    const material = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // Red box
-
-    this.mesh = new THREE.Mesh(geometry, material);
-
-    // Position in MID_AIR zone
-    if (this.worldLayoutSystem) {
-      const midAirZone = this.worldLayoutSystem.getZone('MID_AIR');
-      if (midAirZone && midAirZone.baselineY) {
-        this.mesh.position.set(0, midAirZone.baselineY, 0);
-      }
-    }
-
-    // Add to world
-    this.world.add(this.mesh);
-
-    console.log('[PlayerProxy] Visual player representation created');
-  }
-
-  getPosition() {
-    return this.mesh ? this.mesh.position.clone() : new THREE.Vector3();
-  }
-
-  setPosition(x, y, z) {
-    if (this.mesh) {
-      this.mesh.position.set(x, y, z);
-    }
-  }
-
-  update(deltaTime) {
-    // Simple rotation for visual feedback
-    if (this.mesh) {
-      this.mesh.rotation.y += deltaTime * 0.5; // Slow Y rotation
-    }
-  }
-
-  destroy() {
-    if (this.mesh && this.world) {
-      this.world.remove(this.mesh);
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
-      this.mesh = null;
-    }
-  }
-}
 
 // PlayerEntity imported from core/entities/PlayerEntity.js
 
@@ -3884,17 +3820,17 @@ class EndlessMode {
     this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
 
     // ===== ENTITY SYSTEMS ===== (gameplay logic)
-    const playerMesh = PlaneFactory.createBasicPlane(); // Create visual placeholder
+    const playerMesh = window.PlaneFactory.createBasicPlane(); // Create visual placeholder
     world.add(playerMesh); // Add to scene
-    this.playerEntity = new PlayerEntity(playerMesh); // Pure visual entity
-    this.playerController = new PlayerController(this.playerEntity, this.laneSystem); // Lane logic controller
-    this.playerMovementPipeline = new PlayerMovementPipelineSystem(
+    this.playerEntity = new window.PlayerEntity(playerMesh); // Pure visual entity
+    this.playerController = new window.PlayerController(this.playerEntity, this.laneSystem); // Lane logic controller
+    this.playerMovementPipeline = new window.PlayerMovementPipelineSystem(
       this.playerIntentSystem,
       this.playerActionStateSystem,
       this.playerController,
       this.playerEntity
     ); // Complete movement pipeline
-    this.laneDebugVisualSystem = new LaneDebugVisualSystem(
+    this.laneDebugVisualSystem = new window.LaneDebugVisualSystem(
       this.laneSystem,
       this.playerMovementPipeline,
       world
@@ -3931,7 +3867,7 @@ class EndlessMode {
     );
 
     // ===== DETERMINISTIC SINGLE OBSTACLE SYSTEM ===== (core gameplay loop)
-    this.singleObstacleSpawnerSystem = new SingleObstacleSpawnerSystem(
+    this.singleObstacleSpawnerSystem = new window.SingleObstacleSpawnerSystem(
       this.entityRegistrySystem,
       this.laneSystem,
       this.worldScrollerSystem,
@@ -4000,8 +3936,8 @@ class EndlessMode {
       this.laneEntityVisualSystem
     );
 
-    console.log('[EndlessMode] Initialized - objects created, ready for start()');
-    console.log('[WorldAxis] Z-axis locked - forward motion illusion established');
+    logger.info('[EndlessMode] Initialized - objects created, ready for start()');
+    logger.info('[WorldAxis] Z-axis locked - forward motion illusion established');
   }
 
   start() {
@@ -4015,7 +3951,7 @@ class EndlessMode {
     // Defensive guard: check for null systems
     for (const key in this) {
       if (this[key] === null && key.includes('System')) {
-        console.warn('[EndlessMode] Null system detected:', key);
+        logger.warn('[EndlessMode] Null system detected:', key);
       }
     }
 
@@ -4035,7 +3971,7 @@ class EndlessMode {
 
     // Safety guard: warn if lane visual guide system is missing (last resort)
     if (!this.laneVisualGuideSystem) {
-      console.warn('[EndlessMode] LaneVisualGuideSystem missing at start — skipping visuals');
+      logger.warn('[EndlessMode] LaneVisualGuideSystem missing at start — skipping visuals');
     }
 
 
@@ -4062,12 +3998,12 @@ class EndlessMode {
 
     // Force SIDE_SCROLLER view profile for endless mode
     this.viewProfileSystem.setProfile(VIEW_PROFILES.SIDE_SCROLLER);
-    console.log('[EndlessMode] View profile forced to SIDE_SCROLLER');
+    logger.info('[EndlessMode] View profile forced to SIDE_SCROLLER');
 
     // Add debug coordinate axes
     const axesHelper = new THREE.AxesHelper(200);
     this.world.add(axesHelper);
-    console.log('[EndlessMode] Debug coordinate axes added (X=red, Y=green, Z=blue)');
+    logger.info('[EndlessMode] Debug coordinate axes added (X=red, Y=green, Z=blue)');
 
     // Create debug overlay
     this.createDebugOverlay();
@@ -4075,7 +4011,7 @@ class EndlessMode {
     // Start camera following PlayerProxy
     this.cameraRig.follow(this.playerEntity);
 
-    console.log('[EndlessMode] Started - input active, state reset');
+    logger.info('[EndlessMode] Started - input active, state reset');
   }
 
   createDebugOverlay() {
@@ -4096,7 +4032,7 @@ class EndlessMode {
     `;
     document.body.appendChild(this.debugOverlay);
 
-    console.log('[EndlessMode] Debug overlay created');
+    logger.info('[EndlessMode] Debug overlay created');
   }
 
   updateDebugOverlay() {
@@ -4142,7 +4078,7 @@ class EndlessMode {
     // Mental model assertions (NON NEGOTIABLE)
     const playerPosition = this.playerEntity.getPosition();
     if (playerPosition.z !== 0) {
-      console.error('[MENTAL MODEL VIOLATION] Player Z changed:', playerPosition.z, '- Player must stay at Z=0!');
+      logger.error('[MENTAL MODEL VIOLATION] Player Z changed:', playerPosition.z, '- Player must stay at Z=0!');
     }
 
     // Silent health check - core systems are validated at init/start time
@@ -4162,7 +4098,7 @@ class EndlessMode {
       if (!this.isInPhase(GAME_PHASES.GAME_OVER)) {
         this.setPhase(GAME_PHASES.GAME_OVER, performance.now());
         if (DebugConfig.ENABLE_FRAME_LOGS) {
-          console.log('[EndlessMode] Player died - entering GAME_OVER phase');
+          logger.info('[EndlessMode] Player died - entering GAME_OVER phase');
         }
       }
     }
@@ -4224,12 +4160,12 @@ class EndlessMode {
     // Log distance every ~500 units (skip initial 0)
     if (this.lastDistanceLog === null && currentDistance >= 500) {
       if (DebugConfig.ENABLE_FRAME_LOGS) {
-      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      logger.info(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
       }
       this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
     } else if (this.lastDistanceLog !== null && currentDistance - this.lastDistanceLog >= 500) {
       if (DebugConfig.ENABLE_FRAME_LOGS) {
-      console.log(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
+      logger.info(`[EndlessMode] Distance: ${currentDistance.toFixed(0)} units`);
       }
       this.lastDistanceLog = Math.floor(currentDistance / 500) * 500;
     }
@@ -4301,7 +4237,7 @@ class EndlessMode {
     // Check for player death and handle game over
     if (this.healthSystem.isDead() && this.gameState.status !== 'GAME_OVER') {
       this.gameState.status = 'GAME_OVER';
-      console.log('[Game] GAME OVER - Player has died');
+      logger.info('[Game] GAME OVER - Player has died');
     }
 
     // 14. Presentation system observes score and domain events for DOM updates
@@ -4333,7 +4269,7 @@ class EndlessMode {
       const xDistance = Math.abs(playerPos.x - obstaclePos.x);
 
       if (zDistance < 20 && xDistance < laneWidth) {
-        console.log('[COLLISION] obstacle hit');
+        logger.info('[COLLISION] obstacle hit');
       }
     }
 
@@ -4353,7 +4289,7 @@ class EndlessMode {
       const obstacles = this.simpleObstacleSpawnSystem.getActiveObstacles();
       const firstObstacleZ = obstacles.length > 0 ? obstacles[0].getPosition().z.toFixed(1) : 'none';
 
-      console.log(`[DEBUG] player lane: ${this.playerEntity.laneIndex}, x: ${playerPos.x.toFixed(1)}, first obstacle z: ${firstObstacleZ}`);
+      logger.info(`[DEBUG] player lane: ${this.playerEntity.laneIndex}, x: ${playerPos.x.toFixed(1)}, first obstacle z: ${firstObstacleZ}`);
       this.debugLogTimer = 0;
     }
 
@@ -4369,7 +4305,7 @@ class EndlessMode {
     // Stop updates without mutating state
     this.isPaused = true;
     if (DebugConfig.ENABLE_FRAME_LOGS) {
-    console.log('[EndlessMode] Paused - updates stopped');
+    logger.info('[EndlessMode] Paused - updates stopped');
     }
   }
 
@@ -4377,7 +4313,7 @@ class EndlessMode {
     // Continue updates
     this.isPaused = false;
     if (DebugConfig.ENABLE_FRAME_LOGS) {
-    console.log('[EndlessMode] Resumed - updates continued');
+    logger.info('[EndlessMode] Resumed - updates continued');
     }
   }
 
@@ -4427,7 +4363,7 @@ class EndlessMode {
     this.depthLayerSystem = null;
     this.worldLayoutSystem = null;
 
-    console.log('[EndlessMode] Destroyed - all references cleared, ready for re-init');
+    logger.info('[EndlessMode] Destroyed - all references cleared, ready for re-init');
   }
 
   // Game phase management - authoritative control owned by EndlessMode only
@@ -4439,7 +4375,7 @@ class EndlessMode {
     this.phaseStartTime = currentTime;
 
     if (DebugConfig.ENABLE_FRAME_LOGS) {
-      console.log(`[EndlessMode] Phase transition: ${oldPhase} → ${newPhase}`);
+      logger.info(`[EndlessMode] Phase transition: ${oldPhase} → ${newPhase}`);
     }
   }
 
@@ -4504,8 +4440,8 @@ class EndlessMode {
       // Apply damage to player (1 life)
       const damageApplied = this.healthSystem.applyDamage(1);
       if (damageApplied > 0) {
-        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
-          console.log(`[EndlessMode] Player hit obstacle ${obstacle.id}, lost ${damageApplied} life(s)`);
+        if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
+          logger.info(`[EndlessMode] Player hit obstacle ${obstacle.id}, lost ${damageApplied} life(s)`);
         }
 
         // Transition to HIT_RECOVERY phase
@@ -4528,8 +4464,8 @@ class EndlessMode {
         }
 
         // Mark obstacle as collided - spawner will respawn only after BEHIND_CLEANUP recycling
-        if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
-          console.log(`[EndlessMode] Obstacle ${obstacle.id} destroyed after collision - will respawn after recycling`);
+        if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
+          logger.info(`[EndlessMode] Obstacle ${obstacle.id} destroyed after collision - will respawn after recycling`);
         }
       }
     }
@@ -4538,4 +4474,5 @@ class EndlessMode {
   }
 }
 
-export default AviatorEndlessGame;
+// Make available globally for script loading
+window.AviatorEndlessGame = AviatorEndlessGame;

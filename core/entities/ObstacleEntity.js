@@ -4,9 +4,10 @@
 // - No self-movement logic - Z position controlled externally
 // - Only syncs mesh position to current state
 
-import DebugConfig from '/core/config/DebugConfig.js';
+(function() {
+  'use strict';
 
-class ObstacleEntity {
+  class ObstacleEntity {
   constructor(id, laneIndex, baseZ, spawnY, mesh = null, laneSystem = null, worldScrollerSystem = null) {
     this.id = id;
     this.type = 'OBSTACLE';
@@ -19,7 +20,7 @@ class ObstacleEntity {
     this.laneSystem = laneSystem; // For proper lane positioning
     this.worldScrollerSystem = worldScrollerSystem; // For computing visual Z position
 
-    if (DebugConfig.ENABLE_OBSTACLE_LOGS) {
+    if (window.DebugConfig && window.DebugConfig.ENABLE_OBSTACLE_LOGS) {
       console.log(`[ObstacleEntity] Created obstacle ${id} at lane ${laneIndex}, baseZ=${baseZ}, spawnY=${spawnY}`);
     }
   }
@@ -64,4 +65,7 @@ class ObstacleEntity {
   }
 }
 
-export default ObstacleEntity;
+  // Expose globally
+  window.ObstacleEntity = ObstacleEntity;
+
+})();
