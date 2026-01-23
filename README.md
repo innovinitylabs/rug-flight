@@ -52,8 +52,10 @@ rug-flight/
 │   │   └── ui.css               # UI styles
 │   └── assets/
 │       └── icons/               # Essential icons (favicon)
-└── reference/                   # Legacy code reference
-    └── top-rug-maverick/        # Original combat game (preserved)
+└── reference/                   # Historical code archives (reference only!)
+    ├── README.md                # Reference folder documentation
+    ├── the-aviator-base/        # Original base game (Badestrand/TheAviator2)
+    └── top-rug-maverick/        # Our legacy combat implementation
 ```
 
 ## 🚀 Getting Started
@@ -158,6 +160,12 @@ The project uses vanilla JavaScript with no build process required. Simply serve
 - **Global Variable System** - Compatible with simple HTTP servers
 - **Airplane Model Factory** - 3D airplane with animations from legacy game
 - **Observer Pattern** - Domain events for system communication
+
+### 📚 **Reference Archives**
+The `/reference/` folder contains historical code for comparison only:
+- **Original Base Game** - TheAviator2 foundation we built upon
+- **Legacy Combat Mode** - Our first implementation approach
+- **Reference Only** - Do not modify or use in active development
 
 ### 🎮 **Example Game (Top Rug)**
 - **Procedural Obstacles** - Distance-based spawning in random lanes
