@@ -1,8 +1,8 @@
-# Top Rug - Lane-Based Endless Runner
+# Rug Flight - Clean 3D Game Engine
 
-A **complete rewrite** of the classic flight game featuring a **modern, clean architecture** with **lane-based movement**, **procedural obstacles**, and **modular systems design**. Experience the evolution from free-flight to structured endless runner gameplay!
+A **modern, clean 3D game engine** built with Three.js, featuring **Entity-Component-System (ECS) architecture**, **lane-based movement systems**, and **modular design**. Includes a complete endless runner example game.
 
-**🎮 Game Mode:**
+**🎮 Example Game:**
 - **Top Rug** - Lane-based endless runner with procedural obstacles, collectible coins, and strategic lane switching
 
 ## 🎮 Game Mode
@@ -19,32 +19,41 @@ A **complete rewrite** of the classic flight game featuring a **modern, clean ar
 
 ```
 rug-flight/
-├── index.html                    # Main entry point with game mode selector
+├── index.html                    # Main entry point
 ├── README.md                     # This file
-├── core/                         # Core game engine components
-│   └── MovementModel.js         # Movement utilities and models
-├── games/                        # Game-specific implementations
-│   └── top-rug/                 # Top Rug - Lane-Based Endless Runner
-│       ├── js/
-│       │   └── game.js          # Complete modular game architecture
-│       ├── css/
-│       │   └── styles.css       # Game-specific styles
-│       └── assets/              # Game assets (audio, images, models)
-├── shared/                       # Shared resources across games
+├── core/                         # Game engine core (8 files)
+│   ├── config/
+│   │   └── DebugConfig.js       # Debug configuration
+│   ├── entities/
+│   │   ├── PlayerEntity.js      # Player entity with airplane
+│   │   └── ObstacleEntity.js    # Obstacle entity
+│   ├── factories/
+│   │   └── AirplaneFactory.js   # Airplane model factory
+│   ├── controllers/
+│   │   └── PlayerController.js  # Player input controller
+│   ├── systems/                 # ECS systems
+│   │   ├── PlayerMovementPipelineSystem.js
+│   │   ├── LaneDebugVisualSystem.js
+│   │   └── SingleObstacleSpawnerSystem.js
+│   └── MovementModel.js         # Movement utilities
+├── games/                       # Example games
+│   └── top-rug/                 # Endless runner example
+│       ├── js/game.js           # Modern ECS game implementation
+│       ├── css/styles.css       # Game-specific styles
+│       └── assets/              # Game assets (audio, images)
+├── shared/                      # Engine utilities (5 files)
 │   ├── js/
-│   │   ├── game-mode-controller.js  # Mode selection & loading
+│   │   ├── logger.js            # Structured logging system
+│   │   ├── utils.js             # Utility functions
+│   │   ├── game-mode-controller.js # Game loading controller
 │   │   ├── three.min.js         # Three.js 3D engine
-│   │   ├── TweenMax.min.js      # Animation library
-│   │   └── utils.js             # Shared utility functions
+│   │   └── TweenMax.min.js      # Animation library
 │   ├── css/
-│   │   └── ui.css              # Shared UI styles
-│   └── assets/                  # Shared assets
-│       ├── fonts/              # Web fonts
-│       └── icons/              # Icons and branding
-└── docs/                        # Technical documentation
-    ├── AUDIO_LOOPING_RCA.md           # Audio system analysis
-    ├── AUDIO_COMPARISON_ANALYSIS.md   # Technical comparisons
-    └── CRITICAL_AUDIO_DIFFERENCE_REPORT.md
+│   │   └── ui.css               # UI styles
+│   └── assets/
+│       └── icons/               # Essential icons (favicon)
+└── reference/                   # Legacy code reference
+    └── top-rug-maverick/        # Original combat game (preserved)
 ```
 
 ## 🚀 Getting Started
@@ -55,10 +64,9 @@ rug-flight/
    cd rug-flight
    ```
 
-2. **Start a local server**
+2. **Start the development server**
    ```bash
    python3 -m http.server 8080
-   # or use any static file server
    ```
 
 3. **Open in browser**
@@ -66,7 +74,7 @@ rug-flight/
    http://localhost:8080
    ```
 
-4. **Select your game mode** from the main menu
+4. **Play the endless runner game**
 
 ## 🔧 Key Features & Architecture
 
@@ -140,37 +148,35 @@ The project uses vanilla JavaScript with no build process required. Simply serve
 - **Modular Game Systems** - Each system has single responsibility and clean interfaces
 - **Progressive Game Design** - From free-flight prototype to structured endless runner
 
-## 📊 Current Development Status
+## 📊 Engine Status
 
-### ✅ **Completed Features**
-- **Lane-Based Player Movement** - 3-lane discrete positioning with smooth transitions
-- **Player Intent System** - Mouse input to semantic game intents (MOVE_LEFT/RIGHT/HOLD)
-- **Action State Management** - Cooldowns, stun states, and intent gating
+### ✅ **Engine Features**
+- **Entity-Component-System (ECS)** - Clean separation of data, logic, and presentation
+- **Lane-Based Movement System** - 3-lane discrete positioning with smooth transitions
+- **Modular Architecture** - Easy to extend and modify
+- **Structured Logging** - Clean console output with configurable levels
+- **Global Variable System** - Compatible with simple HTTP servers
+- **Airplane Model Factory** - 3D airplane with animations from legacy game
+- **Observer Pattern** - Domain events for system communication
+
+### 🎮 **Example Game (Top Rug)**
 - **Procedural Obstacles** - Distance-based spawning in random lanes
-- **Collision Detection** - Player vs obstacle collision intents
-- **Health & Damage System** - Player survival with lives and damage mechanics
-- **Coin Collection** - Collectible entities with scoring and audio feedback
-- **Camera Stability** - Vertical constraints and smooth following
-- **Clean Console** - Zero per-frame spam, useful debug logging only
+- **Coin Collection** - Collectible entities with scoring
+- **Collision Detection** - Player vs obstacle interactions
+- **Camera Following** - Smooth camera with vertical constraints
+- **Audio System** - Sound effects and background music
 
-### 🚧 **Architecture Foundation**
-- **Entity-Component-System Pattern** - Clean data/logic/presentation separation
-- **Observer Pattern Implementation** - Domain events for system communication
-- **Modular System Design** - Single responsibility per system
-- **Performance Monitoring** - Efficient 3D rendering and game loops
-- **Extensible Framework** - Easy to add new game modes and features
-
-### 🎯 **Ready for Next Phase**
-The core endless runner mechanics are complete and stable. Ready for:
-- Advanced obstacle patterns and enemy AI
-- Power-ups and special abilities
-- Enhanced visual effects and particle systems
-- Multiplayer considerations
-- Mobile/touch controls
+### 🚀 **Ready for Development**
+The engine is clean and ready for building new games:
+- Create new game folders in `/games/`
+- Extend the ECS systems for new mechanics
+- Use the AirplaneFactory or create new entity factories
+- Add new assets and modify existing systems
+- Simple deployment with Python HTTP server
 
 ## 📄 License
 
-Based on Karim Maaloul's original "The Aviator" tutorial.
+Built on Karim Maaloul's "The Aviator" tutorial foundation.
 
 Integrate or build upon it for free in your personal or commercial projects. Don't republish, redistribute or sell "as-is".
 
@@ -180,16 +186,23 @@ Read more: [Codrops Licensing](http://tympanus.net/codrops/licensing/)
 
 - **Original "The Aviator"**: Karim Maaloul ([@yakudoo](https://twitter.com/yakudoo))
 - **Codrops Tutorial**: [Article](http://tympanus.net/codrops/?p=26501)
-- **Complete Architecture Rewrite**: Modern ECS endless runner implementation
+- **Modern Engine Architecture**: Clean ECS implementation with modular systems
 - **Libraries**:
   - [Three.js](http://threejs.org/) - 3D WebGL engine
   - [TweenMax](http://greensock.com) - Animation library
 - **AI Assistance**: Claude for architecture design and implementation guidance
-- **Audio Analysis**: Technical analysis and seamless propeller looping implementation
+- **Legacy Code Preservation**: Original combat game saved in `/reference/`
 
-## 🎮 Play Online
+## 🎮 Development
 
-**Top Rug - Lane-Based Endless Runner** - Experience the evolution from free-flight to structured endless runner gameplay!
+**Ready to build new games with this clean engine!**
+
+The ECS architecture makes it easy to:
+- Add new entity types and systems
+- Create different game mechanics
+- Extend the airplane or create new vehicles
+- Add multiplayer support
+- Implement mobile controls
 
 *Local development server required - see Getting Started above*
 

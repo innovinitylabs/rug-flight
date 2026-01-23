@@ -53,6 +53,11 @@
     this.mesh.position.y = this.position.y;
     this.mesh.position.z = this.position.z;
 
+    // Update airplane animations (propeller, pilot hairs, etc.)
+    if (this.mesh.updateAnimation) {
+      this.mesh.updateAnimation(deltaTime);
+    }
+
     // Simple rotation for visual feedback
     this.mesh.rotation.y += deltaTime * 0.5;
   }

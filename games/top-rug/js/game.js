@@ -3820,7 +3820,7 @@ class EndlessMode {
     this.laneVisualGuideSystem = new LaneVisualGuideSystem(this.laneSystem, this.worldLayoutSystem, world, this.worldScrollerSystem); // Subtle lane guides
 
     // ===== ENTITY SYSTEMS ===== (gameplay logic)
-    const playerMesh = window.PlaneFactory.createBasicPlane(); // Create visual placeholder
+    const playerMesh = window.AirplaneFactory.createBasicAirplane(); // Create airplane mesh from legacy game
     world.add(playerMesh); // Add to scene
     this.playerEntity = new window.PlayerEntity(playerMesh); // Pure visual entity
     this.playerController = new window.PlayerController(this.playerEntity, this.laneSystem); // Lane logic controller
